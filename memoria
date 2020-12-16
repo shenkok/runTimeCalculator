@@ -13,15 +13,11 @@
 (simplify  (trueVal (mk-pb 0.6)))
 (simplify  (falseVal (mk-pb 0.6)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;Definicion de Variable
-(declare-datatypes () ((Var (var (val String)))))
-;Funciones asociadas a la estructura
-(define-fun stringVal ((v Var)) String
-  (val v))
-(display (var "X"))  
-(simplify  (stringVal (var "X")))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;dE
+;Definicion de expresion aritmética determinista
+(declare-datatypes () ((Arit (Var (val String)) (Number (n Real)) (Mult (n-m Number) (v Var))  (Sum (f-s Arit) (s-s Arit)) (Rest (f-r Arit) (s-r Arit)))
+                       ))
+

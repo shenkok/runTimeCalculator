@@ -1,0 +1,10 @@
+(declare-datatype Dyn ((a) (b)))
+(define-fun foo ((x Dyn)) Int (
+  match x (
+    (a 1)
+    (b 2)
+  )
+))
+(assert (= (foo a) 1 ))
+(simplify (foo a))
+(check-sat)
