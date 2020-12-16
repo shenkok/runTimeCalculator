@@ -1,0 +1,27 @@
+
+; Definicion de Expresion Booleana Ṕrobabilista 
+(declare-datatypes () ((ProbBool (mk-pb (p Real)))))
+
+; restrición de 0<p<1
+
+;Funciones asosciadas a la estructura
+(define-fun trueVal ((c ProbBool)) Real
+  (p c))
+(define-fun falseVal ((c ProbBool)) Real
+  (- 1 (p c)))
+(display (mk-pb 0.6))
+(simplify  (trueVal (mk-pb 0.6)))
+(simplify  (falseVal (mk-pb 0.6)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Definicion de Variable
+(declare-datatypes () ((Var (var (val String)))))
+;Funciones asociadas a la estructura
+(define-fun stringVal ((v Var)) String
+  (val v))
+(display (var "X"))  
+(simplify  (stringVal (var "X")))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;dE
