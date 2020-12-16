@@ -1,10 +1,18 @@
-(declare-datatype Dyn ((a) (b)))
-(define-fun foo ((x Dyn)) Int (
+;script con funciones dummy para practicar
+
+
+(declare-datatypes () ((Arit (Var (val String)) (Number (n Real)) (Mult (n-m Real) (v String))  (Sum (f-s Arit) (s-s Arit)) (Sub (f-sb Arit) (s-sb Arit)))
+                       ))
+(define-fun foo ((x Arit)) Int (
   match x (
-    (a 1)
-    (b 2)
+    ((Var v ) 1)
+    ((Number n) 2)
+    ((Mult f s) 3)
+    ((Sum f s) 4)
+    ((Sub f s)5)
+
   )
 ))
-(assert (= (foo a) 1 ))
-(simplify (foo a))
-(check-sat)
+
+(simplify (foo (Var "dummy")))
+(simplify  (+ 1 2))

@@ -13,11 +13,50 @@
 (simplify  (trueVal (mk-pb 0.6)))
 (simplify  (falseVal (mk-pb 0.6)))
 
-
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;Definicion de expresion aritmética determinista
-(declare-datatypes () ((Arit (Var (val String)) (Number (n Real)) (Mult (n-m Number) (v Var))  (Sum (f-s Arit) (s-s Arit)) (Rest (f-r Arit) (s-r Arit)))
+(declare-datatypes () ((Arit (Var (val String))
+                             (Number (n Real)) 
+                             (Mult (n-m Real) (v String))  
+                             (Sum (f-s Arit) (s-s Arit)) 
+                             (Sub (f-sb Arit) (s-sb Arit)))
                        ))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(display (Var "X"))
+(display (Number 0.6))
+(display (Mult 0.5 "X"))
+
+
+
+;Definicion de Dado de n caras
+(declare-datatypes(T) ((Dice  end
+                             (add (hd Pair) (tl Dice)))
+                       (Pair (mk-pair (value T) (p Real)) ) 
+                       ))
+
+(display (as end (Dice Real)))
+(display (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+(display (add (mk-pair 0 0)(add (mk-pair 1.0 1.0) (as end (Dice Real)))))
+
+(define-fun isEmpty ((x (Dice Real))) Int (
+  match x (
+    (end 0)
+    ((add head tail) 1)
+
+  )
+))
+
+(define-fun countFace ((x (Dice Real))) Int (
+  match x (
+    (end 0)
+    ((add head tail) (+ 1 (countFace tail)))
+
+  )
+))
+
+;Definicion de Programas
+(declare-datatypes () ((Program empty 
+                                (pif (guard ProbBool) (t Program) (f Program)) 
+                                (assigment (r String) ( l Real)))))
 
