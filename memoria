@@ -18,7 +18,7 @@
 ;Definicion de expresion aritmética determinista
 (declare-datatypes () ((Arit (Var (val String))
                              (Number (n Real)) 
-                             (Mult (n-m Real) (v String))  
+                             (Mult (n-m Real) (v Arit))  
                              (Sum (f-s Arit) (s-s Arit)) 
                              (Sub (f-sb Arit) (s-sb Arit)))
                        ))
@@ -47,7 +47,7 @@
   )
 ))
 
-(define-fun countFace ((x (Dice Real))) Int (
+(define-fun-rec countFace ((x (Dice Real))) Int (
   match x (
     (end 0)
     ((add head tail) (+ 1 (countFace tail)))
@@ -55,8 +55,11 @@
   )
 ))
 
+(simplify (countFace (as end (Dice Real))))
+(simplify (countFace (add (mk-pair 0.0 0.0)(add (mk-pair 1.0 1.0) (as end (Dice Real))))))
+
 ;Definicion de Programas
-(declare-datatypes () ((Program empty 
+(declare-datatypes (T) ((Program empty 
                                 (pif (guard ProbBool) (t Program) (f Program)) 
-                                (assigment (r String) ( l Real)))))
+                                (assigment (r String) (l String)))))
 
