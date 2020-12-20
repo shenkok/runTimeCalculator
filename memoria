@@ -1,6 +1,6 @@
 
 ; Definicion de Expresion Booleana Ṕrobabilista
-(declare-datatypes () ((ProbBool (mk-pb (p Real)))))
+(declare-datatypes () ((ProbBool (pb (p Real)))))
 
 ; restrición de 0<p<1
 
@@ -9,9 +9,6 @@
   (p c))
 (define-fun falseVal ((c ProbBool)) Real
   (- 1 (p c)))
-(display (mk-pb 0.6))
-(simplify  (trueVal (mk-pb 0.6)))
-(simplify  (falseVal (mk-pb 0.6)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -62,29 +59,6 @@
 (simplify (expected (add (mk-pair 10.0 0.5)(add (mk-pair 1.0 0.5) (as end (Dice Real))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;Definicion de Programas
-(declare-datatypes (T) ((Program empty 
-                                (pif (guard ProbBool) (t Program) (f Program))
-                                (assigment (r String) (l (Dice T))))))
-
-;Programa de ejemplo
-; if (1/2*<true> + 1/2*<false>) :
-;    {succ:=true}
-; else {
-;      if (1/2*<true> + 1/2*<false>) :
-;       {succ:=true}
-;       else :
-;            {succ:=false}
-;     }
-
-(display (add (mk-pair 1.0 1.0) (as end (Dice Real))))
-(display (add (mk-pair 0.0 1.0) (as end (Dice Real))))
-(display (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real)))))
-(display (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real)))))
-(display (pif (mk-pb 0.5)
-         (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
-         (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
-))
 
 
 ;Definicion de expresiones booleanas deterministicas
@@ -103,7 +77,31 @@
                                 (Ponderar (k Real) (run RunTime)))
                        ))                     
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;Definicion de Programas
+(declare-datatypes () ((Program empty
+                                 (pif (pconf ProbBool) (c-1 Program)(c-2 Program))
+                                 (assigment (r String) (l (Dice Real)))
+                        )))
+;Programa de ejemplo
+; if (1/2*<true> + 1/2*<false>) :
+;    {succ:=true}
+; else {
+;      if (1/2*<true> + 1/2*<false>) :
+;       {succ:=true}
+;       else :
+;            {succ:=false}
+;     }
+
+(display (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+              (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+              (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
+              )
+          )
+)
 
 
-
-
+               
