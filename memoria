@@ -1,5 +1,5 @@
 
-; Definicion de Expresion Booleana Ṕrobabilista 
+; Definicion de Expresion Booleana Ṕrobabilista
 (declare-datatypes () ((ProbBool (mk-pb (p Real)))))
 
 ; restrición de 0<p<1
@@ -18,13 +18,12 @@
 ;Definicion de expresion aritmética determinista
 (declare-datatypes () ((Arit (Var (val String))
                              (Number (n Real)) 
-                             (Mult (n-m Real) (v Arit))  
-                             (Sum (f-s Arit) (s-s Arit)) 
+                             (Mult (n-m Real) (v Arit))
+                             (Sum (f-s Arit) (s-s Arit))
                              (Sub (f-sb Arit) (s-sb Arit)))
                        ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(display (Var "X"))
-(display (Number 0.6))
+(display (Var "Succ"))
 
 ;Definicion de Dado de n caras
 (declare-datatypes(T) ((Dice  end
@@ -40,7 +39,6 @@
   match x (
     (end 0)
     ((add head tail) 1)
-
   )
 ))
 
@@ -57,7 +55,6 @@
   match x (
     (end 0)
     ((add head tail) (+ (* (p head)(value head)) (expected tail)) )
-
   )
 ))
 
@@ -67,8 +64,28 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Definicion de Programas
 (declare-datatypes (T) ((Program empty 
-                                (pif (guard ProbBool) (t Program) (f Program)) 
-                                (assigment (r String) (l String)))))
+                                (pif (guard ProbBool) (t Program) (f Program))
+                                (assigment (r String) (l (Dice T))))))
+
+;Programa de ejemplo
+; if (1/2*<true> + 1/2*<false>) :
+;    {succ:=true}
+; else {
+;      if (1/2*<true> + 1/2*<false>) :
+;       {succ:=true}
+;       else :
+;            {succ:=false}
+;     }
+
+(display (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+(display (add (mk-pair 0.0 1.0) (as end (Dice Real))))
+(display (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real)))))
+(display (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real)))))
+(display (pif (mk-pb 0.5)
+         (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+         (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
+))
+
 
 ;Definicion de expresiones booleanas deterministicas
 (declare-datatypes () ((DExp True
@@ -84,4 +101,9 @@
                                 (Cond (c DExp))
                                 (Mult (arit Arit) (dexp DExp))
                                 (Ponderar (k Real) (run RunTime)))
-                       ))                       
+                       ))                     
+
+
+
+
+

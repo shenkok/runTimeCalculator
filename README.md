@@ -62,3 +62,13 @@ Run Time
        
         
         
+
+Programa de ejemplo
+ if (1/2*<true> + 1/2*<false>) :
+    {succ:=true}
+ else {
+      if (1/2*<true> + 1/2*<false>) :
+       {succ:=true}
+       else :
+            {succ:=false}
+     }

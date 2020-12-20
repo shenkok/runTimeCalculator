@@ -18,3 +18,8 @@
 (simplify  (+ 1 2))
 (display True)
 (display false)
+
+(display (pif (mk-pb 0.5)
+         (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+         (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
+))
