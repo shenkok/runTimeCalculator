@@ -52,9 +52,19 @@
   )
 ))
 
-(simplify (countFace (as end (Dice Real))))
-(simplify (countFace (add (mk-pair 0.0 0.0)(add (mk-pair 1.0 1.0) (as end (Dice Real))))))
+;Definicion parcial de esperanza
+(define-fun-rec  expected ((x (Dice Real))) Real (
+  match x (
+    (end 0)
+    ((add head tail) (+ (* (p head)(value head)) (expected tail)) )
 
+  )
+))
+
+(simplify (countFace (as end (Dice Real))))
+(simplify (expected (add (mk-pair 10.0 0.5)(add (mk-pair 1.0 0.5) (as end (Dice Real))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Definicion de Programas
 (declare-datatypes (T) ((Program empty 
                                 (pif (guard ProbBool) (t Program) (f Program)) 
@@ -70,10 +80,8 @@
                        ))
 
 ;Definicion de RunTime
-
 (declare-datatypes () ((RunTime (rarit (r Arit))  
                                 (Cond (c DExp))
                                 (Mult (arit Arit) (dexp DExp))
                                 (Ponderar (k Real) (run RunTime)))
-                       ))
-(display (kind 1))                       
+                       ))                       
