@@ -28,8 +28,7 @@ dξ:=
            | a= a 
            | a<=a 
            |ㄱdξ
-           | dξ
-           |^dξ
+           | dξ^dξ
 
 Expresiones booleanas probabilistas 
 pξ:=              

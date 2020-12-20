@@ -25,9 +25,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (display (Var "X"))
 (display (Number 0.6))
-(display (Mult 0.5 "X"))
-
-
 
 ;Definicion de Dado de n caras
 (declare-datatypes(T) ((Dice  end
@@ -63,3 +60,20 @@
                                 (pif (guard ProbBool) (t Program) (f Program)) 
                                 (assigment (r String) (l String)))))
 
+;Definicion de expresiones booleanas deterministicas
+(declare-datatypes () ((DExp True
+                             False
+                             (Eq (r-eq Arit) (l-eq Arit))  
+                             (Geq (r-geq Arit) (l-geq Arit))
+                             (Not (no-exp DExp))
+                             (Or (r-or DExp) (l-or DExp)))
+                       ))
+
+;Definicion de RunTime
+
+(declare-datatypes () ((RunTime (rarit (r Arit))  
+                                (Cond (c DExp))
+                                (Mult (arit Arit) (dexp DExp))
+                                (Ponderar (k Real) (run RunTime)))
+                       ))
+(display (kind 1))                       
