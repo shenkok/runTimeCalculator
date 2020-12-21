@@ -84,6 +84,15 @@
                                  (pif (pconf ProbBool) (c-1 Program)(c-2 Program))
                                  (assigment (r String) (l (Dice Real)))
                         )))
+;Definicion de ert
+(define-fun-rec  ert_f0 ((c Program)) RunTime( 
+  match c (
+    (empty (RunT (Number 0.0)))
+    ((pif cond ct cf) (RunT (Number 1.0)))
+    ((assigment re le)(RunT (Number 2.0))) 
+    )
+         ))
+
 ;Programa de ejemplo
 ; if (1/2*<true> + 1/2*<false>) :
 ;    {succ:=true}
@@ -94,7 +103,7 @@
 ;            {succ:=false}
 ;     }
 
-(display (pif (pb 0.5)
+(simplify (pif (pb 0.5)
               (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
               (pif (pb 0.5)
                    (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
@@ -110,4 +119,5 @@
 )
 (display (Var "hola"))
 (simplify (f_id (RunT (Var "hola"))))
-    
+(display empty)
+(simplify (ert_f0 empty))
