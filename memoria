@@ -19,6 +19,14 @@
                              (Sum (f-s Arit) (s-s Arit))
                              (Sub (f-sb Arit) (s-sb Arit)))
                        ))
+ (define-fun-rec  aritToReal ((expArit Arit)) Real( 
+  match expArit (
+    ((Var x) 1.0)
+    ((Number N) N)
+    ((Mult k arit) (* k (aritToReal arit)))
+    ((Sum arit1 arit2) (+ (aritToReal arit1) (aritToReal arit2) ))
+    ((Sub arit1 arit2) (- (aritToReal arit1) (aritToReal arit2)))
+    )))                 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;Definicion de Dado de n caras
@@ -95,6 +103,20 @@
     ((assigment re le)(RunT (Number 1.0))) 
     )))
 
+;RunTime hacia Expresion Aritmetica
+(define-fun-rec  runTimeToArit ((f RunTime)) Arit( 
+  match f (
+    ((RunT exprArit) exprArit)
+    ((Cond c)(Number 1.0))
+    ((Mult mul1 c)(Number 1.0))
+    ((Ponderar k runT) (Mult k (runTimeToArit runT)))
+    ((Suma runT1 runT2) (Sum (runTimeToArit runT1)(runTimeToArit runT2)))
+    )))
+(define-fun programToReal ((c Program)) Real 
+ (aritToReal(runTimeToArit(ert_f0 c)))
+)    
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Programa de ejemplo
 ; if (1/2*<true> + 1/2*<false>) :
 ;    {succ:=true}
@@ -115,14 +137,18 @@
 )
 
 
+(simplify (pif (pb 0.5) empty empty))
 
-(define-fun-rec  f_id ((x RunTime)) RunTime 
- x
-)
-(display (Var "hola"))
-(simplify (f_id (RunT (Var "hola"))))
-(display empty)
-(simplify (ert_f0 empty))
 (simplify (ert_f0 (pif (pb 0.5) empty empty)))
+
+(simplify
+(programToReal (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+              (pif (pb 0.5)
+                   (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
+              )
+          )
+))
 
 

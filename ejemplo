@@ -1,32 +1,15 @@
 ;script con funciones dummy para practicar
 
 ; Definicion de Expresion Booleana Ṕrobabilista
-(declare-datatypes () ((ProbBool (pb (p Real)))))
+(declare-datatypes () ((ProbBool (pb (p Real) (q Real)))))
 (define-fun falseVal ((c ProbBool)) ProbBool
   c )
 
 (define-fun isEmpty ((x ProbBool)) ProbBool (
   match x (
-    ((pb p) (pb (+ 4 p)))
+    ((pb p q) (pb (+ 4 p q) q))
   )
 ))
 
-(simplify (isEmpty (pb 1)))
+(simplify (isEmpty (pb 1 1)))
 
-(rarit (r Arit))  
-
-  match x (
-    (end 0)
-    ((add head tail) (+ (* (p head)(value head)) (expected tail)) )
-  )
-)
-
-(define-fun-rec  runTimeToReal ((f Runtime)) Real( 
-  match c (
-    (empty (RunT (Number 0.0)))
-    ((pif cond ct cf) (Suma (RunT (Number 1))
-                      (Suma (Ponderar (trueVal cond) (ert_f0 ct))
-                            (Ponderar (falseVal cond) (ert_f0 cf))     
-                      )))
-    ((assigment re le)(RunT (Number 1.0))) 
-    )))    
