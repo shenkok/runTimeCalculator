@@ -12,3 +12,11 @@
 ))
 
 (simplify (isEmpty (pb 1)))
+
+(rarit (r Arit))  
+
+  match x (
+    (end 0)
+    ((add head tail) (+ (* (p head)(value head)) (expected tail)) )
+  )
+)

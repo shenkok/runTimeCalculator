@@ -70,7 +70,7 @@
                        ))
 
 ;Definicion de RunTime
-(declare-datatypes () ((RunTime (rarit (r Arit))  
+(declare-datatypes () ((RunTime (RunT (rarit Arit))
                                 (Cond (c DExp))
                                 (Mult (arit Arit) (dexp DExp))
                                 (Ponderar (k Real) (run RunTime))
@@ -105,5 +105,9 @@
 
 
 
-
-               
+(define-fun-rec  f_id ((x RunTime)) RunTime 
+ x
+)
+(display (Var "hola"))
+(simplify (f_id (RunT (Var "hola"))))
+    
