@@ -20,7 +20,6 @@
                              (Sub (f-sb Arit) (s-sb Arit)))
                        ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(display (Var "Succ"))
 
 ;Definicion de Dado de n caras
 (declare-datatypes(T) ((Dice  end
@@ -28,9 +27,9 @@
                        (Pair (mk-pair (value T) (p Real)) ) 
                        ))
 
-(display (as end (Dice Real)))
-(display (add (mk-pair 1.0 1.0) (as end (Dice Real))))
-(display (add (mk-pair 0 0)(add (mk-pair 1.0 1.0) (as end (Dice Real)))))
+;(display (as end (Dice Real)))
+;(display (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+;(display (add (mk-pair 0 0)(add (mk-pair 1.0 1.0) (as end (Dice Real)))))
 
 (define-fun isEmpty ((x (Dice Real))) Int (
   match x (
@@ -55,8 +54,8 @@
   )
 ))
 
-(simplify (countFace (as end (Dice Real))))
-(simplify (expected (add (mk-pair 10.0 0.5)(add (mk-pair 1.0 0.5) (as end (Dice Real))))))
+;(simplify (countFace (as end (Dice Real))))
+;(simplify (expected (add (mk-pair 10.0 0.5)(add (mk-pair 1.0 0.5) (as end (Dice Real))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -74,8 +73,9 @@
 (declare-datatypes () ((RunTime (rarit (r Arit))  
                                 (Cond (c DExp))
                                 (Mult (arit Arit) (dexp DExp))
-                                (Ponderar (k Real) (run RunTime)))
-                       ))                     
+                                (Ponderar (k Real) (run RunTime))
+                                (Suma (s-r RunTime) (s-l RunTime))
+                       )))                     
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -97,11 +97,13 @@
 (display (pif (pb 0.5)
               (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
               (pif (pb 0.5)
-              (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
-              (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
+                   (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
               )
           )
 )
+
+
 
 
                

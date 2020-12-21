@@ -1,27 +1,14 @@
 ;script con funciones dummy para practicar
 
+; Definicion de Expresion Booleana Ṕrobabilista
+(declare-datatypes () ((ProbBool (pb (p Real)))))
+(define-fun falseVal ((c ProbBool)) ProbBool
+  c )
 
-(declare-datatypes () ((Arit (Var (val String)) (Number (n Real)) (Mult (n-m Real) (v String))  (Sum (f-s Arit) (s-s Arit)) (Sub (f-sb Arit) (s-sb Arit)))
-                       ))
-(define-fun foo ((x Arit)) Int (
+(define-fun isEmpty ((x ProbBool)) ProbBool (
   match x (
-    ((Var v ) 1)
-    ((Number n) 2)
-    ((Mult f s) 3)
-    ((Sum f s) 4)
-    ((Sub f s)5)
-
+    ((pb p) (pb (+ 4 p)))
   )
 ))
 
-(simplify (foo (Var "dummy")))
-(simplify  (+ 1 2))
-(display True)
-(display false)
-(display (pif (pb 0.5)
-              (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
-              (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
-                ))
-
-(display (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real)))))
-(display (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real)))))
+(simplify (isEmpty (pb 1)))
