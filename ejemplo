@@ -20,3 +20,13 @@
     ((add head tail) (+ (* (p head)(value head)) (expected tail)) )
   )
 )
+
+(define-fun-rec  runTimeToReal ((f Runtime)) Real( 
+  match c (
+    (empty (RunT (Number 0.0)))
+    ((pif cond ct cf) (Suma (RunT (Number 1))
+                      (Suma (Ponderar (trueVal cond) (ert_f0 ct))
+                            (Ponderar (falseVal cond) (ert_f0 cf))     
+                      )))
+    ((assigment re le)(RunT (Number 1.0))) 
+    )))    

@@ -88,10 +88,12 @@
 (define-fun-rec  ert_f0 ((c Program)) RunTime( 
   match c (
     (empty (RunT (Number 0.0)))
-    ((pif cond ct cf) (RunT (Number 1.0)))
-    ((assigment re le)(RunT (Number 2.0))) 
-    )
-         ))
+    ((pif cond ct cf) (Suma (RunT (Number 1))
+                      (Suma (Ponderar (trueVal cond) (ert_f0 ct))
+                            (Ponderar (falseVal cond) (ert_f0 cf))     
+                      )))
+    ((assigment re le)(RunT (Number 1.0))) 
+    )))
 
 ;Programa de ejemplo
 ; if (1/2*<true> + 1/2*<false>) :
@@ -121,3 +123,6 @@
 (simplify (f_id (RunT (Var "hola"))))
 (display empty)
 (simplify (ert_f0 empty))
+(simplify (ert_f0 (pif (pb 0.5) empty empty)))
+
+
