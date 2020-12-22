@@ -74,3 +74,5 @@ Programa de ejemplo
        else :
             {succ:=false}
      }
+
+    https://www.youtube.com/watch?v=XpgJ31GKPWI&list=PLyrlk8Xaylp5tLThZKObBuALYANlYzItz&index=2 
