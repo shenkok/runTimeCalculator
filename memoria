@@ -79,10 +79,10 @@
 
 ;Definicion de RunTime
 (declare-datatypes () ((RunTime (RunT (rarit Arit))
-                                (Cond (c DExp))
-                                (Mult (arit Arit) (dexp DExp))
+                                (Mult (dexp DExp)(runT RunTime))
                                 (Ponderar (k Real) (run RunTime))
                                 (Suma (s-r RunTime) (s-l RunTime))
+                                
                        )))                     
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -126,7 +126,7 @@
 ;       else :
 ;            {succ:=false}
 ;     }
-
+(display "ejemplo progra Ctruc")
 (simplify (pif (pb 0.5)
               (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
               (pif (pb 0.5)
@@ -136,11 +136,9 @@
           )
 )
 
-
+(display "otro ejemplo")
 (simplify (pif (pb 0.5) empty empty))
-
 (simplify (ert_f0 (pif (pb 0.5) empty empty)))
-
 (simplify
 (programToReal (pif (pb 0.5)
               (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
