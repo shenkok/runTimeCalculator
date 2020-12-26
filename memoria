@@ -19,14 +19,28 @@
                              (Sum (f-s Arit) (s-s Arit))
                              (Sub (f-sb Arit) (s-sb Arit)))
                        ))
- (define-fun-rec  aritToReal ((expArit Arit)) Real( 
+(define-fun-rec  aritToReal ((expArit Arit)) Real( 
   match expArit (
     ((Var x) 1.0)
     ((Number N) N)
     ((Mult k arit) (* k (aritToReal arit)))
     ((Sum arit1 arit2) (+ (aritToReal arit1) (aritToReal arit2) ))
     ((Sub arit1 arit2) (- (aritToReal arit1) (aritToReal arit2)))
-    )))                 
+    )))     
+
+(define-fun-rec  sustituirVariableArit ((var Sring) (value Real) (expArit Arit)) Arit( 
+  match expArit (
+    ((Var x) (ite (= var x) 
+                  (Number value)
+                  (Var x)
+                  ))
+    ((Number N) (Number N))
+    ((Mult k arit) (Mult k (sustituirVariableArit var value arit)))
+    ((Sum arit1 arit2) (Sum (sustituirVariableArit var value arit1) (sustituirVariable var value arit1)))
+    ((Sub arit1 arit2) (Sub (sustituirVariableArit var value arit1) (sustituirVariable var value arit1)))
+    )))     
+
+                
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;Definicion de Dado de n caras
@@ -39,12 +53,6 @@
 ;(display (add (mk-pair 1.0 1.0) (as end (Dice Real))))
 ;(display (add (mk-pair 0 0)(add (mk-pair 1.0 1.0) (as end (Dice Real)))))
 
-(define-fun isEmpty ((x (Dice Real))) Int (
-  match x (
-    (end 0)
-    ((add head tail) 1)
-  )
-))
 
 (define-fun-rec countFace ((x (Dice Real))) Int (
   match x (
@@ -69,21 +77,30 @@
 
 
 ;Definicion de expresiones booleanas deterministicas
-(declare-datatypes () ((DExp True
-                             False
+(declare-datatypes () ((DExp (Bvar (Bool b))
                              (Eq (r-eq Arit) (l-eq Arit))  
                              (Geq (r-geq Arit) (l-geq Arit))
                              (Not (no-exp DExp))
                              (Or (r-or DExp) (l-or DExp)))
                        ))
 
+(define-fun-rec  sustituirVariableDExp ((var String)(value Real)(c DExp)) DExp( 
+  match c (
+    ((Bvar b) (Bvar b))
+    ((Eq r l) (Eq (sustituirVariableArit r)(SustituirVariableArit l)))
+    ((Geq r l) (Geq (sustituirVariableArit r)(SustituirVariableArit l)))    
+    ((Not cond)(Not (sustituirVariableDExp var value cond)))
+    ((Or fc sc) (Or (sustituirVariableDExp var value fc) (sustituirVariableDExp var value sc)))
+    )))
 ;Definicion de RunTime
 (declare-datatypes () ((RunTime (RunT (rarit Arit))
                                 (Mult (dexp DExp)(runT RunTime))
                                 (Ponderar (k Real) (run RunTime))
                                 (Suma (s-r RunTime) (s-l RunTime))
+                                (Resta (r-r RunTime) (r-l RunTime))
+                                (Sustituir (var String) (value Real) (runt RunTime))
                                 
-                       )))                     
+                       )))                
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -106,11 +123,12 @@
 ;RunTime hacia Expresion Aritmetica
 (define-fun-rec  runTimeToArit ((f RunTime)) Arit( 
   match f (
-    ((RunT exprArit) exprArit)
-    ((Cond c)(Number 1.0))
-    ((Mult mul1 c)(Number 1.0))
+    ((RunT exprArit) exprArit))
+    ((Mult c runT)(Number 1.0))
     ((Ponderar k runT) (Mult k (runTimeToArit runT)))
     ((Suma runT1 runT2) (Sum (runTimeToArit runT1)(runTimeToArit runT2)))
+    ((Resta runT1 runT2) (Sub (runTimeToArit runT1) (runTimeToArit runT2)))
+    ((Sustituir x v runT) (sustituirVariableArit (var x) (value v) (runTimeToArit runT)))
     )))
 (define-fun programToReal ((c Program)) Real 
  (aritToReal(runTimeToArit(ert_f0 c)))
