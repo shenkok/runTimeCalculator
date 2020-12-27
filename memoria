@@ -38,28 +38,14 @@
                        (Pair (mk-pair (value Real) (p Real)) ) 
                        ))
 
-;(display (as end (Dice Real)))
-;(display (add (mk-pair 1.0 1.0) (as end (Dice Real))))
-;(display (add (mk-pair 0 0)(add (mk-pair 1.0 1.0) (as end (Dice Real)))))
 
-
-(define-fun-rec countFace ((x (Dice Real))) Int (
-  match x (
-    (end 0)
-    ((add head tail) (+ 1 (countFace tail)))
-
-  )
-))
-
-
-;(simplify (countFace (as end (Dice Real))))
-;(simplify (expected (add (mk-pair 10.0 0.5)(add (mk-pair 1.0 0.5) (as end (Dice Real))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ;Definicion de expresiones booleanas deterministicas
-(declare-datatypes () ((DExp (Bvar (Bool b))
+(declare-datatypes () ((DExp True
+                             False
                              (Eq (r-eq Arit) (l-eq Arit))  
                              (Geq (r-geq Arit) (l-geq Arit))
                              (Not (no-exp DExp))
@@ -87,12 +73,10 @@
 ;Definicion de Programas
 (declare-datatypes () ((Program empty
                                  (pif (pconf ProbBool) (c-1 Program)(c-2 Program))
-                                 (assigment (r String) (l (Dice Real)))
+                                 (assigment (r String) (l Dice))
                         )))
 
-;RunTime hacia Expresion Aritmetica
-
-(define-fun-rec  sustituirVariableArit ((var Sring) (value Real) (expArit Arit)) Arit( 
+(define-fun-rec  sustituirVariableArit ((var String) (value Real) (expArit Arit)) Arit( 
   match expArit (
     ((Var x) (ite (= var x) 
                   (Number value)
@@ -100,15 +84,17 @@
                   ))
     ((Number N) (Number N))
     ((Mult k arit) (Mult k (sustituirVariableArit var value arit)))
-    ((Sum arit1 arit2) (Sum (sustituirVariableArit var value arit1) (sustituirVariable var value arit1)))
-    ((Sub arit1 arit2) (Sub (sustituirVariableArit var value arit1) (sustituirVariable var value arit1)))
+    ((Sum arit1 arit2) (Sum (sustituirVariableArit var value arit1) (sustituirVariableArit var value arit1)))
+    ((Sub arit1 arit2) (Sub (sustituirVariableArit var value arit1) (sustituirVariableArit var value arit1)))
     )))
+
 
 (define-fun-rec  sustituirVariableDExp ((var String)(value Real)(c DExp)) DExp( 
   match c (
-    ((Bvar b) (Bvar b))
-    ((Eq r l) (Eq (sustituirVariableArit r)(SustituirVariableArit l)))
-    ((Geq r l) (Geq (sustituirVariableArit r)(SustituirVariableArit l)))    
+    (True True)
+    (False False)
+    ((Eq r l) (Eq (sustituirVariableArit var value r)(sustituirVariableArit var value l)))
+    ((Geq r l) (Geq (sustituirVariableArit var value r)(sustituirVariableArit var value l)))    
     ((Not cond)(Not (sustituirVariableDExp var value cond)))
     ((Or fc sc) (Or (sustituirVariableDExp var value fc) (sustituirVariableDExp var value sc)))
     )))
@@ -116,15 +102,13 @@
 
 (define-fun-rec  sustituirVariableRunTime ((var String) (value Real)(f RunTime)) RunTime( 
   match f (
-    ((RunT exprArit) (Runt (sustituirVariableArit var value exprArit)))
-    ((Mult c runT) (Mult (sustituirVariableDExp var value c)(sustituirVariableArit var value runT)))
+    ((RunT exprArit) (RunT (sustituirVariableArit var value exprArit)))
+    ((Mult c runT) (Mult (sustituirVariableDExp var value c)(sustituirVariableRunTime var value runT)))
     ((Ponderar k runT) (Ponderar k (sustituirVariableRunTime var value runT)))
     ((Suma runT1 runT2) (Suma (sustituirVariableRunTime var value runT1) (sustituirVariableRunTime var value runT2)))
-    ((Resta runT1 runT2) (Sub (sustituirVariableRunTime var value runT1) (sustituirVariableRunTime var value runT2)))
+    ((Resta runT1 runT2) (Resta (sustituirVariableRunTime var value runT1) (sustituirVariableRunTime var value runT2)))
     ((Sustituir x v runT) (Sustituir x v (sustituirVariableRunTime var value runT)))
     )))
-
-
 
 (define-fun-rec  runTimeToArit ((f RunTime)) Arit( 
   match f (
@@ -136,9 +120,8 @@
     ((Sustituir x v runT) (runTimeToArit (sustituirVariableRunTime x v runT)))
     )))
 
-
 (define-fun-rec expected ((var String)(distribution Dice) (f RunTime)) RunTime(
-match distribution (
+  match distribution (
     (end (RunT (Number 0)))
     ((add head tail) (Suma (Ponderar (p head) (Sustituir var (value head) f)) (expected var tail f)))
 )))
@@ -154,42 +137,26 @@ match distribution (
     ((assigment x dist)(Suma (RunT (Number 1.0)) (expected x dist f))) 
     )))
 
-
 (define-fun programToReal ((c Program)) Real 
  (aritToReal(runTimeToArit(ert c (RunT (Number 0)))))
-)    
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;Programa de ejemplo
-; if (1/2*<true> + 1/2*<false>) :
-;    {succ:=true}
-; else {
-;      if (1/2*<true> + 1/2*<false>) :
-;       {succ:=true}
-;       else :
-;            {succ:=false}
-;     }
-(display "ejemplo progra Ctruc")
-(simplify (pif (pb 0.5)
-              (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
-              (pif (pb 0.5)
-                   (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
-                   (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
-              )
-          )
 )
 
-(display "otro ejemplo")
-(simplify (pif (pb 0.5) empty empty))
-(simplify (ert (pif (pb 0.5) empty empty)))
+(simplify (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0)  end))
+              (pif (pb 0.5)
+                   (assigment "succ" (add (mk-pair 1.0 1.0) end ))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) end ))
+              )
+          ))
+
+(simplify (programToReal (pif (pb 0.5) empty empty))) 
+
 (simplify
 (programToReal (pif (pb 0.5)
-              (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+              (assigment "succ" (add (mk-pair 1.0 1.0) end))
               (pif (pb 0.5)
-                   (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
-                   (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
+                   (assigment "succ" (add (mk-pair 1.0 1.0) end ))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) end ))
               )
           )
 ))
-
-

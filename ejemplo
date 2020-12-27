@@ -1,15 +1,113 @@
-;script con funciones dummy para practicar
 
-; Definicion de Expresion Booleana Ṕrobabilista
-(declare-datatypes () ((ProbBool (pb (p Real) (q Real)))))
-(define-fun falseVal ((c ProbBool)) ProbBool
-  c )
+(define-fun-rec  sustituirVariableArit ((var Sring) (value Real) (expArit Arit)) Arit( 
+  match expArit (
+    ((Var x) (ite (= var x) 
+                  (Number value)
+                  (Var x)
+                  ))
+    ((Number N) (Number N))
+    ((Mult k arit) (Mult k (sustituirVariableArit var value arit)))
+    ((Sum arit1 arit2) (Sum (sustituirVariableArit var value arit1) (sustituirVariable var value arit2)))
+    ((Sub arit1 arit2) (Sub (sustituirVariableArit var value arit1) (sustituirVariable var value arit2)))
+    )))
 
-(define-fun isEmpty ((x ProbBool)) ProbBool (
-  match x (
-    ((pb p q) (pb (+ 4 p q) q))
-  )
+(define-fun-rec  sustituirVariableArit ((var Sring) (value Real) (expArit Arit)) Arit( 
+  match expArit (
+    ((Var x) (ite (= var x) 
+                  (Number value)
+                  (Var x)
+                  ))
+    ((Number N) (Number N))
+    ((Mult k arit) (Mult k (sustituirVariableArit var value arit)))
+    ((Sum arit1 arit2) (Sum (sustituirVariableArit var value arit1) (sustituirVariable var value arit1)))
+    ((Sub arit1 arit2) (Sub (sustituirVariableArit var value arit1) (sustituirVariable var value arit1)))
+    )))
+
+(define-fun-rec  sustituirVariableDExp ((var String)(value Real)(c DExp)) DExp( 
+  match c (
+    ((Bvar b) (Bvar b))
+    ((Eq r l) (Eq (sustituirVariableArit r)(SustituirVariableArit l)))
+    ((Geq r l) (Geq (sustituirVariableArit r)(SustituirVariableArit l)))    
+    ((Not cond)(Not (sustituirVariableDExp var value cond)))
+    ((Or fc sc) (Or (sustituirVariableDExp var value fc) (sustituirVariableDExp var value sc)))
+    )))
+
+
+(define-fun-rec  sustituirVariableRunTime ((var String) (value Real)(f RunTime)) RunTime( 
+  match f (
+    ((RunT exprArit) (Runt (sustituirVariableArit var value exprArit)))
+    ((Mult c runT) (Mult (sustituirVariableDExp var value c)(sustituirVariableArit var value runT)))
+    ((Ponderar k runT) (Ponderar k (sustituirVariableRunTime var value runT)))
+    ((Suma runT1 runT2) (Suma (sustituirVariableRunTime var value runT1) (sustituirVariableRunTime var value runT2)))
+    ((Resta runT1 runT2) (Sub (sustituirVariableRunTime var value runT1) (sustituirVariableRunTime var value runT2)))
+    ((Sustituir x v runT) (Sustituir x v (sustituirVariableRunTime var value runT)))
+    )))
+
+
+
+(define-fun-rec  runTimeToArit ((f RunTime)) Arit( 
+  match f (
+    ((RunT exprArit) exprArit)
+    ((Mult c runT) (runTimeToArit runT))
+    ((Ponderar k runT) (Mult k (runTimeToArit runT)))
+    ((Suma runT1 runT2) (Sum (runTimeToArit runT1)(runTimeToArit runT2)))
+    ((Resta runT1 runT2) (Sub (runTimeToArit runT1) (runTimeToArit runT2)))
+    ((Sustituir x v runT) (runTimeToArit (sustituirVariableRunTime x v runT)))
+    )))
+
+
+(define-fun-rec expected ((var String)(distribution Dice) (f RunTime)) RunTime(
+match distribution (
+    (end (RunT (Number 0)))
+    ((add head tail) (Suma (Ponderar (p head) (Sustituir var (value head) f)) (expected var tail f)))
+)))
+
+;Definicion de ert
+(define-fun-rec  ert ((c Program)(f RunTime)) RunTime( 
+  match c (
+    (empty f)
+    ((pif cond ct cf) (Suma (RunT (Number 1))
+                      (Suma (Ponderar (trueVal cond) (ert ct f))
+                            (Ponderar (falseVal cond) (ert cf f))     
+                      )))
+    ((assigment x dist)(Suma (RunT (Number 1.0)) (expected x dist f))) 
+    )))
+
+
+(define-fun programToReal ((c Program)) Real 
+ (aritToReal(runTimeToArit(ert c (RunT (Number 0)))))
+)    
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Programa de ejemplo
+; if (1/2*<true> + 1/2*<false>) :
+;    {succ:=true}
+; else {
+;      if (1/2*<true> + 1/2*<false>) :
+;       {succ:=true}
+;       else :
+;            {succ:=false}
+;     }
+
+
+(simplify (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0)  end))
+              (pif (pb 0.5)
+                   (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
+              )
+          )
+)
+
+(display "otro ejemplo")
+(simplify (pif (pb 0.5) empty empty))
+(simplify (ert (pif (pb 0.5) empty empty)))
+(simplify
+(programToReal (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0) end)))
+              (pif (pb 0.5)
+                   (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) (as end (Dice Real))))
+              )
+          )
 ))
-
-(simplify (isEmpty (pb 1 1)))
-
