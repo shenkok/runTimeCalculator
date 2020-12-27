@@ -28,25 +28,14 @@
     ((Sub arit1 arit2) (- (aritToReal arit1) (aritToReal arit2)))
     )))     
 
-(define-fun-rec  sustituirVariableArit ((var Sring) (value Real) (expArit Arit)) Arit( 
-  match expArit (
-    ((Var x) (ite (= var x) 
-                  (Number value)
-                  (Var x)
-                  ))
-    ((Number N) (Number N))
-    ((Mult k arit) (Mult k (sustituirVariableArit var value arit)))
-    ((Sum arit1 arit2) (Sum (sustituirVariableArit var value arit1) (sustituirVariable var value arit1)))
-    ((Sub arit1 arit2) (Sub (sustituirVariableArit var value arit1) (sustituirVariable var value arit1)))
-    )))     
 
                 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;Definicion de Dado de n caras
-(declare-datatypes(T) ((Dice  end
+(declare-datatypes() ((Dice  end
                              (add (hd Pair) (tl Dice)))
-                       (Pair (mk-pair (value T) (p Real)) ) 
+                       (Pair (mk-pair (value Real) (p Real)) ) 
                        ))
 
 ;(display (as end (Dice Real)))
@@ -62,13 +51,6 @@
   )
 ))
 
-;Definicion parcial de esperanza
-(define-fun-rec  expected ((x (Dice Real))) Real (
-  match x (
-    (end 0)
-    ((add head tail) (+ (* (p head)(value head)) (expected tail)) )
-  )
-))
 
 ;(simplify (countFace (as end (Dice Real))))
 ;(simplify (expected (add (mk-pair 10.0 0.5)(add (mk-pair 1.0 0.5) (as end (Dice Real))))))
@@ -84,14 +66,7 @@
                              (Or (r-or DExp) (l-or DExp)))
                        ))
 
-(define-fun-rec  sustituirVariableDExp ((var String)(value Real)(c DExp)) DExp( 
-  match c (
-    ((Bvar b) (Bvar b))
-    ((Eq r l) (Eq (sustituirVariableArit r)(SustituirVariableArit l)))
-    ((Geq r l) (Geq (sustituirVariableArit r)(SustituirVariableArit l)))    
-    ((Not cond)(Not (sustituirVariableDExp var value cond)))
-    ((Or fc sc) (Or (sustituirVariableDExp var value fc) (sustituirVariableDExp var value sc)))
-    )))
+
 ;Definicion de RunTime
 (declare-datatypes () ((RunTime (RunT (rarit Arit))
                                 (Mult (dexp DExp)(runT RunTime))
@@ -100,7 +75,12 @@
                                 (Resta (r-r RunTime) (r-l RunTime))
                                 (Sustituir (var String) (value Real) (runt RunTime))
                                 
-                       )))                
+                       )))
+
+(declare-datatypes() ((Estado  final
+                             (adherir (hd Pair) (tl Dice)))
+                       (Par (mk-par (value String) (p Real)) ) 
+                       ))                                  
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -109,29 +89,74 @@
                                  (pif (pconf ProbBool) (c-1 Program)(c-2 Program))
                                  (assigment (r String) (l (Dice Real)))
                         )))
-;Definicion de ert
-(define-fun-rec  ert_f0 ((c Program)) RunTime( 
-  match c (
-    (empty (RunT (Number 0.0)))
-    ((pif cond ct cf) (Suma (RunT (Number 1))
-                      (Suma (Ponderar (trueVal cond) (ert_f0 ct))
-                            (Ponderar (falseVal cond) (ert_f0 cf))     
-                      )))
-    ((assigment re le)(RunT (Number 1.0))) 
-    )))
 
 ;RunTime hacia Expresion Aritmetica
+
+(define-fun-rec  sustituirVariableArit ((var Sring) (value Real) (expArit Arit)) Arit( 
+  match expArit (
+    ((Var x) (ite (= var x) 
+                  (Number value)
+                  (Var x)
+                  ))
+    ((Number N) (Number N))
+    ((Mult k arit) (Mult k (sustituirVariableArit var value arit)))
+    ((Sum arit1 arit2) (Sum (sustituirVariableArit var value arit1) (sustituirVariable var value arit1)))
+    ((Sub arit1 arit2) (Sub (sustituirVariableArit var value arit1) (sustituirVariable var value arit1)))
+    )))
+
+(define-fun-rec  sustituirVariableDExp ((var String)(value Real)(c DExp)) DExp( 
+  match c (
+    ((Bvar b) (Bvar b))
+    ((Eq r l) (Eq (sustituirVariableArit r)(SustituirVariableArit l)))
+    ((Geq r l) (Geq (sustituirVariableArit r)(SustituirVariableArit l)))    
+    ((Not cond)(Not (sustituirVariableDExp var value cond)))
+    ((Or fc sc) (Or (sustituirVariableDExp var value fc) (sustituirVariableDExp var value sc)))
+    )))
+
+
+(define-fun-rec  sustituirVariableRunTime ((var String) (value Real)(f RunTime)) RunTime( 
+  match f (
+    ((RunT exprArit) (Runt (sustituirVariableArit var value exprArit)))
+    ((Mult c runT) (Mult (sustituirVariableDExp var value c)(sustituirVariableArit var value runT)))
+    ((Ponderar k runT) (Ponderar k (sustituirVariableRunTime var value runT)))
+    ((Suma runT1 runT2) (Suma (sustituirVariableRunTime var value runT1) (sustituirVariableRunTime var value runT2)))
+    ((Resta runT1 runT2) (Sub (sustituirVariableRunTime var value runT1) (sustituirVariableRunTime var value runT2)))
+    ((Sustituir x v runT) (Sustituir x v (sustituirVariableRunTime var value runT)))
+    )))
+
+
+
 (define-fun-rec  runTimeToArit ((f RunTime)) Arit( 
   match f (
-    ((RunT exprArit) exprArit))
-    ((Mult c runT)(Number 1.0))
+    ((RunT exprArit) exprArit)
+    ((Mult c runT) (runTimeToArit runT))
     ((Ponderar k runT) (Mult k (runTimeToArit runT)))
     ((Suma runT1 runT2) (Sum (runTimeToArit runT1)(runTimeToArit runT2)))
     ((Resta runT1 runT2) (Sub (runTimeToArit runT1) (runTimeToArit runT2)))
-    ((Sustituir x v runT) (sustituirVariableArit (var x) (value v) (runTimeToArit runT)))
+    ((Sustituir x v runT) (runTimeToArit (sustituirVariableRunTime x v runT)))
     )))
+
+
+(define-fun-rec expected ((var String)(distribution Dice) (f RunTime)) RunTime(
+match distribution (
+    (end (RunT (Number 0)))
+    ((add head tail) (Suma (Ponderar (p head) (Sustituir var (value head) f)) (expected var tail f)))
+)))
+
+;Definicion de ert
+(define-fun-rec  ert ((c Program)(f RunTime)) RunTime( 
+  match c (
+    (empty f)
+    ((pif cond ct cf) (Suma (RunT (Number 1))
+                      (Suma (Ponderar (trueVal cond) (ert ct f))
+                            (Ponderar (falseVal cond) (ert cf f))     
+                      )))
+    ((assigment x dist)(Suma (RunT (Number 1.0)) (expected x dist f))) 
+    )))
+
+
 (define-fun programToReal ((c Program)) Real 
- (aritToReal(runTimeToArit(ert_f0 c)))
+ (aritToReal(runTimeToArit(ert c (RunT (Number 0)))))
 )    
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -156,7 +181,7 @@
 
 (display "otro ejemplo")
 (simplify (pif (pb 0.5) empty empty))
-(simplify (ert_f0 (pif (pb 0.5) empty empty)))
+(simplify (ert (pif (pb 0.5) empty empty)))
 (simplify
 (programToReal (pif (pb 0.5)
               (assigment "succ" (add (mk-pair 1.0 1.0) (as end (Dice Real))))
