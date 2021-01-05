@@ -160,3 +160,21 @@
               )
           )
 ))
+
+
+(declare-fun x () Real)
+(declare-fun y () Real)
+(assert (= y 2.5))
+(assert (= x
+(programToReal (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0) end))
+              (pif (pb 0.5)
+                   (assigment "succ" (add (mk-pair 1.0 1.0) end ))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) end ))
+              )
+          )
+)))
+
+(assert (= y x))
+(check-sat)
+(get-model)
