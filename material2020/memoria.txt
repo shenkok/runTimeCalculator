@@ -1,0 +1,202 @@
+
+; Definicion de Expresion Booleana Probabilista
+(declare-datatypes () ((ProbBool (pb (p Real)))))
+
+; restrición de 0<p<1
+
+;Funciones asosciadas a la estructura
+;Obtener el probabilidad de true
+(define-fun trueVal ((c ProbBool)) Real
+  (p c))
+;Obt 
+(define-fun falseVal ((c ProbBool)) Real
+  (- 1 (p c)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;Definicion de expresion aritmética determinista
+(declare-datatypes () ((Arit (Var (val String))
+                             (Number (n Real)) 
+                             (Mult (n-m Real) (v Arit))
+                             (Sum (f-s Arit) (s-s Arit))
+                             (Sub (f-sb Arit) (s-sb Arit)))
+                       ))
+;funcion para transforma una expresion aritmetica en una expresion
+; de tipo real 
+(define-fun-rec  aritToReal ((expArit Arit)) Real( 
+  match expArit (
+    ((Var x) 1.0)
+    ((Number N) N)
+    ((Mult k arit) (* k (aritToReal arit)))
+    ((Sum arit1 arit2) (+ (aritToReal arit1) (aritToReal arit2) ))
+    ((Sub arit1 arit2) (- (aritToReal arit1) (aritToReal arit2)))
+    )))     
+
+
+                
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;Definicion de Dado de n caras
+(declare-datatypes() ((Dice  end
+                             (add (hd Pair) (tl Dice)))
+                       (Pair (mk-pair (value Real) (p Real)) ) 
+                       ))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;Definicion de expresiones booleanas deterministicas
+(declare-datatypes () ((DExp True
+                             False
+                             (Eq (r-eq Arit) (l-eq Arit))  
+                             (Geq (r-geq Arit) (l-geq Arit))
+                             (Not (no-exp DExp))
+                             (Or (r-or DExp) (l-or DExp)))
+                       ))
+
+
+;Definicion de RunTime
+(declare-datatypes () ((RunTime (RunT (rarit Arit))
+                                (Mult (dexp DExp)(runT RunTime))
+                                (Ponderar (k Real) (run RunTime))
+                                (Suma (s-r RunTime) (s-l RunTime))
+                                (Resta (r-r RunTime) (r-l RunTime))
+                                (Sustituir (var String) (value Real) (runt RunTime))
+                                
+                       )))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;Definicion de Programas
+(declare-datatypes () ((Program empty
+                                 (pif (pconf ProbBool) (c-1 Program)(c-2 Program))
+                                 (assigment (r String) (l Dice))
+                        )))
+
+;funcion que permite sustituir un valor en una expresion artimética
+(define-fun-rec  sustituirVariableArit ((var String) (value Real) (expArit Arit)) Arit( 
+  match expArit (
+    ((Var x) (ite (= var x) 
+                  (Number value)
+                  (Var x)
+                  ))
+    ((Number N) (Number N))
+    ((Mult k arit) (Mult k (sustituirVariableArit var value arit)))
+    ((Sum arit1 arit2) (Sum (sustituirVariableArit var value arit1) (sustituirVariableArit var value arit1)))
+    ((Sub arit1 arit2) (Sub (sustituirVariableArit var value arit1) (sustituirVariableArit var value arit1)))
+    )))
+
+;Permite sustiuir en una expresion booleana 
+(define-fun-rec  sustituirVariableDExp ((var String)(value Real)(c DExp)) DExp( 
+  match c (
+    (True True)
+    (False False)
+    ((Eq r l) (Eq (sustituirVariableArit var value r)(sustituirVariableArit var value l)))
+    ((Geq r l) (Geq (sustituirVariableArit var value r)(sustituirVariableArit var value l)))    
+    ((Not cond)(Not (sustituirVariableDExp var value cond)))
+    ((Or fc sc) (Or (sustituirVariableDExp var value fc) (sustituirVariableDExp var value sc)))
+    )))
+
+;Permite sustituir en un tiempo de ejecución
+(define-fun-rec  sustituirVariableRunTime ((var String) (value Real)(f RunTime)) RunTime( 
+  match f (
+    ((RunT exprArit) (RunT (sustituirVariableArit var value exprArit)))
+    ((Mult c runT) (Mult (sustituirVariableDExp var value c)(sustituirVariableRunTime var value runT)))
+    ((Ponderar k runT) (Ponderar k (sustituirVariableRunTime var value runT)))
+    ((Suma runT1 runT2) (Suma (sustituirVariableRunTime var value runT1) (sustituirVariableRunTime var value runT2)))
+    ((Resta runT1 runT2) (Resta (sustituirVariableRunTime var value runT1) (sustituirVariableRunTime var value runT2)))
+    ((Sustituir x v runT) (Sustituir x v (sustituirVariableRunTime var value runT)))
+    )))
+
+;Permite tramsformar un tiempo de ejecución en una expresió aritmética
+(define-fun-rec  runTimeToArit ((f RunTime)) Arit( 
+  match f (
+    ((RunT exprArit) exprArit)
+    ((Mult c runT) (runTimeToArit runT))
+    ((Ponderar k runT) (Mult k (runTimeToArit runT)))
+    ((Suma runT1 runT2) (Sum (runTimeToArit runT1)(runTimeToArit runT2)))
+    ((Resta runT1 runT2) (Sub (runTimeToArit runT1) (runTimeToArit runT2)))
+    ((Sustituir x v runT) (runTimeToArit (sustituirVariableRunTime x v runT)))
+    )))
+;permite calcular la esperanza de una distribución
+(define-fun-rec expected ((var String)(distribution Dice) (f RunTime)) RunTime(
+  match distribution (
+    (end (RunT (Number 0)))
+    ((add head tail) (Suma (Ponderar (p head) (Sustituir var (value head) f)) (expected var tail f)))
+)))
+
+;Definicion de ert
+(define-fun-rec  ert ((c Program)(f RunTime)) RunTime( 
+  match c (
+    (empty f)
+    ((pif cond ct cf) (Suma (RunT (Number 1))
+                      (Suma (Ponderar (trueVal cond) (ert ct f))
+                            (Ponderar (falseVal cond) (ert cf f))     
+                      )))
+    ((assigment x dist)(Suma (RunT (Number 1.0)) (expected x dist f))) 
+    )))
+
+;permite transformar un programa en una expresion de tipo real
+(define-fun programToReal ((c Program)) Real 
+ (aritToReal(runTimeToArit(ert c (RunT (Number 0)))))
+)
+
+(simplify (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0)  end))
+              (pif (pb 0.5)
+                   (assigment "succ" (add (mk-pair 1.0 1.0) end ))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) end ))
+              )
+          ))
+
+(simplify (programToReal (pif (pb 0.5) empty empty))) 
+
+;Calculo del tiempo de ejecución de C_trunc
+(simplify
+(programToReal (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0) end))
+              (pif (pb 0.5)
+                   (assigment "succ" (add (mk-pair 1.0 1.0) end ))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) end ))
+              )
+          )
+))
+
+; verificar si el tiempo de C_trunc es mayor a 2.5
+(declare-fun x () Real)
+(declare-fun y () Real)
+(assert (= y 2.5))
+(assert (= x
+(programToReal (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0) end))
+              (pif (pb 0.5)
+                   (assigment "succ" (add (mk-pair 1.0 1.0) end ))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) end ))
+              )
+          )
+)))
+
+(assert (< y x))
+(check-sat)
+
+; verificar si el tiempo de C_trunc es menor a 2.5
+(declare-fun w () Real)
+(declare-fun z () Real)
+(assert (= w 2.5))
+(assert (= z
+(programToReal (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0) end))
+              (pif (pb 0.5)
+                   (assigment "succ" (add (mk-pair 1.0 1.0) end ))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) end ))
+              )
+          )
+)))
+
+(assert (> w z))
+(check-sat)
+
+; Como en ambos casos el modelo no es satisfacible, se concluye que 
+;ert[C_trunc](0) = 2.5
+

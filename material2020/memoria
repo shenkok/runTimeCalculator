@@ -22,7 +22,7 @@
                              (Sub (f-sb Arit) (s-sb Arit)))
                        ))
 ;funcion para transforma una expresion aritmetica en una expresion
-; de tipo real                       
+; de tipo real 
 (define-fun-rec  aritToReal ((expArit Arit)) Real( 
   match expArit (
     ((Var x) 1.0)
@@ -163,7 +163,7 @@
           )
 ))
 
-
+; verificar si el tiempo de C_trunc es mayor a 2.5
 (declare-fun x () Real)
 (declare-fun y () Real)
 (assert (= y 2.5))
@@ -179,3 +179,24 @@
 
 (assert (< y x))
 (check-sat)
+
+; verificar si el tiempo de C_trunc es menor a 2.5
+(declare-fun w () Real)
+(declare-fun z () Real)
+(assert (= w 2.5))
+(assert (= z
+(programToReal (pif (pb 0.5)
+              (assigment "succ" (add (mk-pair 1.0 1.0) end))
+              (pif (pb 0.5)
+                   (assigment "succ" (add (mk-pair 1.0 1.0) end ))
+                   (assigment "succ" (add (mk-pair 0.0 1.0) end ))
+              )
+          )
+)))
+
+(assert (> w z))
+(check-sat)
+
+; Como en ambos casos el modelo no es satisfacible, se concluye que 
+;ert[C_trunc](0) = 2.5
+
