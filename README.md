@@ -46,8 +46,18 @@ Tiempos de Ejecución (Runtime) :
 
 
 
-    https://www.youtube.com/watch?v=XpgJ31GKPWI&list=PLyrlk8Xaylp5tLThZKObBuALYANlYzItz&index=2 
+Introducción a SMT-SOLVER:
+
+      http://homepage.divms.uiowa.edu/~ajreynol/pres-iowa2017-part1.pdf
+
+Andrew Reynols :
+
+      http://homepage.cs.uiowa.edu/~ajreynol/
+
+Cómo escribir de manera correcta :
+    
+      https://www.youtube.com/watch?v=XpgJ31GKPWI&list=PLyrlk8Xaylp5tLThZKObBuALYANlYzItz&index=2 
 
 Link del informe 
 
-    https://www.overleaf.com/2383766224twjygcsswxzw
+      https://www.overleaf.com/2383766224twjygcsswxzw
