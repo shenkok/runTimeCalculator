@@ -49,12 +49,12 @@ Tiempos de Ejecución (Runtime) :
 
 
 Primer ciclo while de prueba:
-      C_{geo} :
+      $C_{geo}$ :
 
       while (c = 1)
             {c := 1/2 *< 0 > + 1/2 * < 1 >}
 
-Invariante asociado al ciclo C_{geo}:
+Invariante asociado al ciclo $C_{geo}$:
 
       C <= 1 + 4*[c = 1]
 
