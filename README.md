@@ -16,6 +16,7 @@ Expresiones aritméticas :
             | n * Arit
             | Arit + Arit 
             | Arit - Arit 
+            | Arit [x -> Arit]
 
 Expresiones booleanas deterministicas :
         
@@ -25,6 +26,7 @@ Expresiones booleanas deterministicas :
            | Arit <= Arit 
            | ㄱ dξ
            | dξ ^ dξ
+           | dξ [x -> Arit]
 
 
 Programas :
@@ -44,6 +46,17 @@ Tiempos de Ejecución (Runtime) :
                | RunTime - Runtime
                | RunTime [x -> Arit]
 
+
+
+Primer ciclo while de prueba:
+      C_{geo} :
+
+      while (c = 1)
+            {c := 1/2 *< 0 > + 1/2 * < 1 >}
+
+Invariante asociado al ciclo C_{geo}:
+
+      C <= 1 + 4*[c = 1]
 
 
 Introducción a SMT-SOLVER:
