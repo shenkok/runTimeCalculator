@@ -2,81 +2,52 @@
 Repositorio Memoria 
 
 
-Expresiones aritméticas deterministas
+Lenguaje basado en el lenguaje WHILE del curso Análisis y Verificación de Programas CC7126-1 - Otoño 2021 Clase 2
+link del curso :
 
-a:=
+    https://pleiad.cl/teaching/cc7126
 
-         n*x 
-         |n 
-         | x 
-         | a+ a 
-         | a -a 
+Nota: Para la realización de esta memoria por el momento sólo se trabaja con la sintaxis del lenguaje.
 
-Expresiones aritméticas probabilístas
+Expresiones aritméticas :
 
-μ:= 
-          
-          end
-          |const pair(v,p) μ
+      Arit := n  constante real
+            | x  variable
+            | n * Arit
+            | Arit + Arit 
+            | Arit - Arit 
 
-Expresiones booleanas deterministas
-
-dξ:=       
-
-           true 
-           |false 
-           | a= a 
-           | a<=a 
-           |ㄱdξ
-           | dξ^dξ
-
-Expresiones booleanas probabilistas 
-pξ:=              
-
-        p*<true>+(1-p)<false>
-
-Programas
-
-C:=     
-
-        empty
-        | skip
-        |{C}☐{C}
-        |x := μ | pξ
-        |C;C 
-        |if(dξ){C}else{C}
-        |pif(pξ){C}else{C}
-        |while(dξ){C}
-        |pwhile(pξ){C}
-
-
-Run Time
- f:=  
- 
-        a
-        |[dξ]
-        |a * [dξ]
-        |n * f
-       
-       
-       
+Expresiones booleanas deterministicas :
         
-        
+      dξ  :=  true 
+           |  false 
+           | Arit = Arit 
+           | Arit <= Arit 
+           | ㄱ dξ
+           | dξ ^ dξ
 
-Programa de ejemplo
 
- 
-     if (1/2*<true> + 1/2*<false>) :
-               {succ:=true}
-     else {
-      if (1/2*<true> + 1/2*<false>) :
-       {succ:=true}
-       else :
-            {succ:=false}
-     }
+Programas :
+
+      C := empty
+         | skip
+         | x := Arit
+         | C ; C 
+         | if (dξ) {C} else {C}
+         | while (dξ) {C}
+
+Tiempos de Ejecución (Runtime) :
+
+      RunTime := Arit
+               | [dξ] * Runtime
+               | RunTime + Runtime
+               | RunTime - Runtime
+               | RunTime [x -> Arit]
+
+
 
     https://www.youtube.com/watch?v=XpgJ31GKPWI&list=PLyrlk8Xaylp5tLThZKObBuALYANlYzItz&index=2 
 
 Link del informe 
 
-      https://www.overleaf.com/2383766224twjygcsswxzw
+    https://www.overleaf.com/2383766224twjygcsswxzw
