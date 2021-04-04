@@ -29,6 +29,14 @@ Expresiones booleanas deterministicas :
            | dξ [x -> Arit]
 
 
+Tiempos de Ejecución (Runtime) :
+
+      RunTime := Arit
+               | [dξ] * RunTime
+               | RunTime + RunTime
+               | RunTime - RunTime
+               | RunTime [x -> Arit]
+
 Programas :
 
       C := empty
@@ -36,25 +44,28 @@ Programas :
          | x := Arit
          | C ; C 
          | if (dξ) {C} else {C}
-         | while (dξ) {C}
+         | while (dξ) {C} [RunTime]
 
-Tiempos de Ejecución (Runtime) :
+Definición de transformada ert[C](f):: Program -> RunTime -> RunTime 
 
-      RunTime := Arit
-               | [dξ] * Runtime
-               | RunTime + Runtime
-               | RunTime - Runtime
-               | RunTime [x -> Arit]
+      ert[C](f) = 
+                match C
+                Skip -> 1 + f
+                Empty -> f
+                x := μ -> 1 + f[x/ μ]
+                C_1 ; C_2 -> ert[C_1](ert[C_2](f))
+                if (dξ) {C_1} else {C_2} -> 1 + [dξ] * ert[C_1](f) + [~dξ] * ert[C_2](f)
+                while (dξ) {C} [I] -> lfp X. 1 + [dξ] * f + 
 
 
 
 Primer ciclo while de prueba:
-      $C_{geo}$ :
+      C_geo :
 
       while (c = 1)
             {c := 1/2 *< 0 > + 1/2 * < 1 >}
 
-Invariante asociado al ciclo $C_{geo}$:
+Invariante asociado al ciclo C_{geo}:
 
       C <= 1 + 4*[c = 1]
 
