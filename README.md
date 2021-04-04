@@ -22,17 +22,17 @@ Expresiones booleanas deterministicas :
         
       dξ  :=  true 
            |  false 
-           | Arit = Arit 
-           | Arit <= Arit 
-           | ㄱ dξ
-           | dξ ^ dξ
-           | dξ [x -> Arit]
+           |  Arit = Arit 
+           |  Arit <= Arit 
+           |  ㄱ dξ
+           |  dξ ^ dξ
+           |  dξ [x -> Arit]
 
 
 Tiempos de Ejecución (Runtime) :
 
       RunTime := Arit
-               | [dξ] * RunTime
+               | [dξ]*RunTime
                | RunTime + RunTime
                | RunTime - RunTime
                | RunTime [x -> Arit]
@@ -50,12 +50,28 @@ Definición de transformada ert[C](f):: Program -> RunTime -> RunTime
 
       ert[C](f) = 
                 match C
-                Skip -> 1 + f
-                Empty -> f
-                x := μ -> 1 + f[x/ μ]
+                empty -> f                
+                skip -> 1 + f
+                x := μ -> 1 + f[x -> μ]
                 C_1 ; C_2 -> ert[C_1](ert[C_2](f))
-                if (dξ) {C_1} else {C_2} -> 1 + [dξ] * ert[C_1](f) + [~dξ] * ert[C_2](f)
-                while (dξ) {C} [I] -> lfp X. 1 + [dξ] * f + 
+                if (dξ) {C_1} else {C_2} -> 1 + [dξ]*ert[C_1](f) + [~dξ]*ert[C_2](f)
+                while (dξ) {C'} [I] -> lfp X. 1 + [~dξ]*f + [dξ]*ert[C'](X) <= I  
+
+Restricción para verificar :
+
+      VerR := RunTime <= RunTime
+              RunTime == RunTime
+
+Definición de función generadora de restricciones  VC(C)(f):: Program -> RunTime -> {VerR}
+
+      VC[C](f) = 
+               match C
+               empty -> {}
+               skip -> {}
+               x := μ -> {}
+               C_1 ; C_2 -> VC[C_1](ert[C_2](f)) Union VC[C_2](f)
+               if (dξ) {C_1} else {C_2} -> VC[C_1](f) Union VC[C_2](f)
+               while (dξ) {C'} [I] -> { 1 + [dξ]*ert[C'](I) + [~dξ]*f <= I } Union VC[C'](f)
 
 
 
