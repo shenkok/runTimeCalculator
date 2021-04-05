@@ -30,9 +30,6 @@
 
 ;;;;
 
-(simplify (var-x (Var "x")))
-(display (Add (Var "y") (Var "x")))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
@@ -64,34 +61,35 @@
 
 ;Definicion de RunTime
 (declare-datatypes () ((RunTime     (RunTimeArit (runt-arit Arit))
-                                    (Mult (mult-dexp DExp)(mult-runt RunTime))
-                                    (Weight (w-k Real) (w-runt RunTime))
-                                    (Add (add-l RunTime) (add-r RunTime))
-                                    (Sub (sub-l RunTime) (sub-r RunTime))
-                                    (Subs (subs-x String) (subs-arit Arit) (subs-runt RunTime))
+                                    (RunTimeMult (mult-dexp DExp)(mult-runt RunTime))
+                                    (RunTimeWeight (w-k Real) (w-runt RunTime))
+                                    (RunTimeAdd (add-l RunTime) (add-r RunTime))
+                                    (RunTimeSub (sub-l RunTime) (sub-r RunTime)) 
+                                    (RunTimeSubs (subs-x String) (subs-arit Arit) (subs-runt RunTime))
                                     )))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; funcion que permite sustituir una expresion aritmética en un Runtime
 ; subsDExp :: String -> RunTime -> Arit -> RunTime
-
-(define-fun-rec  subsRunTime ((var String)  (arit-for Arit) (runt-in RunTime)) RunTime( 
-  match runt-in (
-    ((RunTimeArit arit-rt) (RunTimeArit (subsArit var arit-for arit-rt)))
-    ((Mult dexp runt-m) (Mult (subsDExp var arit-for dexp) (subsRunTime var arit-for runt-m)))
-    ((Weight cte runt-w) (Weight cte (subsRunTime var arit-for runt-w)))
-    ((Add runt-l runt-r) (Add (subsRunTime var arit-for runt-l) (subsRunTime var arit-for runt-r)))
-    ((Sub runt-l runt-r) (Sub (subsRunTime var arit-for runt-l) (subsRunTime var arit-for runt-r)))
-    ((Subs x arit-s runt-s) (Subs x
-                            (subsArit x arit-for arit-s)
+(define-fun-rec subsRunTime ((var String) (arit-for Arit) (runt-in RunTime)) RunTime (
+    match runt-in (
+    ((RunTimeArit arit) (RunTimeArit (subsArit var arit-for arit)))
+    ((RunTimeMult dexp runt) (RunTimeMult (subsDExp var arit-for dexp) (subsRunTime var arit-for runt )))
+    ((RunTimeWeight k runt)(RunTimeWeight k (subsRunTime var arit-for runt)))
+    ((RunTimeAdd runt-l runt-r)(RunTimeAdd (subsRunTime var arit-for runt-l) (subsRunTime var arit-for runt-r)))
+    ((RunTimeSub runt-l runt-r) (RunTimeSub (subsRunTime var arit-for runt-l) (subsRunTime var arit-for runt-r)))
+    ((RunTimeSubs x arit runt) (RunTimeSubs x
+                            (subsArit x arit-for arit)
                             (ite (= var x)
-                                    runt-s
-                                    (SubsRunTime var arit-for runt-s))))
+                                    runt
+                                    (subsRunTime var arit-for runt))))
     )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;; código para practicar ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (simplify (var-x (Var "x")))
-(simplify (add-r (Add (RunTimeArit (Var "y")) (RunTimeArit (Var "x")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
