@@ -8,18 +8,18 @@
                                 (Sub (sub-l Arit) (sub-r Arit))
                                 )))
 
-; funcion que permite sustituir una expresion aritmética 2 en una expresion aritmética 1
+; funcion que permite sustituir una expresion aritmética for  en una expresion aritmética in
 ; subsArit :: String -> Arit -> Arit -> Arit
-(define-fun-rec  subsArit ((var String) (arit1 Arit) (arit2 Arit)) Arit( 
-  match arit1 (
+(define-fun-rec  subsArit ((var String)  (arit-for Arit) (arit-in Arit)) Arit( 
+  match arit-in (
     ((Var x) (ite (= var x) 
-                  arit2
+                  arit-for
                   (Var x)
                   ))
     ((Number N) (Number N))
-    ((Weight k arit) (Weight k (subsArit var arit arit2 )))
-    ((Add arit-l arit-r) (Add (subsArit var arit2 arit-l) (subsArit var arit2 arit-r)))
-    ((Sub arit-l arit-r) (Sub (subsArit var arit2 arit-l) (subsArit var arit2 arit-r)))
+    ((Weight k arit) (Weight k (subsArit var arit-for arit )))
+    ((Add arit-l arit-r) (Add (subsArit var arit-for arit-l) (subsArit var arit-for arit-r)))
+    ((Sub arit-l arit-r) (Sub (subsArit var arit-for arit-l) (subsArit var arit-for arit-r)))
     )))
 
 
@@ -31,7 +31,7 @@
 ;;;;
 
 (simplify (var-x (Var "x")))
-(display (add (Var "y") (Var "x")))
+(display (Add (Var "y") (Var "x")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -47,14 +47,14 @@
 
 ; funcion que permite sustituir una expresion aritmética en una expresion booleana determinista
 ; subsDExp :: String -> DExp -> Arit -> DExp
-(define-fun-rec  subsDExp ((var String) (dexp DExp) (arit Arit)) DExp( 
-  match dexp (
+(define-fun-rec  subsDExp ((var String) (arit-for Arit) (dexp-in DExp)) DExp( 
+  match dexp-in (
     (True True)
     (False False)
-    ((Eq arit-l arit-r) (Eq (subsArit var arit-l arit) (subsArit var arit-r arit)))
-    ((Geq arit-l arit-r) (Geq (subsArit var arit-l arit) (subsArit var arit-r arit)))
-    ((Not n-dexp) (subsDExp var n-dexp arit))
-    ((And d-l d-r) (And (subsDExp var d-l arit) (subsDExp var d-r arit)))
+    ((Eq arit-l arit-r) (Eq (subsArit var arit-for arit-l) (subsArit var arit-for arit-r)))
+    ((Geq arit-l arit-r) (Geq (subsArit var arit-for arit-l) (subsArit var arit-for arit-r)))
+    ((Not dexp) (subsDExp var arit-for dexp))
+    ((And d-l d-r) (And (subsDExp var arit-for d-l) (subsDExp var arit-for d-r)))
     )))
 
 
@@ -73,18 +73,19 @@
 
 ; funcion que permite sustituir una expresion aritmética en un Runtime
 ; subsDExp :: String -> RunTime -> Arit -> RunTime
-(define-fun-rec  subsRunTime ((var String) (runt RunTime) (arit Arit)) RunTime( 
-  match runt (
-    ((RunTimeArit arit-rt) (RunTimeArit (subsArit var arit-rt arit)))
-    ((Mult dexp runt-m) (Mult (subsDExp var dexp arit) (subsRunTime var runt-m arit)))
-    ((Weight cte runt-w) (Weight cte (subsRunTime var runt-w arit)))
-    ((Add runt-l runt-r) (Add (subsRunTime var runt-l arit) (subsRunTime var runt-r arit)))
-    ((Sub runt-l runt-r) (Sub (subsRunTime var runt-l arit) (subsRunTime var runt-r arit)))
+
+(define-fun-rec  subsRunTime ((var String)  (arit-for Arit) (runt-in RunTime)) RunTime( 
+  match runt-in (
+    ((RunTimeArit arit-rt) (RunTimeArit (subsArit var arit-for arit-rt)))
+    ((Mult dexp runt-m) (Mult (subsDExp var arit-for dexp) (subsRunTime var arit-for runt-m)))
+    ((Weight cte runt-w) (Weight cte (subsRunTime var arit-for runt-w)))
+    ((Add runt-l runt-r) (Add (subsRunTime var arit-for runt-l) (subsRunTime var arit-for runt-r)))
+    ((Sub runt-l runt-r) (Sub (subsRunTime var arit-for runt-l) (subsRunTime var arit-for runt-r)))
     ((Subs x arit-s runt-s) (Subs x
-                            ()
-                             (ite (= var x)
-                                    arit2
-                                    (Var x))))
+                            (subsArit x arit-for arit-s)
+                            (ite (= var x)
+                                    runt-s
+                                    (SubsRunTime var arit-for runt-s))))
     )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;; código para practicar ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
