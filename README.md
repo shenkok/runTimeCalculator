@@ -105,3 +105,16 @@ Link del informe
 Documentación
 
       http://smtlib.cs.uiowa.edu/papers/smt-lib-reference-v2.6-r2017-07-18.pdf
+
+Ejemplo de lista enlazada
+
+      (display (insert 3 ( insert 3 (as nil (List Int) ))))
+
+Ejemplo de uso let 
+
+(simplify
+    (let ((rt1 (RunTimeArit (Number 1.0))) (rt2 (RunTimeArit (Number 4.0))))
+        (let ((res1  (ResGeq rt1 rt2)) (res2 (ResEq rt2 rt1)))
+            (let ((n (lenRes (insert res1 (insert res2 (as nil Restrictions))))))
+                n
+            ))))

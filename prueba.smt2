@@ -1,0 +1,20 @@
+(declare-sort A)
+(declare-sort B)
+(declare-fun f (A) B)
+(assert (forall ((x A) (y A))
+                (! (=> (= (f x) (f y)) (= x y))
+                   :pattern ((f x) (f y))
+                   )))
+(declare-const a1 A)
+(declare-const a2 A)
+(declare-const b B)
+(assert (not (= a1 a2)))
+(assert (= (f a1) b))
+(assert (= (f a2) b))
+(check-sat)
+
+(define-fun-rec lenRes ((ress Restrictions)) Int (
+    match ress (
+        (end 0)
+        ((cons k tail) (+ 1 (lenRes  tail Restrictions))) 
+    )))

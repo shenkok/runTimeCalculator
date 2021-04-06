@@ -1,13 +1,5 @@
 ; Definicion de lista enlazada
-
-(set-option :smt.mbqi true)
 ;version no correcta falta hacer el +1 
-(define-fun-rec lenList ((l (List Int))) Int (
-    match l (
-    (nil 0)
-    ((insert k  tail) (lenList tail)) 
-    )))
-
 
 
 ; Expresiones Aritméticas
@@ -84,7 +76,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; funcion que permite sustituir una expresion aritmética en un Runtime
+; funcion que permite sustituir una expresion aritmética en un RunTime
 ; subsDExp :: String -> RunTime -> Arit -> RunTime
 (define-fun-rec subsRunTime ((var String) (arit-for Arit) (runt-in RunTime)) RunTime (
     match runt-in (
@@ -102,11 +94,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;; código para practicar ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(simplify (var-x (Var "x")))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;Definicion de la funcion sustitucion
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -127,23 +114,71 @@
 )))
 
 
-(forall  ((x (List  Int)) (y (List  Int)))
-    (= (append x y)
-        (ite (= x (as nil (List  Int)))
-            y
-            (let ((h (head x)) (t (tail x)))
-                (insert h (append t y))))))
+;define-sort Restrictions () (List Restriction))
+(declare-datatypes () ((Restrictions     End
+                                        (Cons (hd Restriction) (tl Restrictions))
+                                    )))
+; Calculo del largo de un conjunto de restricciones 
+;lenRes(ress) :: Restrictions -> Int
+(define-fun-rec lenRes ((ress Restrictions)) Int (
+    match ress (
+        (End 0)
+        ((Cons k tail) (+ 1 (lenRes tail))) 
+    )))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(simplify
+    (+ 8
+    (lenRes 
+    (Cons 
+    (ResGeq (RunTimeArit (Number 3.0)) (RunTimeArit (Number 3.0)))
+        End))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-
+; union entre dos conjuntos de restricciones
+; unionRes(res1, res2):: Restrictions -> Restrictions -> Restrictions
+(define-fun-rec unionRes ((res1 Restrictions)(res2 Restrictions)) Restrictions (
+    match res1 (
+        (End res2)
+        ((Cons k tail) (unionRes tail (Cons k res2))) 
+    )))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:
-;Definicion de funcion  VC[C](f):: Program -> RunTime -> [Restriction]->( RunTime , [Restriction] )
+(declare-datatypes (T1 T2) ((Pair (mk-pair (first T1) (second T2)))))
 
-
-
-(simplify(append (as nil (List Int)) (insert 6 (insert 5 (as nil (List Int))))))
-(simplify (let ((x 6)) x ))
-
-
-
+;Definicion de funcion  VC[C](f):: Program -> RunTime ->( RunTime , Restrictions )
+(define-fun-rec VC ((C Program) (runt RunTime)) (Pair RunTime Restrictions)(
+    match C (
+       (Skip (mk-pair
+                (RunTimeAdd (RunTimeArit (Number 1.0)) runt)
+                End))
+        (Empty (mk-pair
+                runt
+                End))
+        ((Assigment x arit) (mk-pair
+                                (RunTimeAdd (RunTimeArit (Number 1.0)) (subsRunTime x arit runt))
+                                End))
+        ((If cond ct cf ) (let ((S1 (VC ct runt )) (S2 (VC cf runt )))
+                            (mk-pair
+                                (RunTimeAdd
+                                    (RunTimeArit (Number 1.0)) 
+                                    (RunTimeAdd 
+                                        (RunTimeMult cond (first S1)) 
+                                        (RunTimeMult (Not cond) (first S2))))
+                                (unionRes (second S1)(second S2)))
+                            ))
+        ((Comp c1 c2) (let ((S2 (VC c1 runt )))
+                        (let ((S1 (VC c2 (first S2) )))
+                            (mk-pair (first S1) (unionRes (second S1) (second S2))) 
+                        )))
+        ((While cond c i)(let ((S (VC c runt )))
+                            (mk-pair
+                                i (unionRes 
+                                    (ResGeq
+                                    (RunTimeAdd 
+                                    (RunTimeArit(Number 1.0))
+                                    (RunTimeAdd 
+                                    (RunTimeMult cond (first S))
+                                    (RunTimeMult (Not cond) runt))) i)
+                                    (second S)
+                                    ))
+                            ))
+    )))
