@@ -101,3 +101,7 @@ Cómo escribir de manera correcta :
 Link del informe 
 
       https://www.overleaf.com/2383766224twjygcsswxzw
+
+Documentación
+
+      http://smtlib.cs.uiowa.edu/papers/smt-lib-reference-v2.6-r2017-07-18.pdf

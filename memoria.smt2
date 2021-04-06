@@ -1,5 +1,18 @@
+; Definicion de lista enlazada
+
+(set-option :smt.mbqi true)
+;version no correcta falta hacer el +1 
+(define-fun-rec lenList ((l (List Int))) Int (
+    match l (
+    (nil 0)
+    ((insert k  tail) (lenList tail)) 
+    )))
+
+
+
 ; Expresiones Aritméticas
 ;Definicion de expresion aritmética determinista
+
 
 (declare-datatypes () ((Arit    (Var (var-x String))
                                 (Number (number-k Real)) 
@@ -108,10 +121,29 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;funcion que permite sustituir un valor en una expresion artimética
-; subsArit :: String -> Arit -> Arit -> Arit
+(declare-datatypes () ((Restriction   (ResGeq (rge-l RunTime) (rge-r RunTime))
+                                    (ResEq (re-l RunTime) (re-r RunTime))
+
+)))
+
+
+(forall  ((x (List  Int)) (y (List  Int)))
+    (= (append x y)
+        (ite (= x (as nil (List  Int)))
+            y
+            (let ((h (head x)) (t (tail x)))
+                (insert h (append t y))))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:
-;Definicion de funcion  VC[C](f):: Program -> RunTime -> ( RunTime , [VerR] )
+;Definicion de funcion  VC[C](f):: Program -> RunTime -> [Restriction]->( RunTime , [Restriction] )
+
+
+
+(simplify(append (as nil (List Int)) (insert 6 (insert 5 (as nil (List Int))))))
+(simplify (let ((x 6)) x ))
+
+
+
