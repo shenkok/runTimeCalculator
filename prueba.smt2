@@ -1,20 +1,13 @@
-(declare-sort A)
-(declare-sort B)
-(declare-fun f (A) B)
-(assert (forall ((x A) (y A))
-                (! (=> (= (f x) (f y)) (= x y))
-                   :pattern ((f x) (f y))
-                   )))
-(declare-const a1 A)
-(declare-const a2 A)
-(declare-const b B)
-(assert (not (= a1 a2)))
-(assert (= (f a1) b))
-(assert (= (f a2) b))
-(check-sat)
+;Definicion de Dado de n caras
+(declare-datatypes(T) ((Dice  end
+                             (add (hd Pair) (tl Dice)))
+                       (Pair (mk-pair (value T) (p Real)) ) 
+                       ))
 
-(define-fun-rec lenRes ((ress Restrictions)) Int (
-    match ress (
-        (end 0)
-        ((cons k tail) (+ 1 (lenRes  tail Restrictions))) 
-    )))
+(define-fun-rec countFace ((x (Dice Real))) Int (
+  match x (
+    (end 0)
+    ((add head tail) (+ 1 (countFace tail)))
+  )
+))
+(simplify (countFace (add (mk-pair 0.0 0.0)(add (mk-pair 1.0 1.0) (as end (Dice Real))))))

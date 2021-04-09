@@ -1,7 +1,3 @@
-; Definicion de lista enlazada
-;version no correcta falta hacer el +1 
-
-
 ; Expresiones Aritméticas
 ;Definicion de expresion aritmética determinista
 
@@ -55,7 +51,7 @@
     (False False)
     ((Eq arit-l arit-r) (Eq (subsArit var arit-for arit-l) (subsArit var arit-for arit-r)))
     ((Geq arit-l arit-r) (Geq (subsArit var arit-for arit-l) (subsArit var arit-for arit-r)))
-    ((Not dexp) (subsDExp var arit-for dexp))
+    ((Not dexp) (Not (subsDExp var arit-for dexp)))
     ((And d-l d-r) (And (subsDExp var arit-for d-l) (subsDExp var arit-for d-r)))
     )))
 
@@ -114,32 +110,25 @@
 )))
 
 
-;define-sort Restrictions () (List Restriction))
-(declare-datatypes () ((Restrictions     End
-                                        (Cons (hd Restriction) (tl Restrictions))
-                                    )))
+(define-sort Restrictions () (List Restriction))
+
 ; Calculo del largo de un conjunto de restricciones 
 ;lenRes(ress) :: Restrictions -> Int
 (define-fun-rec lenRes ((ress Restrictions)) Int (
     match ress (
-        (End 0)
-        ((Cons k tail) (+ 1 (lenRes tail))) 
+        (nil 0)
+        ((insert k tail) (+ 1 (lenRes tail))) 
     )))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(simplify
-    (+ 8
-    (lenRes 
-    (Cons 
-    (ResGeq (RunTimeArit (Number 3.0)) (RunTimeArit (Number 3.0)))
-        End))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; union entre dos conjuntos de restricciones
 ; unionRes(res1, res2):: Restrictions -> Restrictions -> Restrictions
 (define-fun-rec unionRes ((res1 Restrictions)(res2 Restrictions)) Restrictions (
     match res1 (
-        (End res2)
-        ((Cons k tail) (unionRes tail (Cons k res2))) 
+        (nil res2)
+        ((insert k tail) (unionRes tail (insert k res2))) 
     )))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:
 (declare-datatypes (T1 T2) ((Pair (mk-pair (first T1) (second T2)))))
@@ -149,13 +138,13 @@
     match C (
        (Skip (mk-pair
                 (RunTimeAdd (RunTimeArit (Number 1.0)) runt)
-                End))
+                nil))
         (Empty (mk-pair
                 runt
-                End))
+                nil))
         ((Assigment x arit) (mk-pair
                                 (RunTimeAdd (RunTimeArit (Number 1.0)) (subsRunTime x arit runt))
-                                End))
+                                nil))
         ((If cond ct cf ) (let ((S1 (VC ct runt )) (S2 (VC cf runt )))
                             (mk-pair
                                 (RunTimeAdd
@@ -171,7 +160,7 @@
                         )))
         ((While cond c i)(let ((S (VC c runt )))
                             (mk-pair
-                                i (unionRes 
+                                i (insert 
                                     (ResGeq
                                     (RunTimeAdd 
                                     (RunTimeArit(Number 1.0))
@@ -182,3 +171,12 @@
                                     ))
                             ))
     )))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(declare-const a Int)
+
+(assert (= a (lenRes (insert (ResGeq (RunTimeArit (Number 3.0)) (RunTimeArit (Number 3.0)))(as nil Restrictions)))))
+(assert (= a 1.0))
+(check-sat)
+(get-model)
+
