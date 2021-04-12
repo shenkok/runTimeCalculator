@@ -1,8 +1,15 @@
+(define-sort Variable () String)
+
 ; Expresiones Aritméticas
-;Definicion de expresion aritmética determinista
+; Definicion de expresion aritmética determinista
 
+;      Arit := n  constante real
+;            | x  variable
+;            | n * Arit
+;            | Arit + Arit 
+;            | Arit - Arit 
 
-(declare-datatypes () ((Arit    (Var (var-x String))
+(declare-datatypes () ((Arit    (Var (var-x Variable))
                                 (Number (number-k Real)) 
                                 (Weight (w-k Real) (w-arit Arit))
                                 (Add (add-l Arit) (add-r Arit))
@@ -11,7 +18,7 @@
 
 ; funcion que permite sustituir una expresion aritmética for  en una expresion aritmética in
 ; subsArit :: String -> Arit -> Arit -> Arit
-(define-fun-rec  subsArit ((var String)  (arit-for Arit) (arit-in Arit)) Arit( 
+(define-fun-rec  subsArit ((var Variable)  (arit-for Arit) (arit-in Arit)) Arit( 
   match arit-in (
     ((Var x) (ite (= var x) 
                   arit-for
@@ -26,15 +33,18 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;; código para practicar ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
-
-
-;;;;
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ;Definicion de expresiones booleanas deterministicas
+
+;      dξ  :=  true 
+;           |  false 
+;           |  Arit = Arit 
+;           |  Arit <= Arit 
+;           |  ㄱ dξ
+;           |  dξ ^ dξ
+
 (declare-datatypes () ((DExp    (True)
                                 (False)
                                 (Eq (eq-l Arit) (eq-r Arit))  
@@ -45,7 +55,7 @@
 
 ; funcion que permite sustituir una expresion aritmética en una expresion booleana determinista
 ; subsDExp :: String -> DExp -> Arit -> DExp
-(define-fun-rec  subsDExp ((var String) (arit-for Arit) (dexp-in DExp)) DExp( 
+(define-fun-rec  subsDExp ((var Variable) (arit-for Arit) (dexp-in DExp)) DExp( 
   match dexp-in (
     (True True)
     (False False)
@@ -61,6 +71,13 @@
 ;Definición de Tiempos de ejecución
 
 ;Definicion de RunTime
+
+;      RunTime := Arit
+;               | [dξ]*RunTime
+;               | RunTime + RunTime
+;               | RunTime - RunTime
+;               | RunTime [x -> Arit]
+
 (declare-datatypes () ((RunTime     (RunTimeArit (runt-arit Arit))
                                     (RunTimeMult (mult-dexp DExp)(mult-runt RunTime))
                                     (RunTimeWeight (w-k Real) (w-runt RunTime))
@@ -74,7 +91,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; funcion que permite sustituir una expresion aritmética en un RunTime
 ; subsDExp :: String -> RunTime -> Arit -> RunTime
-(define-fun-rec subsRunTime ((var String) (arit-for Arit) (runt-in RunTime)) RunTime (
+(define-fun-rec subsRunTime ((var Variable) (arit-for Arit) (runt-in RunTime)) RunTime (
     match runt-in (
     ((RunTimeArit arit) (RunTimeArit (subsArit var arit-for arit)))
     ((RunTimeMult dexp runt) (RunTimeMult (subsDExp var arit-for dexp) (subsRunTime var arit-for runt )))
@@ -94,6 +111,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;Definicion del lenguaje WHILE 
+
+;      C := empty
+;         | skip
+;         | x := Arit
+;         | C ; C 
+;         | if (dξ) {C} else {C}
+;         | while (dξ) {C} [RunTime] 
+
 (declare-datatypes () ((Program     (Empty)
                                     (Skip)
                                     (Assigment (assig-var String) (assig-arit Arit))
