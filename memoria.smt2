@@ -11,7 +11,7 @@
 
 (declare-datatypes () ((Arit    (Var (var-x Variable))
                                 (Number (number-k Real)) 
-                                (Weight (w-k Real) (w-arit Arit))
+                                (Scale (sc-k Real) (sc-arit Arit))
                                 (Add (add-l Arit) (add-r Arit))
                                 (Sub (sub-l Arit) (sub-r Arit))
                                 )))
@@ -25,7 +25,7 @@
                   (Var x)
                   ))
     ((Number N) (Number N))
-    ((Weight k arit) (Weight k (subsArit var arit-for arit )))
+    ((Scale k arit) (Scale k (subsArit var arit-for arit )))
     ((Add arit-l arit-r) (Add (subsArit var arit-for arit-l) (subsArit var arit-for arit-r)))
     ((Sub arit-l arit-r) (Sub (subsArit var arit-for arit-l) (subsArit var arit-for arit-r)))
     )))
@@ -80,7 +80,7 @@
 
 (declare-datatypes () ((RunTime     (RunTimeArit (runt-arit Arit))
                                     (RunTimeMult (mult-dexp DExp)(mult-runt RunTime))
-                                    (RunTimeWeight (w-k Real) (w-runt RunTime))
+                                    (RunTimeScale (sc-k Real) (sc-runt RunTime))
                                     (RunTimeAdd (add-l RunTime) (add-r RunTime))
                                     (RunTimeSub (sub-l RunTime) (sub-r RunTime)) 
                                     (RunTimeSubs (subs-x String) (subs-arit Arit) (subs-runt RunTime))
@@ -95,7 +95,7 @@
     match runt-in (
     ((RunTimeArit arit) (RunTimeArit (subsArit var arit-for arit)))
     ((RunTimeMult dexp runt) (RunTimeMult (subsDExp var arit-for dexp) (subsRunTime var arit-for runt )))
-    ((RunTimeWeight k runt)(RunTimeWeight k (subsRunTime var arit-for runt)))
+    ((RunTimeScale k runt)(RunTimeScale k (subsRunTime var arit-for runt)))
     ((RunTimeAdd runt-l runt-r)(RunTimeAdd (subsRunTime var arit-for runt-l) (subsRunTime var arit-for runt-r)))
     ((RunTimeSub runt-l runt-r) (RunTimeSub (subsRunTime var arit-for runt-l) (subsRunTime var arit-for runt-r)))
     ((RunTimeSubs x arit runt) (RunTimeSubs x
