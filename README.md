@@ -118,3 +118,11 @@ Ejemplo de uso let
                         (let ((n (lenRes (insert res1 (insert res2 (as nil Restrictions))))))
                         n
                         ))))
+
+Ejemplo tutorial:
+
+      https://www.lri.fr/~conchon/TER/2013/2/SMTLIB2.pdf
+
+Otro ejemplo :       
+
+      https://www.lri.fr/~conchon/TER/2013/2/SMTLIB2.pdf

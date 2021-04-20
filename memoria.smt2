@@ -1,3 +1,5 @@
+
+(set-info :smt-lib-version 2.0)
 (define-sort Variable () String)
 
 ; Expresiones Aritméticas
@@ -32,7 +34,7 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;; código para practicar ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(simplify (var-x (subsArit "y" (Number 10) (Var "x"))):algebraic_number_evaluator true)
+(simplify (var-x (subsArit "y" (Number 10) (Var "x"))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
