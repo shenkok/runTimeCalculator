@@ -5,9 +5,9 @@
 
 ;      Arit := n  constante real
 ;            | x  variable
-;            | n * Arit
-;            | Arit + Arit 
-;            | Arit - Arit 
+;            | n * Arit podenracion por escalar
+;            | Arit + Arit sumas de Arit
+;            | Arit - Arit resta de arit
 
 (declare-datatypes () ((Arit    (Var (var-x Variable))
                                 (Number (number-k Real)) 
@@ -32,18 +32,18 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;; código para practicar ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
+(simplify (var-x (subsArit "y" (Number 10) (Var "x"))):algebraic_number_evaluator true)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ;Definicion de expresiones booleanas deterministicas
 
-;      dξ  :=  true 
-;           |  false 
-;           |  Arit = Arit 
-;           |  Arit <= Arit 
-;           |  ㄱ dξ
-;           |  dξ ^ dξ
+;      dξ  :=  true constante true
+;           |  false constante false
+;           |  Arit = Arit igualdad de expresiones arit
+;           |  Arit <= Arit menor igual de expresiones arit
+;           |  ㄱ dξ negacion de una expresion bool
+;           |  dξ ^ dξ disjunción de expresiones bool
 
 (declare-datatypes () ((DExp    (True)
                                 (False)
@@ -72,18 +72,18 @@
 
 ;Definicion de RunTime
 
-;      RunTime := Arit
-;               | [dξ]*RunTime
-;               | RunTime + RunTime
-;               | RunTime - RunTime
-;               | RunTime [x -> Arit]
+;      RunTime := Arit expresion arit
+;               | [dξ]*RunTime ponderacion por condicion
+;               | RunTime + RunTime suma de runtime
+;               | RunTime - RunTime resta de runtime
+;               | RunTime [x -> Arit] sustitucion 
 
 (declare-datatypes () ((RunTime     (RunTimeArit (runt-arit Arit))
                                     (RunTimeMult (mult-dexp DExp)(mult-runt RunTime))
                                     (RunTimeScale (sc-k Real) (sc-runt RunTime))
                                     (RunTimeAdd (add-l RunTime) (add-r RunTime))
                                     (RunTimeSub (sub-l RunTime) (sub-r RunTime)) 
-                                    (RunTimeSubs (subs-x String) (subs-arit Arit) (subs-runt RunTime))
+                                    (RunTimeSubs (subs-x Variable) (subs-arit Arit) (subs-runt RunTime))
                                     )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -129,6 +129,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;Definicion de restricciones 
+;       Restriction := 
+;                       RunTime <= RunTime
+;                   |   RunTime = RunTime 
 (declare-datatypes () ((Restriction   (ResGeq (rge-l RunTime) (rge-r RunTime))
                                     (ResEq (re-l RunTime) (re-r RunTime))
 
@@ -155,8 +159,17 @@
         (nil res2)
         ((insert k tail) (unionRes tail (insert k res2))) 
     )))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;(define-fun characteristicLoopD ((runt RunTime)( c Program)(cond DExp)) RunTime(
+ ;   (RunTimeAdd (RunTimeArit (Number 1))(RunTimeAdd (RunTimeMult (Not cond) runt) (RunTimeMult cond )))
+
+;))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:
+; declarion de estructura pares
 (declare-datatypes (T1 T2) ((Pair (mk-pair (first T1) (second T2)))))
+
 
 ;Definicion de funcion  VC[C](f):: Program -> RunTime ->( RunTime , Restrictions )
 (define-fun-rec VC ((C Program) (runt RunTime)) (Pair RunTime Restrictions)(
@@ -198,10 +211,4 @@
     )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(declare-const a Int)
-
-(assert (= a (lenRes (insert (ResGeq (RunTimeArit (Number 3.0)) (RunTimeArit (Number 3.0)))(as nil Restrictions)))))
-(assert (= a 1.0))
-(check-sat)
-(get-model)
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
