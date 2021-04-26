@@ -126,3 +126,7 @@ Ejemplo tutorial:
 Otro ejemplo :       
 
       https://www.lri.fr/~conchon/TER/2013/2/SMTLIB2.pdf
+      
+Un curso que podria servir :
+    https://homes.cs.washington.edu/~bodik/ucb/cs294fa12.html
+    
