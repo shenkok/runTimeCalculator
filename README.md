@@ -121,8 +121,16 @@ Ejemplo de uso let
 
 Ejemplo tutorial:
 
-      https://www.lri.fr/~conchon/TER/2013/2/SMTLIB2.pdf
+     https://sat-smt.codes/
 
 Otro ejemplo :       
 
       https://www.lri.fr/~conchon/TER/2013/2/SMTLIB2.pdf
+
+rise4fun ;
+
+      https://rise4fun.com/Z3/tutorial/guide
+
+link reu;
+
+      https://uchile.zoom.us/j/88041295290?pwd=RC9PNzYrOVhOTjdmRkIraXVNbDlVQT09

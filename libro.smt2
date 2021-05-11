@@ -45,3 +45,58 @@
 (assert (= x (cons (+ y 1) nil)))
 (assert (> (head x) (+ y 1)))
 (check-sat)
+
+(declare-const a Int)
+(declare-const b Int)
+(declare-const c Int)
+(declare-const d Real)
+(declare-const e Real)
+(assert (> a (+ b 2)))
+(assert (= a (+ (* 2 c) 10)))
+(assert (<= (+ c b) 1000))
+(assert (>= d e))
+(check-sat)
+(get-model)
+(set-logic QF_LIA)
+(declare-const x Int)
+(declare-const y Int)
+(define-fun conjetura_1 () Bool
+    (=> ( > x 0) (> x 1 ))
+)
+
+(define-fun conjetura_2 () Bool
+    (=> ( > x 0) (>= x 1 ))
+)
+
+(define-fun conjetura_3 () Bool
+    (=> (>= x (+ y 2)) (>= x y))
+)
+
+(define-fun conjetura_4 () Bool
+    (=> (and (>= x 0) (>= y 0)) (>= (+ (* 2 x) y)) )
+)
+(assert (not conjetura_4)
+(assert (not conjetura_3)
+(assert (not conjetura_2)
+(check-sat)
+
+
+(declare-sort Type)
+(declare-fun subtype (Type Type) Bool)
+(declare-fun array-of (Type) Type)
+(assert (forall ((x Type)) (subtype x x)))
+(assert (forall ((x Type) (y Type) (z Type))
+          (=> (and (subtype x y) (subtype y z)) 
+              (subtype x z)))) 
+(assert (forall ((x Type) (y Type))
+          (=> (and (subtype x y) (subtype y x)) 
+              (= x y))))
+(assert (forall ((x Type) (y Type) (z Type))
+          (=> (and (subtype x y) (subtype x z)) 
+              (or (subtype y z) (subtype z y))))) 
+(assert (forall ((x Type) (y Type))
+          (=> (subtype x y) 
+              (subtype (array-of x) (array-of y)))))
+(declare-const root-type Type)
+(assert (forall ((x Type)) (subtype x root-type)))
+(check-sat)

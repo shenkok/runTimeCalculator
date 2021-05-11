@@ -1,8 +1,15 @@
 (set-logic QF_LIA)
-(declare-fun x () Int)
-(declare-fun y () Int)
-(declare-fun z () Int)
-(assert (or (> (+ x 1) 0) (> (+ x y) 0)))
-(assert (or (< x 0) (> (+ x y) 4)))
-(assert (not (> (+ x y) 0)))
+(declare-const x Int)
+(declare-const y Int)
+
+(define-fun conjetura_1 () Bool
+    (=> ( > x 0) (> x 1 ))
+)
+
+(define-fun conjetura_2 () Bool
+    (=> ( > x 0) (>= x 1 ))
+)
+
+(assert (not conjetura_2))
 (check-sat)
+(get-model)
