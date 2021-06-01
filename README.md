@@ -141,3 +141,9 @@ Un curso que podria servir :
     https://homes.cs.washington.edu/~bodik/ucb/cs294fa12.html
     
 >>>>>>> 2d4268555699f6c5aab88c069a483fa4296f6d55
+
+
+caso de estudio
+
+
+runtime generado <= [w<8] * 4 + [w >= 8] * 5 

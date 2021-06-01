@@ -4,11 +4,11 @@ import qualified Data.Set as Set
 
 type Name = String
 
-data AExp = Lit Integer
+data AExp = Lit Float
           | Var Name
           | AExp :+: AExp
           | AExp :-: AExp 
-          | Integer :*: AExp deriving (Eq) -- Poner constante
+          | Float :*: AExp deriving (Eq) 
 
 instance Show AExp where 
   show (Lit n) = show n
@@ -45,15 +45,15 @@ sustBExp x aritFor (Not e) = (Not (sustBExp x aritFor e))
 data RunTime = RunTimeArit AExp
              | BExp :<>: RunTime
              | RunTime :++: RunTime
-             | Integer :**: RunTime  deriving (Eq) -- Cambiar a escalar
+             | Float :**: RunTime  deriving (Eq)
 
 instance Show RunTime where 
   show (RunTimeArit arit) = show arit
   show (e_b :<>: (RunTimeArit (Lit 1))) = "["++ (show e_b) ++ "]"
   show (e_b :<>: (RunTimeArit (Lit n))) = "["++ (show e_b) ++ "]*" ++ (show n)
   show (e_b :<>: runt) = "["++ (show e_b) ++ "]*" ++ "(" ++ (show runt) ++ ")"
-  show (e_1 :++: e_2) = show e_1 ++" + "++ show e_2   
-  show (e_1 :**: e_2) = show e_1 ++" * "++ "(" ++ show e_2 ++")"       
+  show (e_1 :++: e_2) =  show e_1 ++" + "++ show e_2    
+  show (e_1 :**: e_2) = show e_1 ++" * " ++ show e_2        
 
 sustRuntime :: Name -> AExp -> RunTime -> RunTime
 sustRuntime x aritFor (RunTimeArit aritIn) = (RunTimeArit (sustAExp x aritFor aritIn))
@@ -91,34 +91,64 @@ vcGenerator (While e_b p inv) runt = (inv, [l_inv :!<=: inv] ++ (snd vc_p)) wher
 
 ---------------------------(Simplificar)---------------------------------------------------------
 
+simplifyBExp :: BExp -> BExp
+simplifyBExp (True' :|: _ ) = True'
+simplifyBExp ( _ :|: True' ) = True'
+simplifyBExp ( e_b :|: False' ) = e_b
+simplifyBExp (False' :|: e_b) = e_b
+simplifyBExp (False' :&: _ ) = False'
+simplifyBExp ( _ :&: False') = False'
+simplifyBExp (True' :&: e_b) = e_b
+simplifyBExp (e_b :&: True') = e_b
+simplifyBExp (Not(Not e_b)) = e_b
+simplifyBExp otherwise = otherwise
+
+deepSimplifyBExp :: BExp -> BExp
+deepSimplifyBExp True' = True'
+deepSimplifyBExp False' = False'
+deepSimplifyBExp (e_1 :<=: e_2) = e_1 :<=: e_2
+deepSimplifyBExp (e_1 :==: e_2) = e_1 :==: e_2
+deepSimplifyBExp (e_1 :|: e_2) = simplifyBExp ((deepSimplifyBExp e_1) :|: (deepSimplifyBExp e_2))
+deepSimplifyBExp (e_1 :&: e_2) = simplifyBExp ((deepSimplifyBExp e_1) :&: (deepSimplifyBExp e_2))
+deepSimplifyBExp (Not e_b) = simplifyBExp (Not (deepSimplifyBExp e_b))
+
+
 simplifyRuntime :: RunTime -> RunTime
+simplifyRuntime ((RunTimeArit (Lit n)) :++: ((RunTimeArit (Lit m))) :++: runt) = (RunTimeArit (Lit (n + m))) :++: runt
 simplifyRuntime (True' :<>: runt) = runt
-simplifyRuntime (False' :<>: _ )  = (RunTimeArit (Lit 0))
-simplifyRuntime ( _ :<>: (RunTimeArit (Lit 0))) = RunTimeArit (Lit 0)
-simplifyRuntime ((RunTimeArit (Lit 0)) :++: runt) = runt
-simplifyRuntime (runt :++: (RunTimeArit (Lit 0))) = runt 
+simplifyRuntime (False' :<>: _ )  = (RunTimeArit (Lit 0.0))
+simplifyRuntime ( _ :<>: (RunTimeArit (Lit 0.0))) = RunTimeArit (Lit 0.0)
+simplifyRuntime ((RunTimeArit (Lit 0.0)) :++: runt) = runt
+simplifyRuntime (runt :++: (RunTimeArit (Lit 0.0))) = runt 
 simplifyRuntime ((RunTimeArit (Lit n)) :++: (RunTimeArit (Lit m))) = (RunTimeArit (Lit (n + m)))
 simplifyRuntime ( m :**: (RunTimeArit (Lit n))) = (RunTimeArit (Lit (m * n)))
-simplifyRuntime ( 1 :**: runt) = runt
-simplifyRuntime ( 0 :**: _ ) = RunTimeArit (Lit 0)
+simplifyRuntime ( 1.0 :**: runt) = runt
+simplifyRuntime ( 0.0 :**: _ ) = RunTimeArit (Lit 0.0)
 simplifyRuntime otherwise = otherwise
 
-deepsimplifyRuntime :: RunTime -> RunTime
-deepsimplifyRuntime (RunTimeArit arit) = (RunTimeArit arit)
-deepsimplifyRuntime (bexp :<>: runt) = simplifyRuntime (bexp :<>: (deepsimplifyRuntime runt))
-deepsimplifyRuntime (e_1 :++: e_2) = simplifyRuntime ((deepsimplifyRuntime e_1) :++: (deepsimplifyRuntime e_2))
-deepsimplifyRuntime (k :**: runt) = simplifyRuntime (k :**: (deepsimplifyRuntime runt))
+deepSimplifyRuntime :: RunTime -> RunTime
+deepSimplifyRuntime (RunTimeArit arit) = (RunTimeArit arit)
+deepSimplifyRuntime (bexp :<>: runt) = simplifyRuntime ((deepSimplifyBExp bexp) :<>: (deepSimplifyRuntime runt))
+deepSimplifyRuntime (e_1 :++: e_2) = simplifyRuntime ((deepSimplifyRuntime e_1) :++: (deepSimplifyRuntime e_2))
+deepSimplifyRuntime (k :**: runt) = simplifyRuntime (k :**: (deepSimplifyRuntime runt))
+
+mapRestriction :: Restriction -> Restriction
+mapRestriction (r_1 :!==: r_2) = (deepSimplifyRuntime r_1) :!==: (deepSimplifyRuntime r_2)
+mapRestriction (r_1 :!<=: r_2) = (deepSimplifyRuntime r_1) :!<=: (deepSimplifyRuntime r_2)
 
 ---------------------------(Simplificar)---------------------------------------------------------
 
 ---------------------------(Preparación para z3)-------------------------------------------------
 
 type Context = [BExp]
+
+
 findConditionRuntime :: RunTime -> Context
 findConditionRuntime (RunTimeArit _) = []
+findConditionRuntime ((Not bexp) :<>: runt) = [bexp] ++ (findConditionRuntime runt)
 findConditionRuntime (bexp :<>: runt) = [bexp] ++ (findConditionRuntime runt)
 findConditionRuntime (e_1 :++: e_2) = (findConditionRuntime e_1) ++ (findConditionRuntime e_2)
-findConditionRuntime (_ :**: runt) = findConditionRuntime runt
+findConditionRuntime (_ :**: runt) = (findConditionRuntime runt)
 
 findConditionRestriction :: Restriction -> Context
 findConditionRestriction (e_1 :!==: e_2) = (findConditionRuntime e_1) ++ (findConditionRuntime e_2)
@@ -129,24 +159,44 @@ bools 0 = [[]]
 bools n = map (False:) r ++ map (True:) r where
   r = bools (n-1)
 
+rmdups :: Context -> Context
+rmdups [] = []
+rmdups (x:xs) = x : rmdups (filter (/= x) xs)
 
 allConditions :: Restriction -> [[(BExp, Bool)]]
 allConditions rest = map (zip conds) vals where
-      conds = findConditionRestriction rest
+      conds = rmdups (findConditionRestriction rest) 
       vals = bools (length conds)
 
-simplifyConditionsContext :: (BExp, Bool) -> BExp
-simplifyConditionsContext (bexp, True) = bexp
-simplifyConditionsContext (bexp, False) = (Not bexp)
+reduceContext :: (BExp, Bool) -> BExp
+reduceContext (bexp, True) = bexp
+reduceContext (bexp, False) = Not(bexp)
 
-simplifyAllConditions :: [[(BExp, Bool)]] -> [Context]
-simplifyAllConditions allvals = map (map simplifyConditionsContext) allvals where
+allContext :: Restriction -> [Context]
+allContext rest = map (map reduceContext) (allConditions rest)
 
+evalCondition :: BExp -> RunTime -> RunTime
+evalCondition bexp (RunTimeArit arit) = (RunTimeArit arit)
+evalCondition bexp1 (bexp2 :<>: runt) | bexp1 == bexp2 = (evalCondition bexp1 runt)
+                                      | (deepSimplifyBExp (Not bexp1)) == bexp2 = (RunTimeArit (Lit 0))
+                                      | otherwise = (bexp2 :<>: (evalCondition bexp1 runt))
+evalCondition bexp (e_1 :++: e_2) = (evalCondition bexp e_1) :++: (evalCondition bexp e_2)
+evalCondition bexp (k :**: runt) = k :**: (evalCondition bexp runt)
 
+evalAllCondition :: RunTime-> Context -> RunTime
+evalAllCondition runt []= runt
+evalAllCondition runt (b:bs)= (evalAllCondition (evalCondition b runt) bs)
 
-restrictionsToZ3 :: Restriction -> ([Context], Restriction)
-restrictionsToZ3 rest =  (allcontext, rest) where
-        allcontext = (simplifyAllConditions.allConditions) rest
+evalRestriction :: Restriction->Context-> Restriction
+evalRestriction (e_1 :!<=: e_2) bs = (evalAllCondition e_1 bs) :!<=: (evalAllCondition e_2 bs)
+evalRestriction (e_1 :!==: e_2) bs = (evalAllCondition e_1 bs) :!==: (evalAllCondition e_2 bs) 
+
+restrictionsToZ3 :: Restriction -> ([Context], [Restriction])
+restrictionsToZ3 rest = (cs, rs) where 
+  sres = simplifyRestriction rest
+  cs = allContext sres
+  rs = map (evalRestriction sres) cs
+
 
 
 ---------------------------(Preparación para z3)---------------------------------------------------------
@@ -158,7 +208,7 @@ restrictionsToZ3 rest =  (allcontext, rest) where
 p0 = (While False' Empty (RunTimeArit (Lit 5)))
 vc_0 = vcGenerator p0 (RunTimeArit (Lit 0)) 
 r0 = fst vc_0
-s0 = deepsimplifyRuntime (fst vc_0)
+s0 = deepSimplifyRuntime (fst vc_0)
 
 -- programa 1 de ejemplo
 
@@ -171,8 +221,8 @@ l5_9 = If ((Lit 8) :<=: (Var "w")) (Seq l6 l7) l9
 l1_9 = If ((Var "y") :<=: (Var "x")) (Seq Skip l3) l5_9
 l0_9 = Seq l0 l1_9
 
-vc_1 = vcGenerator l0_9 (RunTimeArit (Lit 0))
-s1 = deepsimplifyRuntime (fst vc_1)
+vc_1 = vcGenerator l0_9 (RunTimeArit (Lit 0.0))
+s1 = deepSimplifyRuntime (fst vc_1)
 
 
 ---------------------------(Restricciones de ejemplo)---------------------------------------------------------
@@ -197,4 +247,17 @@ vals = bools (length conds)
 allv = map (zip conds) vals
 allc = allConditions restriction
 
+allcontext = allContext restriction
 z3Input = restrictionsToZ3 restriction
+
+expresionBoolean = (Not (Not (Not True')))
+sexp = deepSimplifyBExp expresionBoolean
+
+sumando1 = (Not( (Lit 8.0 ):<=: Var "w")):<>: (RunTimeArit(Lit 4.0)) 
+sumando2 = ( (Lit 8.0):<=: Var "w"):<>: (RunTimeArit(Lit 5.0))
+
+runtr = sumando1 :++: sumando2
+
+res = s1 :!<=: runtr
+
+ejemploP3 = restrictionsToZ3 res
