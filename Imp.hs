@@ -235,13 +235,15 @@ deepSimplifyRuntime (k :**: runt) = simplifyRuntime (k :**: (deepSimplifyRuntime
 
 type Context = [BExp]
 
--- findcondition retorna todas las instancias de BExp dentro un Runtime
+-- findcondition retorna todas las instancias de BExp dentro un Runtime, simplificadas y únicas
 findConditionRuntime :: RunTime -> Context
-findConditionRuntime (RunTimeArit _) = []
-findConditionRuntime ((Not bexp) :<>: runt) = [bexp] ++ (findConditionRuntime runt)
-findConditionRuntime (bexp :<>: runt) = [bexp] ++ (findConditionRuntime runt)
-findConditionRuntime (e_1 :++: e_2) = (findConditionRuntime e_1) ++ (findConditionRuntime e_2)
-findConditionRuntime (_ :**: runt) = (findConditionRuntime runt)
+findConditionRuntime runt = rmdups (map deepSimplifyBExp conds) where
+  conds = f runt 
+  f (RunTimeArit _) = []
+  f ((Not bexp) :<>: runt) = [bexp] ++ (findConditionRuntime runt)
+  f (bexp :<>: runt) = [bexp] ++ (findConditionRuntime runt)
+  f (e_1 :++: e_2) = (findConditionRuntime e_1) ++ (findConditionRuntime e_2)
+  f (_ :**: runt) = (findConditionRuntime runt)
 
 -- bools retorna una matriz con todas las posibles combinaciones False/True 
 -- de tamaño n. 
@@ -251,17 +253,13 @@ bools n = map (False:) r ++ map (True:) r where
   r = bools (n-1)
 
 
-allConditions :: Restriction -> [[(BExp, Bool)]]
-allConditions rest = map (zip conds) vals where
-      conds = rmdups (foldrRes (++) (findConditionRuntime) rest) 
-      vals = bools (length conds)
+allContext :: RunTime -> [Context]
+allContext runt = map (zipWith f conds) lbools
+  f bexp True = bexp
+  f bexp _ = Not bexp
+  conds = findConditionRuntime runt
+  lbools = bools (length conds)
 
-reduceContext :: (BExp, Bool) -> BExp
-reduceContext (bexp, True) = bexp
-reduceContext (bexp, False) = Not(bexp)
-
-allContext :: Restriction -> [Context]
-allContext rest = map (map reduceContext) (allConditions rest)
 
 evalCondition :: BExp -> RunTime -> RunTime
 evalCondition bexp (RunTimeArit arit) = (RunTimeArit arit)
@@ -271,21 +269,7 @@ evalCondition bexp1 (bexp2 :<>: runt) | bexp1 == bexp2 = (evalCondition bexp1 ru
 evalCondition bexp (e_1 :++: e_2) = (evalCondition bexp e_1) :++: (evalCondition bexp e_2)
 evalCondition bexp (k :**: runt) = k :**: (evalCondition bexp runt)
 
-evalAllCondition :: RunTime-> Context -> RunTime
-evalAllCondition runt []= runt
-evalAllCondition runt (b:bs)= (evalAllCondition (evalCondition b runt) bs)
 
-evalRestriction :: Restriction->Context-> Restriction
-evalRestriction (e_1 :!<=: e_2) bs = (evalAllCondition e_1 bs) :!<=: (evalAllCondition e_2 bs)
-evalRestriction (e_1 :!==: e_2) bs = (evalAllCondition e_1 bs) :!==: (evalAllCondition e_2 bs) 
-
-{--
-restrictionsToZ3 :: Restriction -> ([Context], [Restriction])
-restrictionsToZ3 rest = (cs, rs) where 
-  sres = restrictionMap (deepSimplifyRuntime) rest
-  cs = allContext sres
-  rs = map (evalRestriction sres) cs
--}
 ----------------------------(Preparación para z3)---------------------------------------------------------
 
 ---------------------------(Programas de ejemplo)---------------------------------------------------------
