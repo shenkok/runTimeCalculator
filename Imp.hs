@@ -1,38 +1,101 @@
 import           Data.String (IsString (..))
 import           Data.Set (Set)
 import qualified Data.Set as Set
-
+import Data.Function (on)
+import Data.List
 type Name = String
+---------------------------------------- (Funciones útiles)---------------------------------------
+-- rmdups toma una lista de elementos de tipo a y retorna una lista sin duplicados
+rmdups :: (Eq a) =>[a] -> [a]
+rmdups [] = []
+rmdups (x:xs) = x : rmdups (filter (/= x) xs)
+---------------------------------------- (Funciones útiles)---------------------------------------
 
-data AExp = Lit Float
-          | Var Name
-          | AExp :+: AExp
-          | AExp :-: AExp 
-          | Float :*: AExp deriving (Eq) 
 
+
+---------------------------------------- (Expreciones Aritméticas)--------------------------------
+-- Definición de estructuras aritméticas
+data AExp = Lit Float -- Números
+          | Var Name -- Varibles x, y, z
+          | AExp :+: AExp -- suma de expresiones aritméticas
+          | Float :*: AExp deriving (Eq) -- pondelación por una constante 
+
+-- Definición del método show para AExp
 instance Show AExp where 
   show (Lit n) = show n
   show (Var x) = show x
   show (e_1 :+: e_2) = show e_1 ++" + "++ show e_2
-  show (e_1 :-: e_2) = show e_1 ++" - "++ show e_2
   show (e_1 :*: e_2) = show e_1 ++" * "++ show e_2       
 
+-- sustAExp toma un Name "x", un AExp aritFor y un AExp aritIn
+-- sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
 sustAExp _  _ (Lit n) = (Lit n)
 sustAExp x  aritFor (Var y) = if (x == y) then aritFor else (Var y)
 sustAExp x aritFor (e_1 :+: e_2) = (sustAExp x aritFor e_1) :+: (sustAExp x aritFor e_2)
-sustAExp x aritFor (e_1 :-: e_2) = (sustAExp x aritFor e_1) :-: (sustAExp x aritFor e_2)
 sustAExp x aritFor (k :*: e) = k :*: (sustAExp x aritFor e)
 
+-- freeVars toma un AExp arit y retorna una lista de todas las variables libres
+-- considerando que un número está asociado a la variable vacía "".
+freeVars :: AExp -> [String]
+freeVars arit = sort (rmdups (fvar arit)) where
+  fvar (Lit _ ) = [""]
+  fvar (Var x)  = [x]
+  fvar (e_1 :+: e_2) = (fvar e_1) ++ (fvar e_2)
+  fvar (_ :*: e) = (fvar e)
 
-data BExp = True'
-          | False'
-          | AExp :<=: AExp
-          | AExp :==: AExp
-          | BExp :|: BExp
-          | BExp :&: BExp
-          | Not BExp deriving (Show, Eq)
+-- weightVar toma un Aexp arit y una variable var, retorna el peso suma de todas las instancias de esa variable var
+-- en el AExp arit.
+weightVar :: AExp -> String-> Float
+weightVar (Lit n) var | var =="" = n  
+                      | otherwise = 0.0
+weightVar (Var x) var | var == x = 1
+                      | otherwise = 0.0
+weightVar (e_1 :+: e_2) var = (weightVar e_1 var) + (weightVar e_2 var)
+weightVar (k :*: e) var = k * (weightVar e var)
+---------------------------------------- (Expresiones Aritméticas)--------------------------------
 
+
+
+----------------------------------( Simplificador Expresiones Aritméticas )-----------------------
+
+normArit :: AExp -> AExp
+normArit arit = foldr f (Lit 0.0) wvars where
+  f = \x y -> x:+:y
+  vars = freeVars arit -- variables libres del programa
+  weights = map (weightVar arit) vars -- todos los pesos de las diferentes variables
+  wvars = map (\(k, x) ->  k:*:(Var x)) (zip weights vars) -- arreglo de pares (peso, variable)
+
+
+-- simplifyArit toma un AExp arit y retorna una versión simplificada             
+simplifyArit::AExp -> AExp
+simplifyArit ((Lit 0.0) :+: arit) = simplifyArit arit
+simplifyArit (arit :+: (Lit 0.0)) = simplifyArit arit
+simplifyArit (arit_1 :+: arit_2) = (simplifyArit arit_1) :+: (simplifyArit arit_2)
+simplifyArit (1.0 :*: arit) = simplifyArit arit
+simplifyArit (k :*: arit) = k :*: (simplifyArit arit)
+simplifyArit otherwise = otherwise 
+
+completeNormArit :: AExp -> AExp
+completeNormArit = simplifyArit.normArit
+
+----------------------------------( Simplificador Expresiones Aritméticas)-------------------------
+
+
+
+----------------------------------(Expresiones Booleanas)------------------------------------------
+
+--def de expresiones Boolenas
+data BExp = True' -- Constante True
+          | False' -- Constante False
+          | AExp :<=: AExp -- mayor igual entre expresiones aritméticas
+          | AExp :==: AExp -- igualdad expresiones aritméticas
+          | BExp :|: BExp -- Or lógico
+          | BExp :&: BExp -- And Lógico
+          | Not BExp deriving (Show, Eq) -- Negación expresión booleana
+
+-- función de sustitución toma una variable "x", un AExp aritFor y una expresión booleana AritIn
+-- reemplaza todas las indicendias de "x" en la expresión aritIn por la expresión aritFor.
 sustBExp :: Name -> AExp -> BExp -> BExp
 sustBExp _  _ True' = True'
 sustBExp _  _ False' = False'
@@ -42,11 +105,19 @@ sustBExp x aritFor (e_1 :|: e_2) = (sustBExp x aritFor e_1) :|: (sustBExp x arit
 sustBExp x aritFor (e_1 :&: e_2) = (sustBExp x aritFor e_1) :&: (sustBExp x aritFor e_2)
 sustBExp x aritFor (Not e) = (Not (sustBExp x aritFor e))
 
-data RunTime = RunTimeArit AExp
-             | BExp :<>: RunTime
-             | RunTime :++: RunTime
-             | Float :**: RunTime  deriving (Eq)
+----------------------------------(Expresiones Booleanas)------------------------------------------
 
+
+
+----------------------------------( Runtimes )-----------------------------------------------------
+
+-- def de Runtimes
+data RunTime = RunTimeArit AExp -- runtime hecho a partir de una expresión aritmética
+             | BExp :<>: RunTime -- multiplicación por una condición
+             | RunTime :++: RunTime -- suma de runtime
+             | Float :**: RunTime  deriving (Eq) -- ponderación por constante 
+
+-- def de método show para la clase
 instance Show RunTime where 
   show (RunTimeArit arit) = show arit
   show (e_b :<>: (RunTimeArit (Lit 1))) = "["++ (show e_b) ++ "]"
@@ -55,29 +126,54 @@ instance Show RunTime where
   show (e_1 :++: e_2) =  show e_1 ++" + "++ show e_2    
   show (e_1 :**: e_2) = show e_1 ++" * " ++ show e_2        
 
+-- función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
+-- reemplaza todas las indicendias de "x" en la expresión runtIn por la expresión aritFor.
 sustRuntime :: Name -> AExp -> RunTime -> RunTime
 sustRuntime x aritFor (RunTimeArit aritIn) = (RunTimeArit (sustAExp x aritFor aritIn))
 sustRuntime x aritFor (e_b :<>: e_r) = (sustBExp x aritFor e_b) :<>: (sustRuntime x aritFor e_r)
 sustRuntime x aritFor (e_1 :++: e_2) = (sustRuntime x aritFor e_1) :++: (sustRuntime x aritFor e_2)
 sustRuntime x aritFor (k :**: e) = k :**: (sustRuntime x aritFor e)
 
+
+----------------------------------( Runtimes )-----------------------------------------------------
+
+
+----------------------------------(Programas )-----------------------------------------------------
 data Program = Skip
             | Empty
             | Set Name AExp
             | Seq Program Program
             | If BExp Program Program
             | While BExp Program RunTime deriving(Show, Eq)
+----------------------------------( Programas )-----------------------------------------------------
 
-data Restriction = RunTime :!==: RunTime
-               | RunTime :!<=: RunTime deriving(Show, Eq)
 
----------------------------(vc gen)---------------------------------------------------------
+----------------------------------( Restriction )-----------------------------------------------------
+
+data Restriction = RunTime :!==: RunTime -- Restriction de igualdad entre RunTime
+               | RunTime :!<=: RunTime deriving(Show, Eq) -- Restriction de mayor igual entre RunTime
+
+-- def de un función de fold para la estructura Restriction
+foldrRes :: (a -> a -> b) -> (RunTime -> a) -> Restriction -> b
+foldrRes f g (e_1 :!==: e_2) = f (g e_1) (g e_2)
+foldrRes f g (e_1 :!<=: e_2) = f (g e_1) (g e_2)
+
+-- def de la función map para la estructura REstriction
+mapRes :: (RunTime -> RunTime) -> Restriction -> Restriction
+mapRes f (e_1 :!==: e_2) = (f e_1) :!==: (f e_2)
+mapRes f (e_1 :!<=: e_2) = (f e_1) :!<=: (f e_2)
+
+----------------------------------( Restriction )-----------------------------------------------------
+
+
+
+----------------------------------(vc gen)-------------------------------------------------------------
 
 vcGenerator ::  Program -> RunTime -> (RunTime, [Restriction])
-vcGenerator Skip runt = ((RunTimeArit (Lit 1)) :++: runt, [])
+vcGenerator Skip runt = ((RunTimeArit (Lit 1.0)) :++: runt, [])
 vcGenerator Empty runt = (runt, [])
-vcGenerator (Set x arit ) runt = ((RunTimeArit (Lit 1)) :++: (sustRuntime x arit runt), [])
-vcGenerator (If e_b e_t e_f) runt = ( (RunTimeArit (Lit 1)) :++:((e_b :<>:fst vc_t):++:((Not e_b):<>: fst vc_f)),  (snd vc_t) ++ (snd vc_f)) where 
+vcGenerator (Set x arit ) runt = ((RunTimeArit (Lit 1.0)) :++: (sustRuntime x arit runt), [])
+vcGenerator (If e_b e_t e_f) runt = ( (RunTimeArit (Lit 1.0)) :++:((e_b :<>:fst vc_t):++:((Not e_b):<>: fst vc_f)),  (snd vc_t) ++ (snd vc_f)) where 
     vc_t = vcGenerator e_t runt
     vc_f = vcGenerator e_f runt
 vcGenerator (Seq p_1 p_2) runt = (fst vc_1, (snd vc_1) ++ (snd vc_2))   where
@@ -85,7 +181,7 @@ vcGenerator (Seq p_1 p_2) runt = (fst vc_1, (snd vc_1) ++ (snd vc_2))   where
     vc_1 = vcGenerator p_1 (fst vc_2)
 vcGenerator (While e_b p inv) runt = (inv, [l_inv :!<=: inv] ++ (snd vc_p)) where
     vc_p = vcGenerator p inv
-    l_inv = (RunTimeArit (Lit 1) :++: ( ((Not e_b) :<>: runt):++: (e_b :<>: (fst vc_p))))
+    l_inv = (RunTimeArit (Lit 1.0) :++: ( ((Not e_b) :<>: runt):++: (e_b :<>: (fst vc_p))))
 
 ---------------------------(vc gen)---------------------------------------------------------
 
@@ -132,9 +228,6 @@ deepSimplifyRuntime (bexp :<>: runt) = simplifyRuntime ((deepSimplifyBExp bexp) 
 deepSimplifyRuntime (e_1 :++: e_2) = simplifyRuntime ((deepSimplifyRuntime e_1) :++: (deepSimplifyRuntime e_2))
 deepSimplifyRuntime (k :**: runt) = simplifyRuntime (k :**: (deepSimplifyRuntime runt))
 
-mapRestriction :: Restriction -> Restriction
-mapRestriction (r_1 :!==: r_2) = (deepSimplifyRuntime r_1) :!==: (deepSimplifyRuntime r_2)
-mapRestriction (r_1 :!<=: r_2) = (deepSimplifyRuntime r_1) :!<=: (deepSimplifyRuntime r_2)
 
 ---------------------------(Simplificar)---------------------------------------------------------
 
@@ -142,7 +235,7 @@ mapRestriction (r_1 :!<=: r_2) = (deepSimplifyRuntime r_1) :!<=: (deepSimplifyRu
 
 type Context = [BExp]
 
-
+-- findcondition retorna todas las instancias de BExp dentro un Runtime
 findConditionRuntime :: RunTime -> Context
 findConditionRuntime (RunTimeArit _) = []
 findConditionRuntime ((Not bexp) :<>: runt) = [bexp] ++ (findConditionRuntime runt)
@@ -150,22 +243,17 @@ findConditionRuntime (bexp :<>: runt) = [bexp] ++ (findConditionRuntime runt)
 findConditionRuntime (e_1 :++: e_2) = (findConditionRuntime e_1) ++ (findConditionRuntime e_2)
 findConditionRuntime (_ :**: runt) = (findConditionRuntime runt)
 
-findConditionRestriction :: Restriction -> Context
-findConditionRestriction (e_1 :!==: e_2) = (findConditionRuntime e_1) ++ (findConditionRuntime e_2)
-findConditionRestriction (e_1 :!<=: e_2) = (findConditionRuntime e_1) ++ (findConditionRuntime e_2)
-
+-- bools retorna una matriz con todas las posibles combinaciones False/True 
+-- de tamaño n. 
 bools :: Int -> [[Bool]]
 bools 0 = [[]]
 bools n = map (False:) r ++ map (True:) r where
   r = bools (n-1)
 
-rmdups :: Context -> Context
-rmdups [] = []
-rmdups (x:xs) = x : rmdups (filter (/= x) xs)
 
 allConditions :: Restriction -> [[(BExp, Bool)]]
 allConditions rest = map (zip conds) vals where
-      conds = rmdups (findConditionRestriction rest) 
+      conds = rmdups (foldrRes (++) (findConditionRuntime) rest) 
       vals = bools (length conds)
 
 reduceContext :: (BExp, Bool) -> BExp
@@ -191,15 +279,14 @@ evalRestriction :: Restriction->Context-> Restriction
 evalRestriction (e_1 :!<=: e_2) bs = (evalAllCondition e_1 bs) :!<=: (evalAllCondition e_2 bs)
 evalRestriction (e_1 :!==: e_2) bs = (evalAllCondition e_1 bs) :!==: (evalAllCondition e_2 bs) 
 
+{--
 restrictionsToZ3 :: Restriction -> ([Context], [Restriction])
 restrictionsToZ3 rest = (cs, rs) where 
-  sres = simplifyRestriction rest
+  sres = restrictionMap (deepSimplifyRuntime) rest
   cs = allContext sres
   rs = map (evalRestriction sres) cs
-
-
-
----------------------------(Preparación para z3)---------------------------------------------------------
+-}
+----------------------------(Preparación para z3)---------------------------------------------------------
 
 ---------------------------(Programas de ejemplo)---------------------------------------------------------
 
@@ -212,7 +299,7 @@ s0 = deepSimplifyRuntime (fst vc_0)
 
 -- programa 1 de ejemplo
 
-l0 = Set  "x" ((Var "x"):-:(Lit 1))
+l0 = Set  "x" ((Var "x"):+:(Lit 1)) --cambiar por menos
 l3 = Set "y" (2:*:(Var "x"))
 l6 = Set "w" (Lit 3)
 l7 = Set "x" ((Var  "w") :+: (Var "x"))
@@ -226,7 +313,7 @@ s1 = deepSimplifyRuntime (fst vc_1)
 
 
 ---------------------------(Restricciones de ejemplo)---------------------------------------------------------
-
+{-
 c1 = (2 :*:(Var "x")):<=:(Var "y")
 c2 = (Var "x"):<=:(Lit 0)
 c3 = (Var "x"):<=:(Lit 0)
@@ -240,7 +327,7 @@ runt2 = c2 :<>: (RunTimeArit arit2)
 
 restriction = runt1 :!<=: runt2
 
-conds = findConditionRestriction restriction
+conds = findCo restriction
 
 vals = bools (length conds)
 
@@ -261,3 +348,11 @@ runtr = sumando1 :++: sumando2
 res = s1 :!<=: runtr
 
 ejemploP3 = restrictionsToZ3 res
+-}
+-------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------
+
+a1 = (((((Var "x") :+: (Var "x")) :+: (Lit 1)) :+: ((-2) :*: (Var "y"))) :+: (Lit 8.0))
+
+array_a1 = simplifyArit.normArit $ a1
+--array_a1 = normArit $ a1
+-------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------
