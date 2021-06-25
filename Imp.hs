@@ -64,8 +64,9 @@ normArit arit = foldr f (Lit 0.0) wvars where
   f = \x y -> x:+:y
   vars = freeVars arit -- variables libres del programa
   weights = map (weightVar arit) vars -- todos los pesos de las diferentes variables
-  wvars = map (\(k, x) ->  k:*:(Var x)) (zip weights vars) -- arreglo de pares (peso, variable)
-
+  wvars = map g (zip weights vars) -- arreglo de variables con sus ponderaciones
+  g (k, "") = (Lit k)
+  g (k, x)  = k :*: (Var x)
 
 -- simplifyArit toma un AExp arit y retorna una versión simplificada             
 simplifyArit::AExp -> AExp
@@ -139,12 +140,12 @@ sustRuntime x aritFor (k :**: e) = k :**: (sustRuntime x aritFor e)
 
 
 ----------------------------------(Programas )-----------------------------------------------------
-data Program = Skip
-            | Empty
-            | Set Name AExp
-            | Seq Program Program
-            | If BExp Program Program
-            | While BExp Program RunTime deriving(Show, Eq)
+data Program = Skip -- programa vacío que toma una unidad de tiempo
+            | Empty -- programacio vacío sin costo de tiempo
+            | Set Name AExp -- Asignación
+            | Seq Program Program -- Composición secuencial de programas
+            | If BExp Program Program -- guarda condicional
+            | While BExp Program RunTime deriving(Show, Eq) -- ciclo while
 ----------------------------------( Programas )-----------------------------------------------------
 
 
@@ -154,9 +155,9 @@ data Restriction = RunTime :!==: RunTime -- Restriction de igualdad entre RunTim
                | RunTime :!<=: RunTime deriving(Show, Eq) -- Restriction de mayor igual entre RunTime
 
 -- def de un función de fold para la estructura Restriction
-foldrRes :: (a -> a -> b) -> (RunTime -> a) -> Restriction -> b
-foldrRes f g (e_1 :!==: e_2) = f (g e_1) (g e_2)
-foldrRes f g (e_1 :!<=: e_2) = f (g e_1) (g e_2)
+foldRes :: (a -> a -> b) -> (RunTime -> a) -> Restriction -> b
+foldRes f g (e_1 :!==: e_2) = f (g e_1) (g e_2)
+foldRes f g (e_1 :!<=: e_2) = f (g e_1) (g e_2)
 
 -- def de la función map para la estructura REstriction
 mapRes :: (RunTime -> RunTime) -> Restriction -> Restriction
@@ -168,7 +169,8 @@ mapRes f (e_1 :!<=: e_2) = (f e_1) :!<=: (f e_2)
 
 
 ----------------------------------(vc gen)-------------------------------------------------------------
-
+-- generador de restricciones 
+-- entrega un conjunto de restricciones y el tiempo de ejecución esperado
 vcGenerator ::  Program -> RunTime -> (RunTime, [Restriction])
 vcGenerator Skip runt = ((RunTimeArit (Lit 1.0)) :++: runt, [])
 vcGenerator Empty runt = (runt, [])
@@ -186,7 +188,7 @@ vcGenerator (While e_b p inv) runt = (inv, [l_inv :!<=: inv] ++ (snd vc_p)) wher
 ---------------------------(vc gen)---------------------------------------------------------
 
 ---------------------------(Simplificar)---------------------------------------------------------
-
+-- reglas de un sólo paso para simplificar un BExp
 simplifyBExp :: BExp -> BExp
 simplifyBExp (True' :|: _ ) = True'
 simplifyBExp ( _ :|: True' ) = True'
@@ -199,31 +201,31 @@ simplifyBExp (e_b :&: True') = e_b
 simplifyBExp (Not(Not e_b)) = e_b
 simplifyBExp otherwise = otherwise
 
+-- reglas recursivas para simplificar un BExp
 deepSimplifyBExp :: BExp -> BExp
 deepSimplifyBExp True' = True'
 deepSimplifyBExp False' = False'
-deepSimplifyBExp (e_1 :<=: e_2) = e_1 :<=: e_2
-deepSimplifyBExp (e_1 :==: e_2) = e_1 :==: e_2
+deepSimplifyBExp (e_1 :<=: e_2) = (completeNormArit e_1) :<=: (completeNormArit e_2)
+deepSimplifyBExp (e_1 :==: e_2) = (completeNormArit e_1) :==: (completeNormArit e_2)
 deepSimplifyBExp (e_1 :|: e_2) = simplifyBExp ((deepSimplifyBExp e_1) :|: (deepSimplifyBExp e_2))
 deepSimplifyBExp (e_1 :&: e_2) = simplifyBExp ((deepSimplifyBExp e_1) :&: (deepSimplifyBExp e_2))
 deepSimplifyBExp (Not e_b) = simplifyBExp (Not (deepSimplifyBExp e_b))
 
-
+-- reglas de un sólo paso para simplificar un RunTime
 simplifyRuntime :: RunTime -> RunTime
-simplifyRuntime ((RunTimeArit (Lit n)) :++: ((RunTimeArit (Lit m))) :++: runt) = (RunTimeArit (Lit (n + m))) :++: runt
-simplifyRuntime (True' :<>: runt) = runt
-simplifyRuntime (False' :<>: _ )  = (RunTimeArit (Lit 0.0))
-simplifyRuntime ( _ :<>: (RunTimeArit (Lit 0.0))) = RunTimeArit (Lit 0.0)
-simplifyRuntime ((RunTimeArit (Lit 0.0)) :++: runt) = runt
-simplifyRuntime (runt :++: (RunTimeArit (Lit 0.0))) = runt 
-simplifyRuntime ((RunTimeArit (Lit n)) :++: (RunTimeArit (Lit m))) = (RunTimeArit (Lit (n + m)))
-simplifyRuntime ( m :**: (RunTimeArit (Lit n))) = (RunTimeArit (Lit (m * n)))
-simplifyRuntime ( 1.0 :**: runt) = runt
-simplifyRuntime ( 0.0 :**: _ ) = RunTimeArit (Lit 0.0)
+simplifyRuntime ((RunTimeArit (Lit m)) :++: (RunTimeArit (Lit n))) = (RunTimeArit (Lit (n + m)))
+simplifyRuntime ((RunTimeArit (Lit m)) :++: ((RunTimeArit (Lit n)) :++: runt)) = (RunTimeArit (Lit (n + m)) :++: runt)
+simplifyRuntime ( True' :<>: runt) = runt
+simplifyRuntime (False' :<>: _ ) = (RunTimeArit (Lit 0))
+simplifyRuntime ((RunTimeArit (Lit 0)) :++: runt) = runt
+simplifyRuntime (runt :++: (RunTimeArit (Lit 0))) = runt
+simplifyRuntime (1 :**: runt) = runt
+simplifyRuntime (0 :**: _ ) = (RunTimeArit (Lit 0))
 simplifyRuntime otherwise = otherwise
 
+-- reglas recursivas para simplificar un RunTime
 deepSimplifyRuntime :: RunTime -> RunTime
-deepSimplifyRuntime (RunTimeArit arit) = (RunTimeArit arit)
+deepSimplifyRuntime (RunTimeArit arit) = (RunTimeArit (completeNormArit arit))
 deepSimplifyRuntime (bexp :<>: runt) = simplifyRuntime ((deepSimplifyBExp bexp) :<>: (deepSimplifyRuntime runt))
 deepSimplifyRuntime (e_1 :++: e_2) = simplifyRuntime ((deepSimplifyRuntime e_1) :++: (deepSimplifyRuntime e_2))
 deepSimplifyRuntime (k :**: runt) = simplifyRuntime (k :**: (deepSimplifyRuntime runt))
@@ -234,10 +236,11 @@ deepSimplifyRuntime (k :**: runt) = simplifyRuntime (k :**: (deepSimplifyRuntime
 ---------------------------(Preparación para z3)-------------------------------------------------
 
 type Context = [BExp]
+type Contexts = [Context]
 
--- findcondition retorna todas las instancias de BExp dentro un Runtime, simplificadas y únicas
+-- findcondition retorna todas las instancias de BExp dentro un Runtime sin repeticiones
 findConditionRuntime :: RunTime -> Context
-findConditionRuntime runt = rmdups (map deepSimplifyBExp conds) where
+findConditionRuntime runt = rmdups conds where
   conds = f runt 
   f (RunTimeArit _) = []
   f ((Not bexp) :<>: runt) = [bexp] ++ (findConditionRuntime runt)
@@ -252,15 +255,17 @@ bools 0 = [[]]
 bools n = map (False:) r ++ map (True:) r where
   r = bools (n-1)
 
-
-allContext :: RunTime -> [Context]
-allContext runt = map (zipWith f conds) lbools
+-- allContext toma un RunTime runt y retorna todos los posibles context que 
+-- se pueden extraer de a partir de los BExp que tiene el RunTime.
+allContext :: RunTime -> Contexts
+allContext runt = map (zipWith f conds) lbools where
   f bexp True = bexp
-  f bexp _ = Not bexp
+  f bexp _ = (Not bexp)
   conds = findConditionRuntime runt
   lbools = bools (length conds)
 
-
+-- evalCondition toma un BExp bexp y un Runtime runt, evalua todas las instancias de bexp 
+-- dentro de runt
 evalCondition :: BExp -> RunTime -> RunTime
 evalCondition bexp (RunTimeArit arit) = (RunTimeArit arit)
 evalCondition bexp1 (bexp2 :<>: runt) | bexp1 == bexp2 = (evalCondition bexp1 runt)
@@ -268,6 +273,22 @@ evalCondition bexp1 (bexp2 :<>: runt) | bexp1 == bexp2 = (evalCondition bexp1 ru
                                       | otherwise = (bexp2 :<>: (evalCondition bexp1 runt))
 evalCondition bexp (e_1 :++: e_2) = (evalCondition bexp e_1) :++: (evalCondition bexp e_2)
 evalCondition bexp (k :**: runt) = k :**: (evalCondition bexp runt)
+
+-- runTimeToArit, toma un RunTime runt y retorna su versión AExp en el caso de que se pueda
+runtimeToArit :: RunTime -> AExp
+runtimeToArit (RunTimeArit arit) = arit
+runtimeToArit (e_1 :++: e_2) = (runtimeToArit e_1) :+: (runtimeToArit e_2)
+runtimeToArit (k :**: e) = k :*: (runtimeToArit e)
+runtimeToArit otherwise = undefined
+
+
+restrictionsToZ3 :: Restriction -> [(Context, Restriction)]
+restrictionsToZ3 rest = zip contexts eval_runt where
+  simplify_rest = (mapRes deepSimplifyRuntime rest) -- simplifica los runtimes de la restriccion
+  contexts = (allContext (foldRes (:++:) (id) simplify_rest)) -- todos los posibles context de simplify_rest
+  f  = \bexp -> mapRes (evalCondition bexp)  
+  eval_runt = map (foldr f simplify_rest) contexts -- para todos los context, evaluar todas las posibles conditions.
+
 
 
 ----------------------------(Preparación para z3)---------------------------------------------------------
@@ -293,11 +314,11 @@ l1_9 = If ((Var "y") :<=: (Var "x")) (Seq Skip l3) l5_9
 l0_9 = Seq l0 l1_9
 
 vc_1 = vcGenerator l0_9 (RunTimeArit (Lit 0.0))
+r1 = fst vc_1
 s1 = deepSimplifyRuntime (fst vc_1)
 
 
 ---------------------------(Restricciones de ejemplo)---------------------------------------------------------
-{-
 c1 = (2 :*:(Var "x")):<=:(Var "y")
 c2 = (Var "x"):<=:(Lit 0)
 c3 = (Var "x"):<=:(Lit 0)
@@ -310,6 +331,9 @@ runt1 = c1 :<>: (RunTimeArit arit1)
 runt2 = c2 :<>: (RunTimeArit arit2)
 
 restriction = runt1 :!<=: runt2
+
+z3_rest = restrictionsToZ3 restriction
+{-
 
 conds = findCo restriction
 
@@ -337,6 +361,6 @@ ejemploP3 = restrictionsToZ3 res
 
 a1 = (((((Var "x") :+: (Var "x")) :+: (Lit 1)) :+: ((-2) :*: (Var "y"))) :+: (Lit 8.0))
 
-array_a1 = simplifyArit.normArit $ a1
+sa1 = completeNormArit $ a1
 --array_a1 = normArit $ a1
 -------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------
