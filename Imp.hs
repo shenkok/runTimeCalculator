@@ -333,8 +333,8 @@ runt2 = c2 :<>: (RunTimeArit arit2)
 restriction = runt1 :!<=: runt2
 
 z3_rest = restrictionsToZ3 restriction
+------------------------------------------------------------------------------------------------------------------------------------
 {-
-
 conds = findCo restriction
 
 vals = bools (length conds)

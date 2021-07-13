@@ -135,7 +135,10 @@ link reu;
 
       https://uchile.zoom.us/j/88041295290?pwd=RC9PNzYrOVhOTjdmRkIraXVNbDlVQT09
 
-      buscar vggen z3
+
+tutorial sbv
+
+      https://www.youtube.com/watch?v=gWZbNc5hqOA&list=PLfzJKXh_D71Rg8Cbl81sCzx59RloCspL-&index=9
 
 
       
