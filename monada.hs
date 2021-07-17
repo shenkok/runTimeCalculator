@@ -36,6 +36,6 @@ landRight n (left, right)
 routine ::  Maybe Pole
 routine = do
     start  <- return (0, 0)
-    firts  <- landLeft 3 start
+    firts  <- landLeft 2 start
     second <- landRight 1 firts
     return second   
