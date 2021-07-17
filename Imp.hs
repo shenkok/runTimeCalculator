@@ -1,7 +1,3 @@
-import           Data.String (IsString (..))
-import           Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Function (on)
 import Data.List
 type Name = String
 ---------------------------------------- (Funciones útiles)---------------------------------------
@@ -151,18 +147,39 @@ data Program = Skip -- programa vacío que toma una unidad de tiempo
 
 ----------------------------------( Restriction )-----------------------------------------------------
 
-data Restriction = RunTime :!==: RunTime -- Restriction de igualdad entre RunTime
-               | RunTime :!<=: RunTime deriving(Show, Eq) -- Restriction de mayor igual entre RunTime
+-- Definición de restriccion
+data Restriction a = a :!==: a 
+                   | a :!<=: a deriving (Eq, Show)
+
+-- Extender a Functor
+instance Functor Restriction  where
+-- fmap :: (a -> b) -> Restriction a -> Restriction b  
+  fmap f (a_1 :!==: a_2) = ((f a_1 ):!==: (f a_2))
+  fmap f (a_1 :!<=: a_2) = ((f a_1 ):!<=: (f a_2))
+
+-- Extender a Functor Aplicativo
+instance Applicative Restriction where
+-- pure :: a -> Restriction a
+  pure a = a :!==: a
+-- (<*>) :: Restriction (a->b) -> Restriction a -> Restriction b
+  (f_1 :!==: f_2 ) <*> (a_1 :!<=: a_2) = ((f_1 a_1 ):!<=: (f_2 a_2))
+  (f_1 :!==: f_2 ) <*> (a_1 :!==: a_2) = ((f_1 a_1 ):!==: (f_2 a_2))
+  (f_1 :!<=: f_2 ) <*> (a_1 :!<=: a_2) = ((f_1 a_1 ):!<=: (f_2 a_2))
+  (f_1 :!<=: f_2 ) <*> (a_1 :!==: a_2) = ((f_1 a_1 ):!==: (f_2 a_2))
+  
+-- Extender a Mónada
+instance Monad Restriction where
+-- (>>=) :: Restriction a -> (a -> Restriction b) -> Restriction b
+  (a :!==: _) >>= f = f a
+  (a :!<=: _) >>= f = f a
 
 -- def de un función de fold para la estructura Restriction
-foldRes :: (a -> a -> b) -> (RunTime -> a) -> Restriction -> b
+foldRes :: (b -> b -> c) -> (a -> b) -> Restriction a -> c
 foldRes f g (e_1 :!==: e_2) = f (g e_1) (g e_2)
 foldRes f g (e_1 :!<=: e_2) = f (g e_1) (g e_2)
 
--- def de la función map para la estructura REstriction
-mapRes :: (RunTime -> RunTime) -> Restriction -> Restriction
-mapRes f (e_1 :!==: e_2) = (f e_1) :!==: (f e_2)
-mapRes f (e_1 :!<=: e_2) = (f e_1) :!<=: (f e_2)
+type AritR =  Restriction AExp
+type RunTimeR =  Restriction RunTime 
 
 ----------------------------------( Restriction )-----------------------------------------------------
 
@@ -171,7 +188,7 @@ mapRes f (e_1 :!<=: e_2) = (f e_1) :!<=: (f e_2)
 ----------------------------------(vc gen)-------------------------------------------------------------
 -- generador de restricciones 
 -- entrega un conjunto de restricciones y el tiempo de ejecución esperado
-vcGenerator ::  Program -> RunTime -> (RunTime, [Restriction])
+vcGenerator ::  Program -> RunTime -> (RunTime, [RunTimeR])
 vcGenerator Skip runt = ((RunTimeArit (Lit 1.0)) :++: runt, [])
 vcGenerator Empty runt = (runt, [])
 vcGenerator (Set x arit ) runt = ((RunTimeArit (Lit 1.0)) :++: (sustRuntime x arit runt), [])
@@ -237,6 +254,7 @@ deepSimplifyRuntime (k :**: runt) = simplifyRuntime (k :**: (deepSimplifyRuntime
 
 type Context = [BExp]
 type Contexts = [Context]
+type SolverInput = (Context, AritR)
 
 -- findcondition retorna todas las instancias de BExp dentro un Runtime sin repeticiones
 findConditionRuntime :: RunTime -> Context
@@ -275,21 +293,23 @@ evalCondition bexp (e_1 :++: e_2) = (evalCondition bexp e_1) :++: (evalCondition
 evalCondition bexp (k :**: runt) = k :**: (evalCondition bexp runt)
 
 -- runTimeToArit, toma un RunTime runt y retorna su versión AExp en el caso de que se pueda
-runtimeToArit :: RunTime -> AExp
-runtimeToArit (RunTimeArit arit) = arit
-runtimeToArit (e_1 :++: e_2) = (runtimeToArit e_1) :+: (runtimeToArit e_2)
-runtimeToArit (k :**: e) = k :*: (runtimeToArit e)
-runtimeToArit otherwise = undefined
+runTimeToArit :: RunTime -> AExp
+runTimeToArit (RunTimeArit arit) = arit
+runTimeToArit (e_1 :++: e_2) = (runTimeToArit e_1) :+: (runTimeToArit e_2)
+runTimeToArit (k :**: e) = k :*: (runTimeToArit e)
+runTimeToArit otherwise = undefined
 
 
-restrictionsToZ3 :: Restriction -> [(Context, Restriction)]
-restrictionsToZ3 rest = zip contexts eval_runt where
-  simplify_rest = (mapRes deepSimplifyRuntime rest) -- simplifica los runtimes de la restriccion
+restrictionsToSolver :: RunTimeR -> [SolverInput]
+restrictionsToSolver rest = zip contexts eval_arit where
+  simplify_rest = (fmap deepSimplifyRuntime rest) -- simplifica los runtimes de la restriccion
   contexts = (allContext (foldRes (:++:) (id) simplify_rest)) -- todos los posibles context de simplify_rest
-  f  = \bexp -> mapRes (evalCondition bexp)  
+  f  = \bexp -> fmap (evalCondition bexp)  
   eval_runt = map (foldr f simplify_rest) contexts -- para todos los context, evaluar todas las posibles conditions.
+  eval_arit = map (fmap $ completeNormArit.runTimeToArit) eval_runt -- pasar de los runtimes a arit simplificadas.
 
-
+--showSolverInput :: SolverInput -> Int -> IO()
+--showSolverInput (context, rest) = 
 
 ----------------------------(Preparación para z3)---------------------------------------------------------
 
@@ -332,21 +352,8 @@ runt2 = c2 :<>: (RunTimeArit arit2)
 
 restriction = runt1 :!<=: runt2
 
-z3_rest = restrictionsToZ3 restriction
+z3_rest = restrictionsToSolver restriction
 ------------------------------------------------------------------------------------------------------------------------------------
-{-
-conds = findCo restriction
-
-vals = bools (length conds)
-
-allv = map (zip conds) vals
-allc = allConditions restriction
-
-allcontext = allContext restriction
-z3Input = restrictionsToZ3 restriction
-
-expresionBoolean = (Not (Not (Not True')))
-sexp = deepSimplifyBExp expresionBoolean
 
 sumando1 = (Not( (Lit 8.0 ):<=: Var "w")):<>: (RunTimeArit(Lit 4.0)) 
 sumando2 = ( (Lit 8.0):<=: Var "w"):<>: (RunTimeArit(Lit 5.0))
@@ -355,12 +362,10 @@ runtr = sumando1 :++: sumando2
 
 res = s1 :!<=: runtr
 
-ejemploP3 = restrictionsToZ3 res
--}
+ejemploP3 = restrictionsToSolver res
 -------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------
 
 a1 = (((((Var "x") :+: (Var "x")) :+: (Lit 1)) :+: ((-2) :*: (Var "y"))) :+: (Lit 8.0))
 
 sa1 = completeNormArit $ a1
---array_a1 = normArit $ a1
 -------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------
