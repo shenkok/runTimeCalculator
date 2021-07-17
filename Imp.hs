@@ -308,7 +308,10 @@ restrictionsToSolver rest = zip contexts eval_arit where
   eval_runt = map (foldr f simplify_rest) contexts -- para todos los context, evaluar todas las posibles conditions.
   eval_arit = map (fmap $ completeNormArit.runTimeToArit) eval_runt -- pasar de los runtimes a arit simplificadas.
 
+----------------------------(Preparación para z3)---------------------------------------------------------
 
+
+----------------------------( Funciones para imprimir en pantalla los contextos y sus restricciones)---------------------------------------------------------
 showSolverInput :: SolverInput -> Int -> IO()
 showSolverInput (contexto, rest) n = do 
   putStr "Par (contexto, restricción) número " 
@@ -321,18 +324,21 @@ showSolverInput (contexto, rest) n = do
 
 showSolverInputs :: RunTimeR -> IO()
 showSolverInputs runtr = do
+  print $ concat (replicate 50 "*")
   putStrLn "La restricción es :"
   print runtr 
   putStr "Hay un total de " 
   putStr.show $ n 
   putStrLn " diferentes pares (contexto, restricción) " 
+  print $ concat (replicate 50 "-")
   mapM_ (uncurry showSolverInput ) $ zip  inputs [1..n]
+  print $ concat (replicate 50 "*")
   where 
     n = length (restrictionsToSolver runtr) 
     inputs = restrictionsToSolver runtr
 
- 
-----------------------------(Preparación para z3)---------------------------------------------------------
+ ----------------------------( Funciones para imprimir en pantalla los contextos y sus restricciones)---------------------------------------------------------
+
 
 ---------------------------(Programas de ejemplo)---------------------------------------------------------
 
