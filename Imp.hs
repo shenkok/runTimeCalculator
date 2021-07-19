@@ -33,7 +33,7 @@ sustAExp x aritFor (k :*: e) = k :*: (sustAExp x aritFor e)
 
 -- freeVars toma un AExp arit y retorna una lista de todas las variables libres
 -- considerando que un número está asociado a la variable vacía "".
-freeVars :: AExp -> [String]
+freeVars :: AExp -> [Name]
 freeVars arit = sort (rmdups (fvar arit)) where
   fvar (Lit _ ) = [""]
   fvar (Var x)  = [x]
@@ -101,6 +101,17 @@ sustBExp x aritFor (e_1 :==: e_2) = (sustAExp x aritFor e_1) :==: (sustAExp x ar
 sustBExp x aritFor (e_1 :|: e_2) = (sustBExp x aritFor e_1) :|: (sustBExp x aritFor e_2)
 sustBExp x aritFor (e_1 :&: e_2) = (sustBExp x aritFor e_1) :&: (sustBExp x aritFor e_2)
 sustBExp x aritFor (Not e) = (Not (sustBExp x aritFor e))
+
+freeVarsBExp :: BExp -> [Name]
+freeVarsBExp True' = []
+freeVarsBExp False' = []
+freeVarsBExp (arit_1 :<=: arit_2) = (freeVars arit_1) ++ (freeVars arit_2)
+freeVarsBExp (arit_1 :==: arit_2) = (freeVars arit_1) ++ (freeVars arit_2)
+freeVarsBExp (b_1 :|: b_2) = (freeVarsBExp b_1) ++ (freeVarsBExp b_2)
+freeVarsBExp (b_1 :&: b_2) = (freeVarsBExp b_1) ++ (freeVarsBExp b_2)
+freeVarsBExp (Not b) = (freeVarsBExp b)
+
+
 
 ----------------------------------(Expresiones Booleanas)------------------------------------------
 
