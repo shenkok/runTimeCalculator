@@ -436,11 +436,3 @@ a1 = (((((Var "x") :+: (Var "x")) :+: (Lit 1)) :+: ((-2) :*: (Var "y"))) :+: (Li
 
 sa1 = completeNormArit $ a1
 -------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------
-
-
-act ::IO(Char, Char)
-act = do
-  x <- getChar
-  getChar
-  y <- getChar
-  return (x, y)
