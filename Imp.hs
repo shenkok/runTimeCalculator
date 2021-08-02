@@ -317,6 +317,17 @@ runTimeToArit (k :**: e) = k :*: (runTimeToArit e)
 runTimeToArit otherwise = undefined
 
 
+runTimeToArit' :: RunTime -> Maybe AExp
+runTimeToArit' (RunTimeArit arit) = Just arit
+runTimeToArit' (e_1 :++: e_2) = do 
+                            aexp1 <- runTimeToArit' $ e_1
+                            aexp2 <- runTimeToArit' $ e_2
+                            return (aexp1 :+: aexp2)
+runTimeToArit' (k :**: e) = do 
+                            aexp <- runTimeToArit' $ e
+                            return ( k :*: aexp) 
+runTimeToArit' otherwise = Nothing
+
 restrictionsToSolver :: RRunTime -> [SolverInput]
 restrictionsToSolver rest = zip3 contexts eval_arit free_vars where
   simplify_rest = (fmap deepSimplifyRunTime rest) -- simplifica los RunTimes de la restriccion
@@ -394,11 +405,15 @@ c3 = (Var "x"):<=:(Lit 0)
 c4 = (Var "ww"):<=:(Lit 0)
 
 arit1 = (Var "x") :+: (Var "y")
+rarit1 = RunTimeArit arit1
+
 arit2 = (Var "y") :+: (Lit 1)
+rarit2 = 10 :**: (RunTimeArit arit2)
+rarit3 = rarit1 :++: rarit2
+
 
 runt1 = c1 :<>: (RunTimeArit arit1)
 runt2 = c2 :<>: (RunTimeArit arit2)
-
 restriction = runt1 :!<=: runt2
 
 z3_rest = restrictionsToSolver restriction
@@ -421,3 +436,11 @@ a1 = (((((Var "x") :+: (Var "x")) :+: (Lit 1)) :+: ((-2) :*: (Var "y"))) :+: (Li
 
 sa1 = completeNormArit $ a1
 -------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------
+
+
+act ::IO(Char, Char)
+act = do
+  x <- getChar
+  getChar
+  y <- getChar
+  return (x, y)
