@@ -1,8 +1,8 @@
 module Imp where
 
-import Data.List  
+import Data.List
 type Name = String
-type Constant = Float
+type Constant = Integer
 type Names = [Name]
 ---------------------------------------- (Funciones útiles)---------------------------------------
 -- rmdups toma una lista de elementos de tipo a y retorna una lista sin duplicados
@@ -48,9 +48,9 @@ freeVars arit = sort (rmdups (fvar arit)) where
 -- en el AExp arit.
 weightVar :: AExp -> String-> Constant
 weightVar (Lit n) var | var =="" = n  
-                      | otherwise = 0.0
+                      | otherwise = 0
 weightVar (Var x) var | var == x = 1
-                      | otherwise = 0.0
+                      | otherwise = 0
 weightVar (e_1 :+: e_2) var = (weightVar e_1 var) + (weightVar e_2 var)
 weightVar (k :*: e) var = k * (weightVar e var)
 ---------------------------------------- (Expresiones Aritméticas)--------------------------------
@@ -60,7 +60,7 @@ weightVar (k :*: e) var = k * (weightVar e var)
 ----------------------------------( Simplificador Expresiones Aritméticas )-----------------------
 
 normArit :: AExp -> AExp
-normArit arit = foldr f (Lit 0.0) wvars where
+normArit arit = foldr f (Lit 0) wvars where
   f = \x y -> x:+:y
   vars = freeVars arit -- variables libres del programa
   weights = map (weightVar arit) vars -- todos los pesos de las diferentes variables
@@ -70,10 +70,10 @@ normArit arit = foldr f (Lit 0.0) wvars where
 
 -- simplifyArit toma un AExp arit y retorna una versión simplificada             
 simplifyArit::AExp -> AExp
-simplifyArit ((Lit 0.0) :+: arit) = simplifyArit arit
-simplifyArit (arit :+: (Lit 0.0)) = simplifyArit arit
+simplifyArit ((Lit 0) :+: arit) = simplifyArit arit
+simplifyArit (arit :+: (Lit 0)) = simplifyArit arit
 simplifyArit (arit_1 :+: arit_2) = (simplifyArit arit_1) :+: (simplifyArit arit_2)
-simplifyArit (1.0 :*: arit) = simplifyArit arit
+simplifyArit (1 :*: arit) = simplifyArit arit
 simplifyArit (k :*: arit) = k :*: (simplifyArit arit)
 simplifyArit otherwise = otherwise 
 
@@ -208,10 +208,10 @@ type RRunTime =  Restriction RunTime
 -- generador de restricciones 
 -- entrega un conjunto de restricciones y el tiempo de ejecución esperado
 vcGenerator ::  Program -> RunTime -> (RunTime, [RRunTime])
-vcGenerator Skip runt = ((RunTimeArit (Lit 1.0)) :++: runt, [])
+vcGenerator Skip runt = ((RunTimeArit (Lit 1)) :++: runt, [])
 vcGenerator Empty runt = (runt, [])
-vcGenerator (Set x arit ) runt = ((RunTimeArit (Lit 1.0)) :++: (sustRunTime x arit runt), [])
-vcGenerator (If e_b e_t e_f) runt = ( (RunTimeArit (Lit 1.0)) :++:((e_b :<>:fst vc_t):++:((Not e_b):<>: fst vc_f)),  (snd vc_t) ++ (snd vc_f)) where 
+vcGenerator (Set x arit ) runt = ((RunTimeArit (Lit 1)) :++: (sustRunTime x arit runt), [])
+vcGenerator (If e_b e_t e_f) runt = ( (RunTimeArit (Lit 1)) :++:((e_b :<>:fst vc_t):++:((Not e_b):<>: fst vc_f)),  (snd vc_t) ++ (snd vc_f)) where 
     vc_t = vcGenerator e_t runt
     vc_f = vcGenerator e_f runt
 vcGenerator (Seq p_1 p_2) runt = (fst vc_1, (snd vc_1) ++ (snd vc_2))   where
@@ -219,7 +219,7 @@ vcGenerator (Seq p_1 p_2) runt = (fst vc_1, (snd vc_1) ++ (snd vc_2))   where
     vc_1 = vcGenerator p_1 (fst vc_2)
 vcGenerator (While e_b p inv) runt = (inv, [l_inv :!<=: inv] ++ (snd vc_p)) where
     vc_p = vcGenerator p inv
-    l_inv = (RunTimeArit (Lit 1.0) :++: ( ((Not e_b) :<>: runt):++: (e_b :<>: (fst vc_p))))
+    l_inv = (RunTimeArit (Lit 1) :++: ( ((Not e_b) :<>: runt):++: (e_b :<>: (fst vc_p))))
 
 ---------------------------(vc gen)---------------------------------------------------------
 
@@ -331,16 +331,31 @@ runTimeToArit' (k :**: e) = do
 runTimeToArit' otherwise = Nothing
 
 restrictionsToSolver :: RRunTime -> [SolverInput]
-restrictionsToSolver rest = zip3 contexts eval_arit free_vars where
-  simplify_rest = (fmap deepSimplifyRunTime rest) -- simplifica los RunTimes de la restriccion
-  contexts = (allContext (foldRes (:++:) (id) simplify_rest)) -- todos los posibles context de simplify_rest
-  f  = \bexp -> fmap (evalCondition bexp)  
+restrictionsToSolver rest = zip3 contexts eval_arit free_vars' where
+  simplify_rest = (fmap deepSimplifyRunTime rest) -- Toma los runtimes (a, b) de rest (a:<=:b) y los simplifica entregando simplify_rest (a':<=:b') 
+  contexts = (allContext (foldRes (:++:) (id) simplify_rest)) -- Toma la restricción simplify_rest (a':<=:b')y entrega un arreglo con todos sus contextos
+  f  = \bexp -> fmap (evalCondition bexp) -- Función curryficada 
   eval_runt = map (foldr f simplify_rest) contexts -- para todos los context, evaluar todas las posibles conditions.
   eval_arit = map (fmap $ completeNormArit.runTimeToArit) eval_runt -- pasar de los RunTimes a arit simplificadas.
   g = \ context -> foldr (++) [] (map freeVarsBExp context)
   free_vars_bool = map g contexts
   free_vars_rest = map (foldRes (++) freeVars) eval_arit
   free_vars = map rmdups (zipWith (++) free_vars_bool free_vars_rest)
+  free_vars' = map (filter  (/="")) free_vars
+
+{-
+restrictionsToSolver' :: RRunTime -> Maybe [SolverInput]
+restrictionsToSolver rest = zip3 contexts eval_arit free_vars where
+  simplify_rest = (fmap deepSimplifyRunTime rest) -- Toma los runtimes (a, b) de rest (a:<=:b) y los simplifica entregando simplify_rest (a':<=:b') 
+  contexts = (allContext (foldRes (:++:) (id) simplify_rest)) -- Toma la restricción simplify_rest (a':<=:b')y entrega un arreglo con todos sus contextos
+  f  = \bexp -> fmap (evalCondition bexp) -- Función curryficada 
+  eval_runt = map (foldr f simplify_rest) contexts -- para todos los context, evaluar todas las posibles conditions.
+  eval_arit = map (fmap $ completeNormArit.runTimeToArit) eval_runt -- pasar de los RunTimes a arit simplificadas.
+  g = \ context -> foldr (++) [] (map freeVarsBExp context)
+  free_vars_bool = map g contexts
+  free_vars_rest = map (foldRes (++) freeVars) eval_arit
+  free_vars = map rmdups (zipWith (++) free_vars_bool free_vars_rest)
+  -}
 ----------------------------(Preparación para z3)---------------------------------------------------------
 
 
@@ -373,3 +388,69 @@ showSolverInputs runtr = do
     inputs = restrictionsToSolver runtr
 
  ----------------------------( Funciones para imprimir en pantalla los contextos y sus restricciones)---------------------------------------------------------
+
+
+---------------------------(Programas de ejemplo)---------------------------------------------------------
+
+-- programa de ejemplo 
+
+p0 = (While False' Empty (RunTimeArit (Lit 5)))
+vc_0 = vcGenerator p0 (RunTimeArit (Lit 0)) 
+r0 = fst vc_0
+s0 = deepSimplifyRunTime (fst vc_0)
+
+-- programa 1 de ejemplo
+
+l0 = Set  "x" ((Var "x"):+:(Lit 1)) --cambiar por menos
+l3 = Set "y" (2:*:(Var "x"))
+l6 = Set "w" (Lit 3)
+l7 = Set "x" ((Var  "w") :+: (Var "x"))
+l9 = Set "y" (Lit 5)
+l5_9 = If ((Lit 8) :<=: (Var "w")) (Seq l6 l7) l9
+l1_9 = If ((Var "y") :<=: (Var "x")) (Seq Skip l3) l5_9
+l0_9 = Seq l0 l1_9
+
+vc_1 = vcGenerator l0_9 (RunTimeArit (Lit 0))
+r1 = fst vc_1
+s1 = deepSimplifyRunTime (fst vc_1)
+
+
+---------------------------(Restricciones de ejemplo)---------------------------------------------------------
+c1 = (2 :*:(Var "x")):<=:(Var "y")
+c2 = (Var "x"):<=:(Lit 0)
+c3 = (Var "x"):<=:(Lit 0)
+c4 = (Var "ww"):<=:(Lit 0)
+
+arit1 = (Var "x") :+: (Var "y")
+rarit1 = RunTimeArit arit1
+
+arit2 = (Var "y") :+: (Lit 1)
+rarit2 = 10 :**: (RunTimeArit arit2)
+rarit3 = rarit1 :++: rarit2
+
+
+runt1 = c1 :<>: (RunTimeArit arit1)
+runt2 = c2 :<>: (RunTimeArit arit2)
+restriction = runt1 :!<=: runt2
+
+z3_rest = restrictionsToSolver restriction
+------------------------------------------------------------------------------------------------------------------------------------
+{-
+sumando1 = (Not( (Lit 8 ):<=: Var "w")):<>: (RunTimeArit(Lit 4)) 
+sumando2 = ( (Lit 8):<=: Var "w"):<>: (RunTimeArit(Lit 5))
+
+runtr = sumando1 :++: sumando2
+
+res = s1 :!<=: runtr
+
+ejemploP3 = restrictionsToSolver res
+
+ejSol = ejemploP3 !! 0
+printEj = showSolverInputs res
+-}
+-------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------
+
+a1 = (((((Var "x") :+: (Var "x")) :+: (Lit 1)) :+: ((-2) :*: (Var "y"))) :+: (Lit 8))
+
+sa1 = completeNormArit $ a1
+-------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------
