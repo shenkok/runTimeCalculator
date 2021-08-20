@@ -10,12 +10,20 @@ rmdups :: (Eq a) =>[a] -> [a]
 rmdups [] = []
 rmdups (x:xs) = x : rmdups (filter (/= x) xs)
 
+-- | bools retorna una matriz con todas las posibles combinaciones False/True 
+-- de tamaño n. 
+bools :: Int -> [[Bool]]
+bools 0 = [[]]
+bools n = map (False:) r ++ map (True:) r where
+  r = bools (n-1)
+
+
 
 ---------------------------------------- { EXPRESIONES ARITMÉTICAS }--------------------------------
 -- | Definición de Expresiones Aritméticas
 -- NOTA      : Para que el solver pueda manejar varibles Reales, Enteras o mixtas
 --             se podría agregar como input el tipo a Var.
---             Var Name Tipo
+--             data = Var Name Tipo
 -- NOTA       : He pensado bastante el usar sólo expresiones lineales y si se podría generalizar un poco más.
 --            En la página oficial de SBV link: https://hackage.haskell.org/package/sbv-8.16/docs/Data-SBV.html#g:12
 --            mencionan que
@@ -72,11 +80,11 @@ weightVar (k :*: e) var = k * (weightVar e var)
 -- En general creo que se podría implementar algo parecido a la tarea 1 de lenguajes 2019-2, Tarea de polinomios.
 ---------------------------------------------------------------------------------------------------------------
 -- | Descripción del algoritmo 
--- 1. Extraigo las variables libres de la expresión
--- 2. Calculo el peso asociado a cada una de las variables
--- 3. Defino una función auxiliar que un par (peso, variable) y retorma un monomio peso:*:variable
--- 4. Entrego un arreglo con los monomios respectivos.
--- 5. Corro un fold, con caso base (Lit 0) y usando la suma de polinomios como función
+-- 1. Extraer las variables libres de la expresión
+-- 2. Calcular el peso asociado a cada una de las variables
+-- 3. Definir una función auxiliar que un par (peso, variable) y retorma un monomio peso:*:variable
+-- 4. Entregar un arreglo con los monomios respectivos.
+-- 5. Correr un fold, con caso base (Lit 0) y usando la suma de polinomios como función
 -- La expresión final no considera el 0 y el 1 como neutros de de la adicción y multiplicación.
 normArit :: AExp -> AExp
 normArit arit = foldr f (Lit 0) wvars where -- 5
@@ -90,8 +98,9 @@ normArit arit = foldr f (Lit 0) wvars where -- 5
 
 -- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1.    
 simplifyArit::AExp -> AExp
-simplifyArit ((Lit 0) :+: arit) = simplifyArit arit
-simplifyArit (arit :+: (Lit 0)) = simplifyArit arit
+simplifyArit ((Lit 0) :+: arit) =  simplifyArit arit
+simplifyArit (arit :+: (Lit 0)) =  simplifyArit arit
+simplifyArit (Lit m) :+: (Lit n) = (Lit $ m + n) 
 simplifyArit (arit_1 :+: arit_2) = (simplifyArit arit_1) :+: (simplifyArit arit_2)
 simplifyArit (1 :*: arit) = simplifyArit arit
 simplifyArit (0 :*: _) = (Lit 0)
@@ -201,6 +210,7 @@ freeVarsRunTime (e_1 :++: e_2) = (freeVarsRunTime e_1) ++ (freeVarsRunTime e_2)
 -- La versión general 
 -- data Program = For (Set Name AExp) (Set Name AExp) BExp Program
 -- Las partes son : iniciar variable - modificación al final de cada ciclo - condición de fin - cuerpo del for
+-- Sería basicamente un while, así que no creo que aporte mucho en la práctica.
 -- Versión simplificada
 -- data Program = For Integer Program
 -- Representa iterar una versión constante de veces el cuerpo del for.
@@ -254,8 +264,8 @@ type RArit =  Restriction AExp
 type RRunTime =  Restriction RunTime 
 
 
-----------------------------------(vc gen)-------------------------------------------------------------
--- generador de restricciones 
+----------------------------------{ VC GEN }-------------------------------------------------------------
+-- | Generador de restricciones 
 -- entrega un conjunto de restricciones y el tiempo de ejecución esperado
 vcGenerator ::  Program -> RunTime -> (RunTime, [RRunTime])
 vcGenerator Skip runt = ((RunTimeArit (Lit 1)) :++: runt, [])
@@ -271,10 +281,8 @@ vcGenerator (While e_b p inv) runt = (inv, [l_inv :!<=: inv] ++ (snd vc_p)) wher
     vc_p = vcGenerator p inv
     l_inv = (RunTimeArit (Lit 1) :++: ( ((Not e_b) :<>: runt):++: (e_b :<>: (fst vc_p))))
 
----------------------------(vc gen)---------------------------------------------------------
-
----------------------------(Simplificar)---------------------------------------------------------
--- reglas de un sólo paso para simplificar un BExp
+---------------------------{ SIMPLIFICAR EXPRESIONES BOOLEANAS }---------------------------------------------------------
+-- | Reglas de un sólo paso para simplificar un BExp
 simplifyBExp :: BExp -> BExp
 simplifyBExp (True' :|: _ ) = True'
 simplifyBExp ( _ :|: True' ) = True'
@@ -287,7 +295,7 @@ simplifyBExp (e_b :&: True') = e_b
 simplifyBExp (Not(Not e_b)) = e_b
 simplifyBExp otherwise = otherwise
 
--- reglas recursivas para simplificar un BExp
+-- | Reglas recursivas para simplificar un BExp
 deepSimplifyBExp :: BExp -> BExp
 deepSimplifyBExp True' = True'
 deepSimplifyBExp False' = False'
@@ -297,7 +305,9 @@ deepSimplifyBExp (e_1 :|: e_2) = simplifyBExp ((deepSimplifyBExp e_1) :|: (deepS
 deepSimplifyBExp (e_1 :&: e_2) = simplifyBExp ((deepSimplifyBExp e_1) :&: (deepSimplifyBExp e_2))
 deepSimplifyBExp (Not e_b) = simplifyBExp (Not (deepSimplifyBExp e_b))
 
--- reglas de un sólo paso para simplificar un RunTime
+-------------------- {  SIMPLIFICAR RUNTIMES }------------------------------------------------------------------
+-- Acá es donde creo que si tomase un enfoque monádico, se podría simplificar la expresión.
+-- | Reglas de un sólo paso para simplificar un RunTime
 simplifyRunTime :: RunTime -> RunTime
 simplifyRunTime ((RunTimeArit (Lit m)) :++: (RunTimeArit (Lit n))) = (RunTimeArit (Lit (n + m)))
 simplifyRunTime ((RunTimeArit (Lit m)) :++: ((RunTimeArit (Lit n)) :++: runt)) = (RunTimeArit (Lit (n + m)) :++: runt)
@@ -309,7 +319,7 @@ simplifyRunTime (1 :**: runt) = runt
 simplifyRunTime (0 :**: _ ) = (RunTimeArit (Lit 0))
 simplifyRunTime otherwise = otherwise
 
--- reglas recursivas para simplificar un RunTime
+-- Reglas recursivas para simplificar un RunTime
 deepSimplifyRunTime :: RunTime -> RunTime
 deepSimplifyRunTime (RunTimeArit arit) = (RunTimeArit (completeNormArit arit))
 deepSimplifyRunTime (bexp :<>: runt) = simplifyRunTime ((deepSimplifyBExp bexp) :<>: (deepSimplifyRunTime runt))
@@ -317,15 +327,14 @@ deepSimplifyRunTime (e_1 :++: e_2) = simplifyRunTime ((deepSimplifyRunTime e_1) 
 deepSimplifyRunTime (k :**: runt) = simplifyRunTime (k :**: (deepSimplifyRunTime runt))
 
 
----------------------------(Simplificar)---------------------------------------------------------
 
----------------------------(Preparación para z3)-------------------------------------------------
+---------------------------{ PREPARACIÓN PARA SBV }-------------------------------------------------
 
 type Context = [BExp]
 type Contexts = [Context]
 type SolverInput = (Context,RArit, Names)
 
--- findcondition retorna todas las instancias de BExp dentro un RunTime sin repeticiones
+-- | Retorna todas las instancias de BExp dentro un RunTime sin repeticiones
 findConditionRunTime :: RunTime -> Context
 findConditionRunTime runt = rmdups conds where
   conds = f runt 
@@ -335,15 +344,8 @@ findConditionRunTime runt = rmdups conds where
   f (e_1 :++: e_2) = (findConditionRunTime e_1) ++ (findConditionRunTime e_2)
   f (_ :**: runt) = (findConditionRunTime runt)
 
--- bools retorna una matriz con todas las posibles combinaciones False/True 
--- de tamaño n. 
-bools :: Int -> [[Bool]]
-bools 0 = [[]]
-bools n = map (False:) r ++ map (True:) r where
-  r = bools (n-1)
-
--- allContext toma un RunTime runt y retorna todos los posibles context que 
--- se pueden extraer de a partir de los BExp que tiene el RunTime.
+-- | Toma un RunTime runt y retorna todos los posibles context (matriz de BExp) que 
+-- se pueden extraer a partir de los BExp que tiene el RunTime.
 allContext :: RunTime -> Contexts
 allContext runt = map (zipWith f conds) lbools where
   f bexp True = bexp
@@ -351,7 +353,7 @@ allContext runt = map (zipWith f conds) lbools where
   conds = findConditionRunTime runt
   lbools = bools (length conds)
 
--- evalCondition toma un BExp bexp y un RunTime runt, evalua todas las instancias de bexp 
+-- | Toma un BExp bexp y un RunTime runt, evalua todas las instancias de bexp 
 -- dentro de runt
 evalCondition :: BExp -> RunTime -> RunTime
 evalCondition bexp (RunTimeArit arit) = (RunTimeArit arit)
@@ -361,14 +363,16 @@ evalCondition bexp1 (bexp2 :<>: runt) | bexp1 == bexp2 = (evalCondition bexp1 ru
 evalCondition bexp (e_1 :++: e_2) = (evalCondition bexp e_1) :++: (evalCondition bexp e_2)
 evalCondition bexp (k :**: runt) = k :**: (evalCondition bexp runt)
 
--- RunTimeToArit, toma un RunTime runt y retorna su versión AExp en el caso de que se pueda
+-- | Toma un RunTime runt y retorna su versión AExp en el caso de que se pueda
+-- NOTA: En un principio pensé en usar la mónada maybe para que el porgrama no se caiga
+-- pero en los ejemplos que vi siempre tiraban el error, así que quise seguir esa línea
 runTimeToArit :: RunTime -> AExp
 runTimeToArit (RunTimeArit arit) = arit
 runTimeToArit (e_1 :++: e_2) = (runTimeToArit e_1) :+: (runTimeToArit e_2)
 runTimeToArit (k :**: e) = k :*: (runTimeToArit e)
-runTimeToArit otherwise = undefined
+runTimeToArit otherwise = error $ "No hay versión directa a AExp" ++ otherwise
 
-
+-- Versión monádica de la función anterior
 runTimeToArit' :: RunTime -> Maybe AExp
 runTimeToArit' (RunTimeArit arit) = Just arit
 runTimeToArit' (e_1 :++: e_2) = do 
@@ -380,36 +384,46 @@ runTimeToArit' (k :**: e) = do
                             return ( k :*: aexp) 
 runTimeToArit' otherwise = Nothing
 
+-- | Toma una restricción de Runtime a:!<=:b y retorna un arreglo de restricciones de AExp [a:<=:b]
+-- Uno por cada contexto posible
+---------------------------------------------------------------------------------------------------
+-- NOTA: Este algoritmo es poco claro y creo que debe cambiarse.
+-- Descripción del algoritmo
+-- 0 Entrega una un arreglo de 3-tuplas (SolverInpur)
+-- Cada tupla es
+-- 0.a. Context: Un arreglo de BExp, es la hiṕotesis del implica 
+-- 0.a. Ejemplo [x<y, y<0]
+-- 0.b. Restricción: Restriction RArit, será la conclusión del Implica
+-- 0.b. Ejemplo x<8
+-- 0.c. Variables libres de todo el SolverInput 
+-- 0.c Ejemplo [x, y]
+
+-- 1. Simplificar los dos runtimes de la restricción a:!<=:b -> a':!<=:b'
+-- 2. Extraer todos los contextos posibles de los dos runtime a' y b'
+-- 3. Función currificada, para poder evaluar una condición y usarlar con los contexts
+-- 4. Evaluar todos los contextos y generar todas las posibles restricciones de runtimes [a'':!<=:b'' ]
+-- 5. A partir de las restricciones de runtimes [a'':<=:b''], se extrae la expresión aritmetica subyacente 
+--    generando restricciones de AExp [a''' :!<=b'''].
+-- 6. Funcion que toma un context [BExp] y extrae las variables libres y las concatena
+-- 7. Arreglo cuyos elementos son arreglos con todas las varibles libres de cada posible contexto
+-- 8. Variables libres de cada restricción de AExp [a''' :!<=b''']
+-- 9. Uno las variables libre de cada context con las variables de su respectiva restricción
+-- 10. Elimino las variables libres que sean "", ya que en realidad son Literales (Lit n)
 restrictionsToSolver :: RRunTime -> [SolverInput]
-restrictionsToSolver rest = zip3 contexts eval_arit free_vars' where
-  simplify_rest = (fmap deepSimplifyRunTime rest) -- Toma los runtimes (a, b) de rest (a:<=:b) y los simplifica entregando simplify_rest (a':<=:b') 
-  contexts = (allContext (foldRes (:++:) (id) simplify_rest)) -- Toma la restricción simplify_rest (a':<=:b')y entrega un arreglo con todos sus contextos
-  f  = \bexp -> fmap (evalCondition bexp) -- Función curryficada 
-  eval_runt = map (foldr f simplify_rest) contexts -- para todos los context, evaluar todas las posibles conditions.
-  eval_arit = map (fmap $ completeNormArit.runTimeToArit) eval_runt -- pasar de los RunTimes a arit simplificadas.
-  g = \ context -> foldr (++) [] (map freeVarsBExp context)
-  free_vars_bool = map g contexts
-  free_vars_rest = map (foldRes (++) freeVars) eval_arit
-  free_vars = map rmdups (zipWith (++) free_vars_bool free_vars_rest)
-  free_vars' = map (filter  (/="")) free_vars
-
-{-
-restrictionsToSolver' :: RRunTime -> Maybe [SolverInput]
-restrictionsToSolver rest = zip3 contexts eval_arit free_vars where
-  simplify_rest = (fmap deepSimplifyRunTime rest) -- Toma los runtimes (a, b) de rest (a:<=:b) y los simplifica entregando simplify_rest (a':<=:b') 
-  contexts = (allContext (foldRes (:++:) (id) simplify_rest)) -- Toma la restricción simplify_rest (a':<=:b')y entrega un arreglo con todos sus contextos
-  f  = \bexp -> fmap (evalCondition bexp) -- Función curryficada 
-  eval_runt = map (foldr f simplify_rest) contexts -- para todos los context, evaluar todas las posibles conditions.
-  eval_arit = map (fmap $ completeNormArit.runTimeToArit) eval_runt -- pasar de los RunTimes a arit simplificadas.
-  g = \ context -> foldr (++) [] (map freeVarsBExp context)
-  free_vars_bool = map g contexts
-  free_vars_rest = map (foldRes (++) freeVars) eval_arit
-  free_vars = map rmdups (zipWith (++) free_vars_bool free_vars_rest)
-  -}
-----------------------------(Preparación para z3)---------------------------------------------------------
+restrictionsToSolver rest = zip3 contexts eval_arit free_vars' where  -- 0
+  simplify_rest = (fmap deepSimplifyRunTime rest)                     -- 1 
+  contexts = (allContext (foldRes (:++:) (id) simplify_rest))         -- 2
+  f  = \bexp -> fmap (evalCondition bexp)                             -- 3
+  eval_runt = map (foldr f simplify_rest) contexts                    -- 4
+  eval_arit = map (fmap $ completeNormArit.runTimeToArit) eval_runt   -- 5
+  g = \ context -> foldr (++) [] (map freeVarsBExp context)           -- 6
+  free_vars_bool = map g contexts                                     -- 7
+  free_vars_rest = map (foldRes (++) freeVars) eval_arit              -- 8
+  free_vars = map rmdups (zipWith (++) free_vars_bool free_vars_rest) -- 9
+  free_vars' = map (filter  (/="")) free_vars                         -- 10
 
 
-----------------------------( Funciones para imprimir en pantalla los contextos y sus restricciones)---------------------------------------------------------
+---------------------------- {FUNCIONES PARA IMPRIMIR EN PANTALLA TODO EL INPUT }---------------------------------------------------------
 showSolverInput :: SolverInput -> Int -> IO()
 showSolverInput (contexto, rest, vars) n = do 
   putStr "Par (contexto, restricción) número " 
@@ -437,7 +451,6 @@ showSolverInputs runtr = do
     n = length (restrictionsToSolver runtr) 
     inputs = restrictionsToSolver runtr
 
- ----------------------------( Funciones para imprimir en pantalla los contextos y sus restricciones)---------------------------------------------------------
 
 
 ---------------------------(Programas de ejemplo)---------------------------------------------------------

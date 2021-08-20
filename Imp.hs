@@ -1,3 +1,5 @@
+module Imp where
+
 import Data.List
 type Name = String
 type Constant = Float
@@ -9,14 +11,15 @@ rmdups [] = []
 rmdups (x:xs) = x : rmdups (filter (/= x) xs)
 ---------------------------------------- (Funciones útiles)---------------------------------------
 
-
-
----------------------------------------- (Expreciones Aritméticas)--------------------------------
+--------------------------------------- (Expreciones Aritméticas)--------------------------------
 -- Definición de estructuras aritméticas
 data AExp = Lit Constant -- Números
           | Var Name -- Varibles x, y, z
           | AExp :+: AExp -- suma de expresiones aritméticas
           | Constant :*: AExp deriving (Eq) -- pondelación por una constante 
+
+--(+:) ::AExp-> AExp -> AExp
+-- (Lit m) +: (Lit n) = ()
 
 -- Definición del método show para AExp
 instance Show AExp where 
@@ -46,9 +49,9 @@ freeVars arit = sort (rmdups (fvar arit)) where
 -- en el AExp arit.
 weightVar :: AExp -> String-> Constant
 weightVar (Lit n) var | var =="" = n  
-                      | otherwise = 0.0
+                      | otherwise = 0
 weightVar (Var x) var | var == x = 1
-                      | otherwise = 0.0
+                      | otherwise = 0
 weightVar (e_1 :+: e_2) var = (weightVar e_1 var) + (weightVar e_2 var)
 weightVar (k :*: e) var = k * (weightVar e var)
 ---------------------------------------- (Expresiones Aritméticas)--------------------------------
@@ -58,7 +61,7 @@ weightVar (k :*: e) var = k * (weightVar e var)
 ----------------------------------( Simplificador Expresiones Aritméticas )-----------------------
 
 normArit :: AExp -> AExp
-normArit arit = foldr f (Lit 0.0) wvars where
+normArit arit = foldr f (Lit 0) wvars where
   f = \x y -> x:+:y
   vars = freeVars arit -- variables libres del programa
   weights = map (weightVar arit) vars -- todos los pesos de las diferentes variables
@@ -68,10 +71,10 @@ normArit arit = foldr f (Lit 0.0) wvars where
 
 -- simplifyArit toma un AExp arit y retorna una versión simplificada             
 simplifyArit::AExp -> AExp
-simplifyArit ((Lit 0.0) :+: arit) = simplifyArit arit
-simplifyArit (arit :+: (Lit 0.0)) = simplifyArit arit
+simplifyArit ((Lit 0) :+: arit) = simplifyArit arit
+simplifyArit (arit :+: (Lit 0)) = simplifyArit arit
 simplifyArit (arit_1 :+: arit_2) = (simplifyArit arit_1) :+: (simplifyArit arit_2)
-simplifyArit (1.0 :*: arit) = simplifyArit arit
+simplifyArit (1 :*: arit) = simplifyArit arit
 simplifyArit (k :*: arit) = k :*: (simplifyArit arit)
 simplifyArit otherwise = otherwise 
 
@@ -206,10 +209,10 @@ type RRunTime =  Restriction RunTime
 -- generador de restricciones 
 -- entrega un conjunto de restricciones y el tiempo de ejecución esperado
 vcGenerator ::  Program -> RunTime -> (RunTime, [RRunTime])
-vcGenerator Skip runt = ((RunTimeArit (Lit 1.0)) :++: runt, [])
+vcGenerator Skip runt = ((RunTimeArit (Lit 1)) :++: runt, [])
 vcGenerator Empty runt = (runt, [])
-vcGenerator (Set x arit ) runt = ((RunTimeArit (Lit 1.0)) :++: (sustRunTime x arit runt), [])
-vcGenerator (If e_b e_t e_f) runt = ( (RunTimeArit (Lit 1.0)) :++:((e_b :<>:fst vc_t):++:((Not e_b):<>: fst vc_f)),  (snd vc_t) ++ (snd vc_f)) where 
+vcGenerator (Set x arit ) runt = ((RunTimeArit (Lit 1)) :++: (sustRunTime x arit runt), [])
+vcGenerator (If e_b e_t e_f) runt = ( (RunTimeArit (Lit 1)) :++:((e_b :<>:fst vc_t):++:((Not e_b):<>: fst vc_f)),  (snd vc_t) ++ (snd vc_f)) where 
     vc_t = vcGenerator e_t runt
     vc_f = vcGenerator e_f runt
 vcGenerator (Seq p_1 p_2) runt = (fst vc_1, (snd vc_1) ++ (snd vc_2))   where
@@ -217,7 +220,7 @@ vcGenerator (Seq p_1 p_2) runt = (fst vc_1, (snd vc_1) ++ (snd vc_2))   where
     vc_1 = vcGenerator p_1 (fst vc_2)
 vcGenerator (While e_b p inv) runt = (inv, [l_inv :!<=: inv] ++ (snd vc_p)) where
     vc_p = vcGenerator p inv
-    l_inv = (RunTimeArit (Lit 1.0) :++: ( ((Not e_b) :<>: runt):++: (e_b :<>: (fst vc_p))))
+    l_inv = (RunTimeArit (Lit 1) :++: ( ((Not e_b) :<>: runt):++: (e_b :<>: (fst vc_p))))
 
 ---------------------------(vc gen)---------------------------------------------------------
 
@@ -329,16 +332,31 @@ runTimeToArit' (k :**: e) = do
 runTimeToArit' otherwise = Nothing
 
 restrictionsToSolver :: RRunTime -> [SolverInput]
-restrictionsToSolver rest = zip3 contexts eval_arit free_vars where
-  simplify_rest = (fmap deepSimplifyRunTime rest) -- simplifica los RunTimes de la restriccion
-  contexts = (allContext (foldRes (:++:) (id) simplify_rest)) -- todos los posibles context de simplify_rest
-  f  = \bexp -> fmap (evalCondition bexp)  
+restrictionsToSolver rest = zip3 contexts eval_arit free_vars' where
+  simplify_rest = (fmap deepSimplifyRunTime rest) -- Toma los runtimes (a, b) de rest (a:<=:b) y los simplifica entregando simplify_rest (a':<=:b') 
+  contexts = (allContext (foldRes (:++:) (id) simplify_rest)) -- Toma la restricción simplify_rest (a':<=:b')y entrega un arreglo con todos sus contextos
+  f  = \bexp -> fmap (evalCondition bexp) -- Función curryficada 
   eval_runt = map (foldr f simplify_rest) contexts -- para todos los context, evaluar todas las posibles conditions.
   eval_arit = map (fmap $ completeNormArit.runTimeToArit) eval_runt -- pasar de los RunTimes a arit simplificadas.
   g = \ context -> foldr (++) [] (map freeVarsBExp context)
   free_vars_bool = map g contexts
   free_vars_rest = map (foldRes (++) freeVars) eval_arit
   free_vars = map rmdups (zipWith (++) free_vars_bool free_vars_rest)
+  free_vars' = map (filter  (/="")) free_vars
+
+{-
+restrictionsToSolver' :: RRunTime -> Maybe [SolverInput]
+restrictionsToSolver rest = zip3 contexts eval_arit free_vars where
+  simplify_rest = (fmap deepSimplifyRunTime rest) -- Toma los runtimes (a, b) de rest (a:<=:b) y los simplifica entregando simplify_rest (a':<=:b') 
+  contexts = (allContext (foldRes (:++:) (id) simplify_rest)) -- Toma la restricción simplify_rest (a':<=:b')y entrega un arreglo con todos sus contextos
+  f  = \bexp -> fmap (evalCondition bexp) -- Función curryficada 
+  eval_runt = map (foldr f simplify_rest) contexts -- para todos los context, evaluar todas las posibles conditions.
+  eval_arit = map (fmap $ completeNormArit.runTimeToArit) eval_runt -- pasar de los RunTimes a arit simplificadas.
+  g = \ context -> foldr (++) [] (map freeVarsBExp context)
+  free_vars_bool = map g contexts
+  free_vars_rest = map (foldRes (++) freeVars) eval_arit
+  free_vars = map rmdups (zipWith (++) free_vars_bool free_vars_rest)
+  -}
 ----------------------------(Preparación para z3)---------------------------------------------------------
 
 
