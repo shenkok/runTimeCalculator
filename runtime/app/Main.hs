@@ -40,7 +40,7 @@ namesSolution = ["a", "b"]
 restSol1 = ((Var "a") :+: (Var "b")) :<=: (Lit 0)
 restSol2 = (Var "b") :<=: (Lit 5)
 contextoSol = [restSol1, restSol2]
-solution = sat $ do 
+solution = isSatisfiable $ do 
     a <- sInteger "a"
     b <- sInteger "b"
     constrain $ a + b .<= 0
@@ -49,8 +49,9 @@ solution = sat $ do
 solution' = sat $ do 
     [a, b] <- sIntegers ["a", "b"]
     constrain $ (sAnd [a + b .<= 0,  b .<= 5])
+
 solution'' = sat $ do
-    xs <- sIntegers namesSolution 
+    xs <- sFloats namesSolution 
     let env = M.fromList (zip namesSolution xs)
     constrain $ (sAnd (map (bexp env) contextoSol))
 
@@ -64,21 +65,21 @@ solution0 = sat $ do
 
 
 solution0' = sat $ do 
-    xs <- sIntegers names0
+    xs <- sFloats names0
     let env = M.fromList (zip names0 xs)
     constrain $ (sAnd (map (bexp env) contexto0))
 solution1' = sat $ do 
-    xs <- sIntegers names1
+    xs <- sFloats names1
     let env = M.fromList (zip names1 xs)
     constrain $ (sAnd (map (bexp env) contexto1))
 
-solution2' = sat $ do 
-    xs <- sIntegers names2
+solution2' = isSatisfiable $ do 
+    xs <- sFloats names2
     let env = M.fromList (zip names2 xs)
     constrain $ (sAnd (map (bexp env) contexto2))
 
 solution3' = sat $ do 
-    xs <- sIntegers names3
+    xs <- sFloats names3
     let env = M.fromList (zip names3 xs)
     constrain $ (sAnd (map (bexp env) contexto3))
 

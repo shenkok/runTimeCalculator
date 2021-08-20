@@ -2,40 +2,52 @@ module Imp where
 
 import Data.List
 type Name = String
-type Constant = Integer
+type Constant = Float
 type Names = [Name]
----------------------------------------- (Funciones útiles)---------------------------------------
--- rmdups toma una lista de elementos de tipo a y retorna una lista sin duplicados
+---------------------------------------- { FUNCIONES ÚTILES }---------------------------------------
+-- | Elimina los elementos repetidos en una lista
 rmdups :: (Eq a) =>[a] -> [a]
 rmdups [] = []
 rmdups (x:xs) = x : rmdups (filter (/= x) xs)
----------------------------------------- (Funciones útiles)---------------------------------------
 
 
+---------------------------------------- { EXPRESIONES ARITMÉTICAS }--------------------------------
+-- | Definición de Expresiones Aritméticas
+-- NOTA      : Para que el solver pueda manejar varibles Reales, Enteras o mixtas
+--             se podría agregar como input el tipo a Var.
+--             Var Name Tipo
+-- NOTA       : He pensado bastante el usar sólo expresiones lineales y si se podría generalizar un poco más.
+--            En la página oficial de SBV link: https://hackage.haskell.org/package/sbv-8.16/docs/Data-SBV.html#g:12
+--            mencionan que
+--            SBV can deal with real numbers just fine, since the theory of reals is decidable.
+--            (See http://smtlib.cs.uiowa.edu/theories-Reals.shtml.)
+--            In addition, by leveraging backend solver capabilities,
+--            SBV can also represent and solve non-linear equations involving real-variables.
+--           (For instance, the Z3 SMT solver, supports polynomial constraints on reals starting with v4.0.)
+--           Seguramente deba investigar en mayor profundidad los límites de Z3, pensando en usar polinomios de mayor grado
 
----------------------------------------- (Expreciones Aritméticas)--------------------------------
--- Definición de estructuras aritméticas
-data AExp = Lit Constant -- Números
-          | Var Name -- Varibles x, y, z
-          | AExp :+: AExp -- suma de expresiones aritméticas
-          | Constant :*: AExp deriving (Eq) -- pondelación por una constante 
+data AExp = Lit Constant                    -- Números
+          | Var Name                        -- Varibles x, y, z
+          | AExp :+: AExp                   -- Suma de expresiones aritméticas
+          | Constant :*: AExp deriving (Eq) -- Ponderación por una constante 
 
--- Definición del método show para AExp
+---------------------------------------- { FUNCIONES EXPRESIONES ARITMÉTICAS }--------------------------------
+-- | Definición del método show para AExp
 instance Show AExp where 
   show (Lit n) = show n
   show (Var x) = show x
   show (e_1 :+: e_2) = show e_1 ++" + "++ show e_2
   show (e_1 :*: e_2) = show e_1 ++" * "++ show e_2       
 
--- sustAExp toma un Name "x", un AExp aritFor y un AExp aritIn
--- sustituye todas las instancias "x" en AritIn y por aritFor
+
+-- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
 sustAExp _  _ (Lit n) = (Lit n)
 sustAExp x  aritFor (Var y) = if (x == y) then aritFor else (Var y)
 sustAExp x aritFor (e_1 :+: e_2) = (sustAExp x aritFor e_1) :+: (sustAExp x aritFor e_2)
 sustAExp x aritFor (k :*: e) = k :*: (sustAExp x aritFor e)
 
--- freeVars toma un AExp arit y retorna una lista de todas las variables libres
+-- | Toma un AExp arit y retorna una lista de todas las variables libres
 -- considerando que un número está asociado a la variable vacía "".
 freeVars :: AExp -> Names
 freeVars arit = sort (rmdups (fvar arit)) where
@@ -44,59 +56,78 @@ freeVars arit = sort (rmdups (fvar arit)) where
   fvar (e_1 :+: e_2) = (fvar e_1) ++ (fvar e_2)
   fvar (_ :*: e) = (fvar e)
 
--- weightVar toma un Aexp arit y una variable var, retorna el peso suma de todas las instancias de esa variable var
--- en el AExp arit.
-weightVar :: AExp -> String-> Constant
+-- | WeightVar toma un Aexp arit y una variable var, retorna el peso suma de todas las instancias de esa variable var
+-- en el AExp arit, se considera n:*:"" como equivalente a (Lit n) .
+weightVar :: AExp -> Name -> Constant
 weightVar (Lit n) var | var =="" = n  
                       | otherwise = 0
 weightVar (Var x) var | var == x = 1
                       | otherwise = 0
 weightVar (e_1 :+: e_2) var = (weightVar e_1 var) + (weightVar e_2 var)
 weightVar (k :*: e) var = k * (weightVar e var)
----------------------------------------- (Expresiones Aritméticas)--------------------------------
 
-
-
-----------------------------------( Simplificador Expresiones Aritméticas )-----------------------
-
+---------------------------------- { SIMPLIFICAR Y MORMALIZAR EXPRESIONES ARITMÉTICAS } -----------------------
+-- | NOTA : El algoritmo puede ser mas elegante, pensaba en definir por una función de tome un polimio normalizado, un monomio
+-- y retorne un polinomio normalizado. En base a eso se podría eliminar el considerar a  n:*:"" como equivalente a (Lit n).
+-- En general creo que se podría implementar algo parecido a la tarea 1 de lenguajes 2019-2, Tarea de polinomios.
+---------------------------------------------------------------------------------------------------------------
+-- | Descripción del algoritmo 
+-- 1. Extraigo las variables libres de la expresión
+-- 2. Calculo el peso asociado a cada una de las variables
+-- 3. Defino una función auxiliar que un par (peso, variable) y retorma un monomio peso:*:variable
+-- 4. Entrego un arreglo con los monomios respectivos.
+-- 5. Corro un fold, con caso base (Lit 0) y usando la suma de polinomios como función
+-- La expresión final no considera el 0 y el 1 como neutros de de la adicción y multiplicación.
 normArit :: AExp -> AExp
-normArit arit = foldr f (Lit 0) wvars where
+normArit arit = foldr f (Lit 0) wvars where -- 5
   f = \x y -> x:+:y
-  vars = freeVars arit -- variables libres del programa
-  weights = map (weightVar arit) vars -- todos los pesos de las diferentes variables
-  wvars = map g (zip weights vars) -- arreglo de variables con sus ponderaciones
-  g (k, "") = (Lit k)
-  g (k, x)  = k :*: (Var x)
+  vars = freeVars arit                      -- 1 
+  weights = map (weightVar arit) vars       -- 2
+  g (k, "") = (Lit k)                       -- 3
+  g (k, x)  = k :*: (Var x)                 -- 3
+  wvars = map g (zip weights vars)          -- 4
 
--- simplifyArit toma un AExp arit y retorna una versión simplificada             
+
+-- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1.    
 simplifyArit::AExp -> AExp
 simplifyArit ((Lit 0) :+: arit) = simplifyArit arit
 simplifyArit (arit :+: (Lit 0)) = simplifyArit arit
 simplifyArit (arit_1 :+: arit_2) = (simplifyArit arit_1) :+: (simplifyArit arit_2)
 simplifyArit (1 :*: arit) = simplifyArit arit
+simplifyArit (0 :*: _) = (Lit 0)
 simplifyArit (k :*: arit) = k :*: (simplifyArit arit)
 simplifyArit otherwise = otherwise 
 
+-- | Retorna una versión normalizada de un AExp.
 completeNormArit :: AExp -> AExp
 completeNormArit = simplifyArit.normArit
 
-----------------------------------( Simplificador Expresiones Aritméticas)-------------------------
-
-
-
-----------------------------------(Expresiones Booleanas)------------------------------------------
-
---def de expresiones Boolenas
-data BExp = True' -- Constante True
-          | False' -- Constante False
-          | AExp :<=: AExp -- mayor igual entre expresiones aritméticas
-          | AExp :==: AExp -- igualdad expresiones aritméticas
-          | BExp :|: BExp -- Or lógico
-          | BExp :&: BExp -- And Lógico
+---------------------------------- { EXPRESIONES BOOLEANAS} ------------------------------------------
+-- NOTA: Se podría agregar el :<: como operador, considerando que es super común como condición
+-- NOTA: Se podría generalizar la estructura para que no sólo reciba AExp. 
+{-
+data BExp a = True'                        -- Constante True
+            | False'                       -- Constante False
+            | a :<=: a                     -- mayor igual entre expresiones a
+            | a :==: a                     -- igualdad expresiones a
+            | BExp a :|: BExp a             -- Or lógico
+            | BExp a :&: BExp a               -- And Lógico
+            | Not BExp a deriving (Show, Eq) -- Negación expresión booleana
+-}
+-----------------------------------------------------------------------------------------------------
+-- | Definición de expresiones Boolenas
+data BExp = True'                        -- Constante True
+          | False'                       -- Constante False
+          | AExp :<=: AExp               -- mayor igual entre expresiones aritméticas
+          | AExp :==: AExp               -- igualdad expresiones aritméticas
+          | BExp :|: BExp                -- Or lógico
+          | BExp :&: BExp                -- And Lógico
           | Not BExp deriving (Show, Eq) -- Negación expresión booleana
 
--- función de sustitución toma una variable "x", un AExp aritFor y una expresión booleana AritIn
--- reemplaza todas las indicendias de "x" en la expresión aritIn por la expresión aritFor.
+---------------------------------- { FUNCIONES EXPRESIONES BOOLEANAS } ------------------------------------------
+
+-- | Función de sustitución toma una variable "x", un AExp aritFor y una expresión booleana AritIn
+-- reemplaza todas las incidendias de "x" en la expresión aritIn por la expresión aritFor.
 sustBExp :: Name -> AExp -> BExp -> BExp
 sustBExp _  _ True' = True'
 sustBExp _  _ False' = False'
@@ -106,6 +137,7 @@ sustBExp x aritFor (e_1 :|: e_2) = (sustBExp x aritFor e_1) :|: (sustBExp x arit
 sustBExp x aritFor (e_1 :&: e_2) = (sustBExp x aritFor e_1) :&: (sustBExp x aritFor e_2)
 sustBExp x aritFor (Not e) = (Not (sustBExp x aritFor e))
 
+-- | Función que entrega las variables libres de una expresión aritmética
 freeVarsBExp :: BExp -> Names
 freeVarsBExp True' = []
 freeVarsBExp False' = []
@@ -116,20 +148,32 @@ freeVarsBExp (b_1 :&: b_2) = (freeVarsBExp b_1) ++ (freeVarsBExp b_2)
 freeVarsBExp (Not b) = (freeVarsBExp b)
 
 
-
-----------------------------------(Expresiones Booleanas)------------------------------------------
-
-
-
-----------------------------------( RunTimes )-----------------------------------------------------
-
--- def de RunTimes
-data RunTime = RunTimeArit AExp -- RunTime hecho a partir de una expresión aritmética
-             | BExp :<>: RunTime -- multiplicación por una condición
-             | RunTime :++: RunTime -- suma de RunTime
+----------------------------------{ RUNTIMES }-----------------------------------------------------
+-- ACOTACIÓN: Se podría parametrizar la estructura para que sea más general.
+{-
+data RunTime a = RunTimeArit a                        -- RunTime hecho a partir de una expresión a
+             | BExp a :<>: RunTime a                  -- multiplicación por una condición
+             | RunTime a:++: RunTime a                -- suma de RunTime
+             | Constant :**: RunTime a deriving (Eq)  -- ponderación por constante 
+-}
+-- Creo que varias de las funciones que defino abajo sobre RUNTIMES se podrían simplificar si se extendiera
+-- a functor, functor aplicativo o mónada (sobre todo las de simplificar)
+-- Veo cierto parecido al constructor (:) de las listas a la suma de Runtime :++:
+-- NOTA:       Sobre el conjunto de restricciones que se genera con los Runtime como base.
+--            Si lo veo de un punto de vista geométrico, las restricciones son hiperplanos y su intersección son poliedros
+--            Esto me recordó mucho los distintos problemas de optimización Real o mixta, dónde se 
+--            relajan ciertas restricciones para llegar a una aproximación.
+--            Quizás algunas se esas aproximaciones/relajaciones se podrían aplicar con el fin de tener más constructores
+--            Aunque también es cierto que sería un gran trabajo extra, pero lo menciono para dejarlo como trabajo a futuro
+-- | Definición de RunTimes
+data RunTime = RunTimeArit AExp                     -- RunTime hecho a partir de una expresión aritmética
+             | BExp :<>: RunTime                    -- multiplicación por una condición
+             | RunTime :++: RunTime                 -- suma de RunTime
              | Constant :**: RunTime  deriving (Eq) -- ponderación por constante 
 
--- def de método show para la clase
+----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
+
+-- | Definición de método show para la clase
 instance Show RunTime where 
   show (RunTimeArit arit) = show arit
   show (e_b :<>: (RunTimeArit (Lit 1))) = "["++ (show e_b) ++ "]"
@@ -138,7 +182,7 @@ instance Show RunTime where
   show (e_1 :++: e_2) =  show e_1 ++" + "++ show e_2    
   show (e_1 :**: e_2) = show e_1 ++" * " ++ show e_2        
 
--- función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
+-- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
 -- reemplaza todas las indicendias de "x" en la expresión runtIn por la expresión aritFor.
 sustRunTime :: Name -> AExp -> RunTime -> RunTime
 sustRunTime x aritFor (RunTimeArit aritIn) = (RunTimeArit (sustAExp x aritFor aritIn))
@@ -146,37 +190,43 @@ sustRunTime x aritFor (e_b :<>: e_r) = (sustBExp x aritFor e_b) :<>: (sustRunTim
 sustRunTime x aritFor (e_1 :++: e_2) = (sustRunTime x aritFor e_1) :++: (sustRunTime x aritFor e_2)
 sustRunTime x aritFor (k :**: e) = k :**: (sustRunTime x aritFor e)
 
+-- | Entrega las variables libres dentro de un Runtime
 freeVarsRunTime :: RunTime -> Names
 freeVarsRunTime (RunTimeArit arit) = freeVars arit
 freeVarsRunTime (b :<>: runt) = (freeVarsBExp b) ++ (freeVarsRunTime runt)
 freeVarsRunTime (e_1 :++: e_2) = (freeVarsRunTime e_1) ++ (freeVarsRunTime e_2)
-freeVarsRunTime (_ :**: runt) = (freeVarsRunTime runt)
-----------------------------------( RunTimes )-----------------------------------------------------
 
+----------------------------------{ PROGRAMAS }-----------------------------------------------------
+-- NOTA : Se podría agregar el ciclo for
+-- La versión general 
+-- data Program = For (Set Name AExp) (Set Name AExp) BExp Program
+-- Las partes son : iniciar variable - modificación al final de cada ciclo - condición de fin - cuerpo del for
+-- Versión simplificada
+-- data Program = For Integer Program
+-- Representa iterar una versión constante de veces el cuerpo del for.
+-- La idea es que sea sólo azúcar sintáctica y luego yo por debajo lo transforme a su equivalente
+-- del tipo Seq Program Program para luego usar la transformada sobre él.
 
-----------------------------------(Programas )-----------------------------------------------------
 data Program = Skip -- programa vacío que toma una unidad de tiempo
             | Empty -- programacio vacío sin costo de tiempo
             | Set Name AExp -- Asignación
             | Seq Program Program -- Composición secuencial de programas
             | If BExp Program Program -- guarda condicional
             | While BExp Program RunTime deriving(Show, Eq) -- ciclo while
-----------------------------------( Programas )-----------------------------------------------------
 
+----------------------------------{ RESTRICCIONES }-----------------------------------------------------
 
-----------------------------------( Restriction )-----------------------------------------------------
-
--- Definición de restriccion
+-- | Definición de restriccion
 data Restriction a = a :!==: a 
                    | a :!<=: a deriving (Eq, Show)
 
--- Extender a Functor
+-- | Extender a Functor
 instance Functor Restriction  where
 -- fmap :: (a -> b) -> Restriction a -> Restriction b  
   fmap f (a_1 :!==: a_2) = ((f a_1 ):!==: (f a_2))
   fmap f (a_1 :!<=: a_2) = ((f a_1 ):!<=: (f a_2))
 
--- Extender a Functor Aplicativo
+-- | Extender a Functor Aplicativo
 instance Applicative Restriction where
 -- pure :: a -> Restriction a
   pure a = a :!==: a
@@ -186,22 +236,22 @@ instance Applicative Restriction where
   (f_1 :!<=: f_2 ) <*> (a_1 :!<=: a_2) = ((f_1 a_1 ):!<=: (f_2 a_2))
   (f_1 :!<=: f_2 ) <*> (a_1 :!==: a_2) = ((f_1 a_1 ):!==: (f_2 a_2))
   
--- Extender a Mónada
+-- | Extender a Mónada 
+-- NOTA: Creo que esta está demás, ya que no veo una formal natural de usar la def de mónada.
 instance Monad Restriction where
 -- (>>=) :: Restriction a -> (a -> Restriction b) -> Restriction b
   (a :!==: _) >>= f = f a
   (a :!<=: _) >>= f = f a
 
--- def de un función de fold para la estructura Restriction
+-- | Definición de un función de fold para la estructura Restriction
 foldRes :: (b -> b -> c) -> (a -> b) -> Restriction a -> c
 foldRes f g (e_1 :!==: e_2) = f (g e_1) (g e_2)
 foldRes f g (e_1 :!<=: e_2) = f (g e_1) (g e_2)
 
+---------------------------- { SINÓNIMOS DE TIPOS ÚTILES } ---------------------------------------------
+
 type RArit =  Restriction AExp
 type RRunTime =  Restriction RunTime 
-
-----------------------------------( Restriction )-----------------------------------------------------
-
 
 
 ----------------------------------(vc gen)-------------------------------------------------------------

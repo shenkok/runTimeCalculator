@@ -7,14 +7,14 @@ import Data.Foldable (foldMap)
 import Control.Monad ((<=<))
 import Imp
 
-type Env = M.Map String SInteger
+type Env = M.Map String SFloat
 
 
-envLookup :: Name -> Env -> SInteger
+envLookup :: Name -> Env -> SFloat
 envLookup x env = maybe (error $ "Var not found: " ++ show x) id
                             (M.lookup x env)
 
-aexp :: Env -> AExp -> SInteger
+aexp :: Env -> AExp -> SFloat
 aexp _ (Lit n) =  literal n
 aexp env (Var x) =  envLookup x env
 aexp env (e_1 :+: e_2) = (aexp env e_1 ) + (aexp env e_2)
@@ -37,27 +37,4 @@ reOrganiceInput (context, rarit, names) = (names, new_context) where
     new_context = context ++ [new_rarit]
 
 
-
--------------------(EJEMPLOS PARA PROBAR) ----------------------------------
-
-sumando1 = (Not( (Lit 8 ):<=: Var "w")):<>: (RunTimeArit(Lit 4)) 
-sumando2 = ( (Lit 8):<=: Var "w"):<>: (RunTimeArit(Lit 5))
-
-runtr = sumando1 :++: sumando2
-
-res = s1 :!<=: runtr
-
-ejemploP3 = restrictionsToSolver res
-
-ejSol = ejemploP3 !! 0
-(names, contexto) =  reOrganiceInput ejSol
-
-printEj = showSolverInputs res
-
--------------------(EJEMPLOS PARA PROBAR) ----------------------------------
-
-solution'' = sat $ do 
-    xs <- sIntegers names
-    let env = M.fromList (zip names xs)
-    constrain $ (sAnd (map (bexp env) contexto))
 
