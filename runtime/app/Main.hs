@@ -45,26 +45,36 @@ programa1 = Seq l0 l1_l9
     Programa 2
         while (False) {Invariante: 5}
             Empty
-    Invariante correcto
+        Invariante correcto
 -}
 programa2 :: Program
-programa2 = (While False' Empty (runTArit 5)))
+programa2 = (While False' Empty (runTArit 5))
 
 {-
     Programa 3
      while(True) {Invariante: 5}
         Skip
-    Invariante incorrecto
+        Invariante incorrecto
 -}
 
 programa3 :: Program
-programa3 = (While True' Skip (runTArit 5)))
+programa3 = (While True' Skip (runTArit 5))
 
+{-
+    Programa 4 
+        while (x >= 0) {Invariante 1 + 2*x}
+            x = x- 1
 
-solution = sat $ do
-    a <- sInteger "a"
-    b <- sInteger "b"
-    constrain $ a .< b + 10
+        El invariante no es correcto    
+-}
+
+invP4 = (runTArit 1) :++: (RunTimeArit (2 :*:(Var "x")))
+condP4 = (Lit 0) :<=: (Var "x")
+bodyP4 = Set "x" ((Var "x" :+: (Lit $ -1)))
+
+programa4 :: Program 
+programa4 = While condP4 bodyP4 invP4 
+
 
 main :: IO ()
-main = completeRoutine programa3 zero
+main = completeRoutine programa4 zero
