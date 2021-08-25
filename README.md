@@ -163,6 +163,6 @@ Hay pasos que averiguaré en breve.
 - Para cargar un módulo en consola (con todas sus varaibles), ir a la carpeta y usar  `stack ghci Modulo.hs `.
    - Por ejemplo para cargar el módulo  `Main.hs` ir a la carpeta  `runtime\app` y ejecutar  `stack ghci Main.hs `
 - Para ver en consola sólo el output de  `Main.hs` (en este caso el cálculo hecho sobre el programa4), ejecutar  `stack exec runtime-exe`.
-- ** Importante ** Cada vez que se edita algún archivo usar  `stack build`
+- **Importante** Cada vez que se edita algún archivo usar  `stack build`
 
 
