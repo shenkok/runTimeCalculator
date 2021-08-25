@@ -130,8 +130,11 @@ El trabajo principal se encuentra en la carpeta `runtime`
 
 Con respecto a las otras carpetas: 
       `findCanonic` contiene ejemplos de simplificación de expresiones aritméticas
+
       `material2020` contiene el material usado y generado en la propuesta de memoria (2020)
+
       `material2021` contiene los manuscritos generados durante el 2021
-      `otros` ejemplos y ensayos de programas, usados para introducirse a las herramientas durante todo el proceso
       
+      `otros` ejemplos y ensayos de programas, usados para introducirse a las herramientas durante todo el proceso
+
 
