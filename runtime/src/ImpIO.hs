@@ -1,6 +1,5 @@
 module ImpIO where
 
-import Lib
 import Data.SBV
 import ImpToSBV
 import Imp

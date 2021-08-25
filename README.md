@@ -138,4 +138,17 @@ Con respecto a las otras carpetas:
 
 `otros`: ejemplos y ensayos de programas, usados para introducirse a las herramientas durante todo el proceso.
 
+Sobre la carpeta `runtime`: 
+
+`app`: Contiene el archivo `Main.hs`, que es el archivo a ejecutar en el proyecto.
+
+`src`: Contiene los diferentes módulos usados en el proyecto.
+
+      `src\Imp.hs` Módulo con la implemetntación del lenguaje imperativo (por el momento determinista) 
+
+      `src\ImpToSBV` Módulo con la implemtación de las funciones necesarias para generar los sub-problemas lineales a partir de las estructuras de `Imp.hs`
+
+
+
+
 

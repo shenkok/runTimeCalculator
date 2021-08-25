@@ -1,10 +1,7 @@
 module Main where
 
-import Lib
-import Data.SBV
 import ImpToSBV
 import Imp
-import qualified Data.Map as M
 import ImpIO
 
 -------------------------------------------------- { EJEMPLOS DE PROGRAMAS} ------------------------------------------------------------------
