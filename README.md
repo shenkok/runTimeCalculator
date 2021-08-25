@@ -122,6 +122,10 @@ tutorial sbv
 
       https://www.youtube.com/watch?v=gWZbNc5hqOA&list=PLfzJKXh_D71Rg8Cbl81sCzx59RloCspL-&index=9
 
+sobre stack:
+
+      https://docs.haskellstack.org/en/stable/README/
+
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Sobre la distribución de archivos
@@ -130,25 +134,36 @@ El trabajo principal se encuentra en la carpeta `runtime`
 
 Con respecto a las otras carpetas: 
 
-`findCanonic` : Contiene ejemplos de simplificación de expresiones aritméticas.
+- `findCanonic` : Contiene ejemplos de simplificación de expresiones aritméticas.
 
-`material2020`: Contiene el material usado y generado en la propuesta de memoria (2020).
+- `material2020`: Contiene el material usado y generado en la propuesta de memoria (2020).
 
-`material2021`: Contiene los manuscritos generados durante el 2021.
+- `material2021`: Contiene los manuscritos generados durante el 2021.
 
-`otros`: ejemplos y ensayos de programas, usados para introducirse a las herramientas durante todo el proceso.
+- `otros`: ejemplos y ensayos de programas, usados para introducirse a las herramientas durante todo el proceso.
 
-Sobre la carpeta `runtime`: 
+Sobre la carpeta `runtime`: El proyecto es hecho en stack versión 2.7.3
 
-`app`: Contiene el archivo `Main.hs`, que es el archivo a ejecutar en el proyecto.
+- `app`: Contiene el archivo `Main.hs`, que es el archivo a ejecutar en el proyecto.
 
-`src`: Contiene los diferentes módulos usados en el proyecto.
+- `src`: Contiene los diferentes módulos usados en el proyecto.
+    - `src\Imp.hs` Módulo con la implemetación del lenguaje imperativo (por el momento determinista)
+    - `src\ImpToSBV` Módulo  las funciones necesarias para generar los sub-problemas lineales a partir de las estructuras de `Imp.hs`
+    - `src\ImpIO` Módulo con las funciones necesarias para producir un output entendible de los procedimientos
 
-      `src\Imp.hs` Módulo con la implemetntación del lenguaje imperativo (por el momento determinista) 
+- `package.yaml`: Contiene las librerías necesarias para compilar el proyecto
 
-      `src\ImpToSBV` Módulo con la implemtación de las funciones necesarias para generar los sub-problemas lineales a partir de las estructuras de `Imp.hs`
+--------------------------------------------------------------------------------------------------------------------------------------------------------
 
+Como compilar:
 
+Hay pasos que averiguaré en breve.
+
+- Una vez instalado (debería instalarse con  `stack setup ` y/o `stack init `, pero debo confirmar) usar  `stack build ` en la carpeta  `runtime`
+
+- Para cargar un módulo en consola (con todas sus varaibles), ir a la carpeta y usar  `stack ghci Modulo.hs `.
+   - Por ejemplo para cargar el módulo  `Main.hs` ir a la carpeta  `runtime\app` y ejecutar  `stack ghci Main.hs `
+- Para ver en consola sólo el output de  `Main.hs` (en este caso el cálculo hecho sobre el programa4), ejecutar  `stack exec runtime-exe`.
 
 
 
