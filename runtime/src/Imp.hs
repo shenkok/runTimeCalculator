@@ -4,6 +4,13 @@ import Data.List
 type Name = String
 type Constant = Float
 type Names = [Name]
+{-
+  MODULO QUE SE ENCARGA SE REPRESENTAR EXPRESIONES ARITMÉTICAS, BOOLEANAS, RUNTIMES Y PROGRAMAS
+-} 
+
+-- TODO: Parser para escribir los lenguajes de forma cómoda
+-- TODO: Averigüar como bajar el número de parentesis
+
 ---------------------------------------- { FUNCIONES ÚTILES }---------------------------------------
 -- | Elimina los elementos repetidos en una lista
 rmdups :: (Eq a) =>[a] -> [a]
@@ -35,7 +42,7 @@ bools n = map (False:) r ++ map (True:) r where
 --           Seguramente deba investigar en mayor profundidad los límites de Z3, pensando en usar polinomios de mayor grado
 
 data AExp = Lit Constant                    -- Números
-          | Var Name                        -- Varibles x, y, z
+          | Var Name                        -- Variables x, y, z
           | AExp :+: AExp                   -- Suma de expresiones aritméticas
           | Constant :*: AExp deriving (Eq) -- Ponderación por una constante 
 
@@ -50,7 +57,7 @@ instance Show AExp where
 
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
-sustAExp _  _ (Lit n) = (Lit n)
+sustAExp _  _ (Lit n) = Lit n
 sustAExp x  aritFor (Var y) = if (x == y) then aritFor else (Var y)
 sustAExp x aritFor (e_1 :+: e_2) = (sustAExp x aritFor e_1) :+: (sustAExp x aritFor e_2)
 sustAExp x aritFor (k :*: e) = k :*: (sustAExp x aritFor e)
@@ -62,7 +69,7 @@ freeVars arit = sort (rmdups (fvar arit)) where
   fvar (Lit _ ) = [""]
   fvar (Var x)  = [x]
   fvar (e_1 :+: e_2) = (fvar e_1) ++ (fvar e_2)
-  fvar (_ :*: e) = (fvar e)
+  fvar (_ :*: e) = fvar e
 
 -- | WeightVar toma un Aexp arit y una variable var, retorna el peso suma de todas las instancias de esa variable var
 -- en el AExp arit, se considera n:*:"" como equivalente a (Lit n) .
@@ -100,10 +107,10 @@ normArit arit = foldr f (Lit 0) wvars where -- 5
 simplifyArit::AExp -> AExp
 simplifyArit ((Lit 0) :+: arit) =  simplifyArit arit
 simplifyArit (arit :+: (Lit 0)) =  simplifyArit arit
-simplifyArit (Lit m) :+: (Lit n) = (Lit $ m + n) 
+simplifyArit ((Lit m) :+: (Lit n)) = Lit (m + n) 
 simplifyArit (arit_1 :+: arit_2) = (simplifyArit arit_1) :+: (simplifyArit arit_2)
 simplifyArit (1 :*: arit) = simplifyArit arit
-simplifyArit (0 :*: _) = (Lit 0)
+simplifyArit (0 :*: _) = Lit 0
 simplifyArit (k :*: arit) = k :*: (simplifyArit arit)
 simplifyArit otherwise = otherwise 
 
@@ -144,7 +151,7 @@ sustBExp x aritFor (e_1 :<=: e_2) = (sustAExp x aritFor e_1) :<=: (sustAExp x ar
 sustBExp x aritFor (e_1 :==: e_2) = (sustAExp x aritFor e_1) :==: (sustAExp x aritFor e_2)
 sustBExp x aritFor (e_1 :|: e_2) = (sustBExp x aritFor e_1) :|: (sustBExp x aritFor e_2)
 sustBExp x aritFor (e_1 :&: e_2) = (sustBExp x aritFor e_1) :&: (sustBExp x aritFor e_2)
-sustBExp x aritFor (Not e) = (Not (sustBExp x aritFor e))
+sustBExp x aritFor (Not e) = Not (sustBExp x aritFor e)
 
 -- | Función que entrega las variables libres de una expresión aritmética
 freeVarsBExp :: BExp -> Names
@@ -167,7 +174,6 @@ data RunTime a = RunTimeArit a                        -- RunTime hecho a partir 
 -}
 -- Creo que varias de las funciones que defino abajo sobre RUNTIMES se podrían simplificar si se extendiera
 -- a functor, functor aplicativo o mónada (sobre todo las de simplificar)
--- Veo cierto parecido al constructor (:) de las listas a la suma de Runtime :++:
 -- NOTA:       Sobre el conjunto de restricciones que se genera con los Runtime como base.
 --            Si lo veo de un punto de vista geométrico, las restricciones son hiperplanos y su intersección son poliedros
 --            Esto me recordó mucho los distintos problemas de optimización Real o mixta, dónde se 
@@ -265,7 +271,7 @@ type RRunTime =  Restriction RunTime
 
 
 ----------------------------------{ VC GEN }-------------------------------------------------------------
--- | Generador de restricciones 
+-- | Generador de restricciones y calcula un candidato a cota superior
 -- entrega un conjunto de restricciones y el tiempo de ejecución esperado
 vcGenerator ::  Program -> RunTime -> (RunTime, [RRunTime])
 vcGenerator Skip runt = ((RunTimeArit (Lit 1)) :++: runt, [])
@@ -280,6 +286,9 @@ vcGenerator (Seq p_1 p_2) runt = (fst vc_1, (snd vc_1) ++ (snd vc_2))   where
 vcGenerator (While e_b p inv) runt = (inv, [l_inv :!<=: inv] ++ (snd vc_p)) where
     vc_p = vcGenerator p inv
     l_inv = (RunTimeArit (Lit 1) :++: ( ((Not e_b) :<>: runt):++: (e_b :<>: (fst vc_p))))
+-- | Genera las restricciones considerando al 0 como runtime
+vcGenerator0 :: Program -> (RunTime, [RRunTime])
+vcGenerator0 program = vcGenerator program (RunTimeArit (Lit 0))
 
 ---------------------------{ SIMPLIFICAR EXPRESIONES BOOLEANAS }---------------------------------------------------------
 -- | Reglas de un sólo paso para simplificar un BExp
@@ -315,6 +324,7 @@ simplifyRunTime ( True' :<>: runt) = runt
 simplifyRunTime (False' :<>: _ ) = (RunTimeArit (Lit 0))
 simplifyRunTime ((RunTimeArit (Lit 0)) :++: runt) = runt
 simplifyRunTime (runt :++: (RunTimeArit (Lit 0))) = runt
+simplifyRunTime (_ :**: (RunTimeArit (Lit 0))) = RunTimeArit (Lit 0)
 simplifyRunTime (1 :**: runt) = runt
 simplifyRunTime (0 :**: _ ) = (RunTimeArit (Lit 0))
 simplifyRunTime otherwise = otherwise
@@ -370,7 +380,7 @@ runTimeToArit :: RunTime -> AExp
 runTimeToArit (RunTimeArit arit) = arit
 runTimeToArit (e_1 :++: e_2) = (runTimeToArit e_1) :+: (runTimeToArit e_2)
 runTimeToArit (k :**: e) = k :*: (runTimeToArit e)
-runTimeToArit otherwise = error $ "No hay versión directa a AExp" ++ otherwise
+runTimeToArit otherwise = error $ "No hay versión directa a AExp" ++ (show otherwise)
 
 -- Versión monádica de la función anterior
 runTimeToArit' :: RunTime -> Maybe AExp
@@ -384,19 +394,25 @@ runTimeToArit' (k :**: e) = do
                             return ( k :*: aexp) 
 runTimeToArit' otherwise = Nothing
 
--- | Toma una restricción de Runtime a:!<=:b y retorna un arreglo de restricciones de AExp [a:<=:b]
--- Uno por cada contexto posible
 ---------------------------------------------------------------------------------------------------
 -- NOTA: Este algoritmo es poco claro y creo que debe cambiarse.
 -- Descripción del algoritmo
--- 0 Entrega una un arreglo de 3-tuplas (SolverInpur)
+-- 0 Entrega un arreglo de 3-tuplas (SolverInpur)
+{- Cada 3-tupla representa problemas del tipo
+        a <- sFloat "a"
+        b <- sFloat "b"
+        c <- sFloat "c"
+        constrain $ a + 10.0 .< 19.0 + b
+        constrain $ a + b + c.<= 10 
+        constrain $ Not (a + b<= 10) 
+-}
 -- Cada tupla es
 -- 0.a. Context: Un arreglo de BExp, es la hiṕotesis del implica 
--- 0.a. Ejemplo [x<y, y<0]
+-- 0.a. Ejemplo [a + 10.0 .< 19.0 + b,  a + b + c.<= 10 ]
 -- 0.b. Restricción: Restriction RArit, será la conclusión del Implica
--- 0.b. Ejemplo x<8
+-- 0.b. Ejemplo a + b<= 10
 -- 0.c. Variables libres de todo el SolverInput 
--- 0.c Ejemplo [x, y]
+-- 0.c Ejemplo [a, b, c]
 
 -- 1. Simplificar los dos runtimes de la restricción a:!<=:b -> a':!<=:b'
 -- 2. Extraer todos los contextos posibles de los dos runtime a' y b'
@@ -423,97 +439,7 @@ restrictionsToSolver rest = zip3 contexts eval_arit free_vars' where  -- 0
   free_vars' = map (filter  (/="")) free_vars                         -- 10
 
 
----------------------------- {FUNCIONES PARA IMPRIMIR EN PANTALLA TODO EL INPUT }---------------------------------------------------------
-showSolverInput :: SolverInput -> Int -> IO()
-showSolverInput (contexto, rest, vars) n = do 
-  putStr "Par (contexto, restricción) número " 
-  print n
-  putStrLn "El contexto es :"
-  print contexto
-  putStrLn "Las variables libres son :"
-  print vars
-  putStrLn "La restricción es :"
-  print rest
-  print $ concat (replicate 50 "-")
-
-showSolverInputs ::RRunTime -> IO()
-showSolverInputs runtr = do
-  print $ concat (replicate 50 "*")
-  putStrLn "La restricción es :"
-  print runtr 
-  putStr "Hay un total de " 
-  putStr.show $ n 
-  putStrLn " diferentes pares (contexto, restricción) " 
-  print $ concat (replicate 50 "-")
-  mapM_ (uncurry showSolverInput ) $ zip  inputs [1..n]
-  print $ concat (replicate 50 "*")
-  where 
-    n = length (restrictionsToSolver runtr) 
-    inputs = restrictionsToSolver runtr
 
 
 
----------------------------(Programas de ejemplo)---------------------------------------------------------
 
--- programa de ejemplo 
-
-p0 = (While False' Empty (RunTimeArit (Lit 5)))
-vc_0 = vcGenerator p0 (RunTimeArit (Lit 0)) 
-r0 = fst vc_0
-s0 = deepSimplifyRunTime (fst vc_0)
-
--- programa 1 de ejemplo
-
-l0 = Set  "x" ((Var "x"):+:(Lit 1)) --cambiar por menos
-l3 = Set "y" (2:*:(Var "x"))
-l6 = Set "w" (Lit 3)
-l7 = Set "x" ((Var  "w") :+: (Var "x"))
-l9 = Set "y" (Lit 5)
-l5_9 = If ((Lit 8) :<=: (Var "w")) (Seq l6 l7) l9
-l1_9 = If ((Var "y") :<=: (Var "x")) (Seq Skip l3) l5_9
-l0_9 = Seq l0 l1_9
-
-vc_1 = vcGenerator l0_9 (RunTimeArit (Lit 0))
-r1 = fst vc_1
-s1 = deepSimplifyRunTime (fst vc_1)
-
-
----------------------------(Restricciones de ejemplo)---------------------------------------------------------
-c1 = (2 :*:(Var "x")):<=:(Var "y")
-c2 = (Var "x"):<=:(Lit 0)
-c3 = (Var "x"):<=:(Lit 0)
-c4 = (Var "ww"):<=:(Lit 0)
-
-arit1 = (Var "x") :+: (Var "y")
-rarit1 = RunTimeArit arit1
-
-arit2 = (Var "y") :+: (Lit 1)
-rarit2 = 10 :**: (RunTimeArit arit2)
-rarit3 = rarit1 :++: rarit2
-
-
-runt1 = c1 :<>: (RunTimeArit arit1)
-runt2 = c2 :<>: (RunTimeArit arit2)
-restriction = runt1 :!<=: runt2
-
-z3_rest = restrictionsToSolver restriction
-------------------------------------------------------------------------------------------------------------------------------------
-{-
-sumando1 = (Not( (Lit 8 ):<=: Var "w")):<>: (RunTimeArit(Lit 4)) 
-sumando2 = ( (Lit 8):<=: Var "w"):<>: (RunTimeArit(Lit 5))
-
-runtr = sumando1 :++: sumando2
-
-res = s1 :!<=: runtr
-
-ejemploP3 = restrictionsToSolver res
-
-ejSol = ejemploP3 !! 0
-printEj = showSolverInputs res
--}
--------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------
-
-a1 = (((((Var "x") :+: (Var "x")) :+: (Lit 1)) :+: ((-2) :*: (Var "y"))) :+: (Lit 8))
-
-sa1 = completeNormArit $ a1
--------------------------------(Simplificaciónes Aritméticas)--------------------------------------------------------

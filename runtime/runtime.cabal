@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Imp
+      ImpIO
       ImpToSBV
       Lib
   other-modules:

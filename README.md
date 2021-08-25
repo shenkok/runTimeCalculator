@@ -15,8 +15,6 @@ Expresiones aritméticas :
             | x  variable
             | n * Arit
             | Arit + Arit 
-            | Arit - Arit 
-            | Arit [x -> Arit]
 
 Expresiones booleanas deterministicas :
         
@@ -26,7 +24,6 @@ Expresiones booleanas deterministicas :
            |  Arit <= Arit 
            |  ㄱ dξ
            |  dξ ^ dξ
-           |  dξ [x -> Arit]
 
 
 Tiempos de Ejecución (Runtime) :
@@ -34,9 +31,7 @@ Tiempos de Ejecución (Runtime) :
       RunTime := Arit
                | [dξ]*RunTime
                | RunTime + RunTime
-               | RunTime - RunTime
-               | RunTime [x -> Arit]
-
+               | n*RunTime
 Programas :
 
       C := empty
@@ -106,19 +101,6 @@ Documentación
 
       http://smtlib.cs.uiowa.edu/papers/smt-lib-reference-v2.6-r2017-07-18.pdf
 
-Ejemplo de lista enlazada
-
-      (display (insert 3 ( insert 3 (as nil (List Int) ))))
-
-Ejemplo de uso let 
-
-            (simplify
-            (let ((rt1 (RunTimeArit (Number 1.0))) (rt2 (RunTimeArit (Number 4.0))))
-                  (let ((res1  (ResGeq rt1 rt2)) (res2 (ResEq rt2 rt1)))
-                        (let ((n (lenRes (insert res1 (insert res2 (as nil Restrictions))))))
-                        n
-                        ))))
-
 Ejemplo tutorial:
 
      https://sat-smt.codes/
@@ -140,5 +122,16 @@ tutorial sbv
 
       https://www.youtube.com/watch?v=gWZbNc5hqOA&list=PLfzJKXh_D71Rg8Cbl81sCzx59RloCspL-&index=9
 
+------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-tipo dependiente
+Sobre las carpetas
+
+El trabajo principal se encuentra en la carpeta `runtime`
+
+Con respecto a las otras carpetas: 
+      `findCanonic` contiene ejemplos de simplificación de expresiones aritméticas
+      `material2020` contiene el material usado y generado en la propuesta de memoria (2020)
+      `material2021` contiene los manuscritos generados durante el 2021
+      `otros` ejemplos y ensayos de programas, usados para introducirse a las herramientas durante todo el proceso
+      
+
