@@ -35,8 +35,23 @@ l7 = Set "x" ((Var  "w") :+: (Var "x"))
 l9 = Set "y" (Lit 5)
 l5_l9 = If ((Lit 8) :<=: (Var "w")) (Seq l6 l7) l9
 l1_l9 = If ((Var "y") :<=: (Var "x")) (Seq l2 l3) l5_l9
+
 programa1 :: Program
 programa1 = Seq l0 l1_l9
+
+-- EJEMPLOS
+(runt, _) = vcGenerator0 programa1
+
+-- [w < 8]*4 + [w>=8]*5
+sumando1 = (Var "w" <: Lit 8) :<>: runTArit 4
+sumando2 = (Var "w" >=: Lit 8) :<>: runTArit 5
+
+restriction:: Restriction RunTime
+restriction = runt :!<=: (sumando1 :++: sumando2)
+
+input :: IO()
+input = showSolverInputs restriction 1
+
 
 {-
     Programa 2
@@ -74,4 +89,4 @@ programa4 = While condP4 bodyP4 invP4
 
 
 main :: IO ()
-main = completeRoutine programa1 zero
+main = completeRoutine programa4 zero
