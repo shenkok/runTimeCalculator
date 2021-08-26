@@ -31,6 +31,7 @@ showTransform ert restrictions = do
         constrain $ a + b + c.<= 10 
 -}
 -- Advierte si el problema no es satisfacible entregando un contraejemplo
+-- La n denota el subproblema n
 showSolverInput :: SolverInput -> Int -> IO()
 showSolverInput (contexto, rest, vars) n = do
   let model = makeSBVModel (contexto, rest, vars)
@@ -57,12 +58,12 @@ showSolverInput (contexto, rest, vars) n = do
       else putStrLn "El problema es satisfacible"
   print $ concat (replicate 50 "-")
 
--- | Muestra un arreglo de problemas
+-- | Muestra un arreglo de problemas, n es un entero de denota la restricion n
 showSolverInputs ::RRunTime -> Int -> IO()
 showSolverInputs runtr n = do
   print $ concat (replicate 50 "*")
   putStrLn $ "La restricción " ++ show n ++" es :"
-  print runtr 
+  print sruntr
   putStr "Hay un total de " 
   putStr.show $ l
   putStrLn " sub-problemas diferentes  " 
@@ -70,8 +71,10 @@ showSolverInputs runtr n = do
   mapM_ (uncurry showSolverInput ) $ zip  inputs [1..l]
   print $ concat (replicate 50 "*")
   where 
-    l = length (restrictionsToSolver runtr) 
+    sruntr = fmap deepSimplifyRunTime runtr
     inputs = restrictionsToSolver runtr
+    l = length inputs 
+ 
 
 -- | Muestra una rutina completa
 -- Parte con un programa y un runtime

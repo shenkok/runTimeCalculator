@@ -144,6 +144,22 @@ data BExp = True'                        -- Constante True
           | BExp :&: BExp                -- And Lógico
           | Not BExp deriving (Show, Eq) -- Negación expresión booleana
 
+---------------------------------- { AZÚCAR SINTÁCTICA BOOLEANAS} ----------------------------------------------
+-- | Azúcar sintáctica para >=
+(>=:) :: AExp -> AExp -> BExp
+(>=:) arit_1 arit_2 = arit_2 :<=: arit_1
+
+-- | Azúcar sintáctica para >
+(>:) :: AExp -> AExp -> BExp
+(>:) arit_1 arit_2 = Not $ arit_1 :<=: arit_2
+
+-- | Azúcar sintáctica para <
+(<:) :: AExp -> AExp -> BExp
+(<:) arit_1 arit_2 = Not $ arit_2 :<=: arit_1
+
+-- | Azúcar sintáctica para /= 
+(/=:) :: AExp -> AExp -> BExp
+(/=:) arit_1 arit_2 = Not $ arit_1 :==: arit_2
 ---------------------------------- { FUNCIONES EXPRESIONES BOOLEANAS } ------------------------------------------
 
 -- | Función de sustitución toma una variable "x", un AExp aritFor y una expresión booleana AritIn
@@ -404,7 +420,7 @@ runTimeToArit' otherwise = Nothing
 ---------------------------------------------------------------------------------------------------
 -- NOTA: Este algoritmo es poco claro y creo que debe cambiarse.
 -- Descripción del algoritmo
--- 0 Entrega un arreglo de 3-tuplas (SolverInpur)
+-- 0 Entrega un arreglo de 3-tuplas (SolverInput
 {- Cada 3-tupla representa problemas del tipo
         a <- sFloat "a"
         b <- sFloat "b"
