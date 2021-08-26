@@ -1,12 +1,14 @@
 module Imp where
 
 import Data.List
+
+-- <@Fede: Name se utilizará para el nombre de qué cosas?; agregar comentario>
 type Name = String
-type Constant = Float
 type Names = [Name]
+type Constant = Float
 {-
   MODULO QUE SE ENCARGA SE REPRESENTAR EXPRESIONES ARITMÉTICAS, BOOLEANAS, RUNTIMES Y PROGRAMAS
--} 
+-}
 
 -- TODO: Parser para escribir los lenguajes de forma cómoda
 -- TODO: Averigüar como bajar el número de parentesis
@@ -17,8 +19,8 @@ rmdups :: (Eq a) =>[a] -> [a]
 rmdups [] = []
 rmdups (x:xs) = x : rmdups (filter (/= x) xs)
 
--- | bools retorna una matriz con todas las posibles combinaciones False/True 
--- de tamaño n. 
+-- | bools retorna una matriz con todas las posibles combinaciones False/True
+-- de tamaño n.
 bools :: Int -> [[Bool]]
 bools 0 = [[]]
 bools n = map (False:) r ++ map (True:) r where
@@ -41,18 +43,20 @@ bools n = map (False:) r ++ map (True:) r where
 --           (For instance, the Z3 SMT solver, supports polynomial constraints on reals starting with v4.0.)
 --           Seguramente deba investigar en mayor profundidad los límites de Z3, pensando en usar polinomios de mayor grado
 
+-- <@Fede: sería bueno mencionar esta linea en la parte de trabajo futuro>
+
 data AExp = Lit Constant                    -- Números
           | Var Name                        -- Variables x, y, z
           | AExp :+: AExp                   -- Suma de expresiones aritméticas
-          | Constant :*: AExp deriving (Eq) -- Ponderación por una constante 
+          | Constant :*: AExp deriving (Eq) -- Ponderación por una constante
 
 ---------------------------------------- { FUNCIONES EXPRESIONES ARITMÉTICAS }--------------------------------
 -- | Definición del método show para AExp
-instance Show AExp where 
+instance Show AExp where
   show (Lit n) = show n
   show (Var x) = show x
   show (e_1 :+: e_2) = show e_1 ++" + "++ show e_2
-  show (e_1 :*: e_2) = show e_1 ++" * "++ show e_2       
+  show (e_1 :*: e_2) = show e_1 ++" * "++ show e_2
 
 
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
@@ -74,7 +78,7 @@ freeVars arit = sort (rmdups (fvar arit)) where
 -- | WeightVar toma un Aexp arit y una variable var, retorna el peso suma de todas las instancias de esa variable var
 -- en el AExp arit, se considera n:*:"" como equivalente a (Lit n) .
 weightVar :: AExp -> Name -> Constant
-weightVar (Lit n) var | var =="" = n  
+weightVar (Lit n) var | var =="" = n
                       | otherwise = 0
 weightVar (Var x) var | var == x = 1
                       | otherwise = 0
@@ -86,7 +90,7 @@ weightVar (k :*: e) var = k * (weightVar e var)
 -- y retorne un polinomio normalizado. En base a eso se podría eliminar el considerar a  n:*:"" como equivalente a (Lit n).
 -- En general creo que se podría implementar algo parecido a la tarea 1 de lenguajes 2019-2, Tarea de polinomios.
 ---------------------------------------------------------------------------------------------------------------
--- | Descripción del algoritmo 
+-- | Descripción del algoritmo
 -- 1. Extraer las variables libres de la expresión
 -- 2. Calcular el peso asociado a cada una de las variables
 -- 3. Definir una función auxiliar que un par (peso, variable) y retorma un monomio peso:*:variable
@@ -96,23 +100,23 @@ weightVar (k :*: e) var = k * (weightVar e var)
 normArit :: AExp -> AExp
 normArit arit = foldr f (Lit 0) wvars where -- 5
   f = \x y -> x:+:y
-  vars = freeVars arit                      -- 1 
+  vars = freeVars arit                      -- 1
   weights = map (weightVar arit) vars       -- 2
   g (k, "") = (Lit k)                       -- 3
   g (k, x)  = k :*: (Var x)                 -- 3
   wvars = map g (zip weights vars)          -- 4
 
 
--- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1.    
+-- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1. @Fede: y suma literales
 simplifyArit::AExp -> AExp
 simplifyArit ((Lit 0) :+: arit) =  simplifyArit arit
 simplifyArit (arit :+: (Lit 0)) =  simplifyArit arit
-simplifyArit ((Lit m) :+: (Lit n)) = Lit (m + n) 
+simplifyArit ((Lit m) :+: (Lit n)) = Lit (m + n)
 simplifyArit (arit_1 :+: arit_2) = (simplifyArit arit_1) :+: (simplifyArit arit_2)
 simplifyArit (1 :*: arit) = simplifyArit arit
 simplifyArit (0 :*: _) = Lit 0
 simplifyArit (k :*: arit) = k :*: (simplifyArit arit)
-simplifyArit otherwise = otherwise 
+simplifyArit otherwise = otherwise
 
 -- | Retorna una versión normalizada de un AExp.
 completeNormArit :: AExp -> AExp
@@ -120,7 +124,7 @@ completeNormArit = simplifyArit.normArit
 
 ---------------------------------- { EXPRESIONES BOOLEANAS} ------------------------------------------
 -- NOTA: Se podría agregar el :<: como operador, considerando que es super común como condición
--- NOTA: Se podría generalizar la estructura para que no sólo reciba AExp. 
+-- NOTA: Se podría generalizar la estructura para que no sólo reciba AExp.
 {-
 data BExp a = True'                        -- Constante True
             | False'                       -- Constante False
@@ -170,13 +174,13 @@ freeVarsBExp (Not b) = (freeVarsBExp b)
 data RunTime a = RunTimeArit a                        -- RunTime hecho a partir de una expresión a
              | BExp a :<>: RunTime a                  -- multiplicación por una condición
              | RunTime a:++: RunTime a                -- suma de RunTime
-             | Constant :**: RunTime a deriving (Eq)  -- ponderación por constante 
+             | Constant :**: RunTime a deriving (Eq)  -- ponderación por constante
 -}
 -- Creo que varias de las funciones que defino abajo sobre RUNTIMES se podrían simplificar si se extendiera
 -- a functor, functor aplicativo o mónada (sobre todo las de simplificar)
 -- NOTA:       Sobre el conjunto de restricciones que se genera con los Runtime como base.
 --            Si lo veo de un punto de vista geométrico, las restricciones son hiperplanos y su intersección son poliedros
---            Esto me recordó mucho los distintos problemas de optimización Real o mixta, dónde se 
+--            Esto me recordó mucho los distintos problemas de optimización Real o mixta, dónde se
 --            relajan ciertas restricciones para llegar a una aproximación.
 --            Quizás algunas se esas aproximaciones/relajaciones se podrían aplicar con el fin de tener más constructores
 --            Aunque también es cierto que sería un gran trabajo extra, pero lo menciono para dejarlo como trabajo a futuro
@@ -184,18 +188,18 @@ data RunTime a = RunTimeArit a                        -- RunTime hecho a partir 
 data RunTime = RunTimeArit AExp                     -- RunTime hecho a partir de una expresión aritmética
              | BExp :<>: RunTime                    -- multiplicación por una condición
              | RunTime :++: RunTime                 -- suma de RunTime
-             | Constant :**: RunTime  deriving (Eq) -- ponderación por constante 
+             | Constant :**: RunTime  deriving (Eq) -- ponderación por constante
 
 ----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
 
 -- | Definición de método show para la clase
-instance Show RunTime where 
+instance Show RunTime where
   show (RunTimeArit arit) = show arit
   show (e_b :<>: (RunTimeArit (Lit 1))) = "["++ (show e_b) ++ "]"
   show (e_b :<>: (RunTimeArit (Lit n))) = "["++ (show e_b) ++ "]*" ++ (show n)
   show (e_b :<>: runt) = "["++ (show e_b) ++ "]*" ++ "(" ++ (show runt) ++ ")"
-  show (e_1 :++: e_2) =  show e_1 ++" + "++ show e_2    
-  show (e_1 :**: e_2) = show e_1 ++" * " ++ show e_2        
+  show (e_1 :++: e_2) =  show e_1 ++" + "++ show e_2
+  show (e_1 :**: e_2) = show e_1 ++" * " ++ show e_2  -- @Fede: cambiaría e_1 por k, para dar cuenta de que representan expresiones de distinto tipo
 
 -- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
 -- reemplaza todas las indicendias de "x" en la expresión runtIn por la expresión aritFor.
@@ -213,7 +217,7 @@ freeVarsRunTime (e_1 :++: e_2) = (freeVarsRunTime e_1) ++ (freeVarsRunTime e_2)
 
 ----------------------------------{ PROGRAMAS }-----------------------------------------------------
 -- NOTA : Se podría agregar el ciclo for
--- La versión general 
+-- La versión general
 -- data Program = For (Set Name AExp) (Set Name AExp) BExp Program
 -- Las partes son : iniciar variable - modificación al final de cada ciclo - condición de fin - cuerpo del for
 -- Sería basicamente un while, así que no creo que aporte mucho en la práctica.
@@ -233,12 +237,12 @@ data Program = Skip -- programa vacío que toma una unidad de tiempo
 ----------------------------------{ RESTRICCIONES }-----------------------------------------------------
 
 -- | Definición de restriccion
-data Restriction a = a :!==: a 
+data Restriction a = a :!==: a
                    | a :!<=: a deriving (Eq, Show)
 
 -- | Extender a Functor
 instance Functor Restriction  where
--- fmap :: (a -> b) -> Restriction a -> Restriction b  
+-- fmap :: (a -> b) -> Restriction a -> Restriction b
   fmap f (a_1 :!==: a_2) = ((f a_1 ):!==: (f a_2))
   fmap f (a_1 :!<=: a_2) = ((f a_1 ):!<=: (f a_2))
 
@@ -251,8 +255,8 @@ instance Applicative Restriction where
   (f_1 :!==: f_2 ) <*> (a_1 :!==: a_2) = ((f_1 a_1 ):!==: (f_2 a_2))
   (f_1 :!<=: f_2 ) <*> (a_1 :!<=: a_2) = ((f_1 a_1 ):!<=: (f_2 a_2))
   (f_1 :!<=: f_2 ) <*> (a_1 :!==: a_2) = ((f_1 a_1 ):!==: (f_2 a_2))
-  
--- | Extender a Mónada 
+
+-- | Extender a Mónada
 -- NOTA: Creo que esta está demás, ya que no veo una formal natural de usar la def de mónada.
 instance Monad Restriction where
 -- (>>=) :: Restriction a -> (a -> Restriction b) -> Restriction b
@@ -267,7 +271,7 @@ foldRes f g (e_1 :!<=: e_2) = f (g e_1) (g e_2)
 ---------------------------- { SINÓNIMOS DE TIPOS ÚTILES } ---------------------------------------------
 
 type RArit =  Restriction AExp
-type RRunTime =  Restriction RunTime 
+type RRunTime =  Restriction RunTime
 
 
 ----------------------------------{ VC GEN }-------------------------------------------------------------
@@ -277,7 +281,7 @@ vcGenerator ::  Program -> RunTime -> (RunTime, [RRunTime])
 vcGenerator Skip runt = ((RunTimeArit (Lit 1)) :++: runt, [])
 vcGenerator Empty runt = (runt, [])
 vcGenerator (Set x arit ) runt = ((RunTimeArit (Lit 1)) :++: (sustRunTime x arit runt), [])
-vcGenerator (If e_b e_t e_f) runt = ( (RunTimeArit (Lit 1)) :++:((e_b :<>:fst vc_t):++:((Not e_b):<>: fst vc_f)),  (snd vc_t) ++ (snd vc_f)) where 
+vcGenerator (If e_b e_t e_f) runt = ( (RunTimeArit (Lit 1)) :++:((e_b :<>:fst vc_t):++:((Not e_b):<>: fst vc_f)),  (snd vc_t) ++ (snd vc_f)) where
     vc_t = vcGenerator e_t runt
     vc_f = vcGenerator e_f runt
 vcGenerator (Seq p_1 p_2) runt = (fst vc_1, (snd vc_1) ++ (snd vc_2))   where
@@ -286,6 +290,7 @@ vcGenerator (Seq p_1 p_2) runt = (fst vc_1, (snd vc_1) ++ (snd vc_2))   where
 vcGenerator (While e_b p inv) runt = (inv, [l_inv :!<=: inv] ++ (snd vc_p)) where
     vc_p = vcGenerator p inv
     l_inv = (RunTimeArit (Lit 1) :++: ( ((Not e_b) :<>: runt):++: (e_b :<>: (fst vc_p))))
+
 -- | Genera las restricciones considerando al 0 como runtime
 vcGenerator0 :: Program -> (RunTime, [RRunTime])
 vcGenerator0 program = vcGenerator program (RunTimeArit (Lit 0))
@@ -347,14 +352,15 @@ type SolverInput = (Context,RArit, Names)
 -- | Retorna todas las instancias de BExp dentro un RunTime sin repeticiones
 findConditionRunTime :: RunTime -> Context
 findConditionRunTime runt = rmdups conds where
-  conds = f runt 
+  conds = f runt
   f (RunTimeArit _) = []
   f ((Not bexp) :<>: runt) = [bexp] ++ (findConditionRunTime runt)
+  -- @Fede: para mejorar la eficiencia, es preferible escribir bexp : (findConditionRunTime runt)
   f (bexp :<>: runt) = [bexp] ++ (findConditionRunTime runt)
   f (e_1 :++: e_2) = (findConditionRunTime e_1) ++ (findConditionRunTime e_2)
   f (_ :**: runt) = (findConditionRunTime runt)
 
--- | Toma un RunTime runt y retorna todos los posibles context (matriz de BExp) que 
+-- | Toma un RunTime runt y retorna todos los posibles context (matriz de BExp) que
 -- se pueden extraer a partir de los BExp que tiene el RunTime.
 allContext :: RunTime -> Contexts
 allContext runt = map (zipWith f conds) lbools where
@@ -363,7 +369,7 @@ allContext runt = map (zipWith f conds) lbools where
   conds = findConditionRunTime runt
   lbools = bools (length conds)
 
--- | Toma un BExp bexp y un RunTime runt, evalua todas las instancias de bexp 
+-- | Toma un BExp bexp y un RunTime runt, evalua todas las instancias de bexp
 -- dentro de runt
 evalCondition :: BExp -> RunTime -> RunTime
 evalCondition bexp (RunTimeArit arit) = (RunTimeArit arit)
@@ -383,15 +389,16 @@ runTimeToArit (k :**: e) = k :*: (runTimeToArit e)
 runTimeToArit otherwise = error $ "No hay versión directa a AExp" ++ (show otherwise)
 
 -- Versión monádica de la función anterior
+-- @Fede: me gusta esta forma monádica de escribirlo :)
 runTimeToArit' :: RunTime -> Maybe AExp
 runTimeToArit' (RunTimeArit arit) = Just arit
-runTimeToArit' (e_1 :++: e_2) = do 
+runTimeToArit' (e_1 :++: e_2) = do
                             aexp1 <- runTimeToArit' $ e_1
                             aexp2 <- runTimeToArit' $ e_2
                             return (aexp1 :+: aexp2)
-runTimeToArit' (k :**: e) = do 
+runTimeToArit' (k :**: e) = do
                             aexp <- runTimeToArit' $ e
-                            return ( k :*: aexp) 
+                            return ( k :*: aexp)
 runTimeToArit' otherwise = Nothing
 
 ---------------------------------------------------------------------------------------------------
@@ -403,22 +410,22 @@ runTimeToArit' otherwise = Nothing
         b <- sFloat "b"
         c <- sFloat "c"
         constrain $ a + 10.0 .< 19.0 + b
-        constrain $ a + b + c.<= 10 
-        constrain $ Not (a + b<= 10) 
+        constrain $ a + b + c.<= 10
+        constrain $ Not (a + b<= 10)
 -}
 -- Cada tupla es
--- 0.a. Context: Un arreglo de BExp, es la hiṕotesis del implica 
+-- 0.a. Context: Un arreglo de BExp, es la hiṕotesis del implica
 -- 0.a. Ejemplo [a + 10.0 .< 19.0 + b,  a + b + c.<= 10 ]
 -- 0.b. Restricción: Restriction RArit, será la conclusión del Implica
 -- 0.b. Ejemplo a + b<= 10
--- 0.c. Variables libres de todo el SolverInput 
+-- 0.c. Variables libres de todo el SolverInput
 -- 0.c Ejemplo [a, b, c]
 
 -- 1. Simplificar los dos runtimes de la restricción a:!<=:b -> a':!<=:b'
 -- 2. Extraer todos los contextos posibles de los dos runtime a' y b'
 -- 3. Función currificada, para poder evaluar una condición y usarlar con los contexts
 -- 4. Evaluar todos los contextos y generar todas las posibles restricciones de runtimes [a'':!<=:b'' ]
--- 5. A partir de las restricciones de runtimes [a'':<=:b''], se extrae la expresión aritmetica subyacente 
+-- 5. A partir de las restricciones de runtimes [a'':<=:b''], se extrae la expresión aritmetica subyacente
 --    generando restricciones de AExp [a''' :!<=b'''].
 -- 6. Funcion que toma un context [BExp] y extrae las variables libres y las concatena
 -- 7. Arreglo cuyos elementos son arreglos con todas las varibles libres de cada posible contexto
@@ -427,7 +434,7 @@ runTimeToArit' otherwise = Nothing
 -- 10. Elimino las variables libres que sean "", ya que en realidad son Literales (Lit n)
 restrictionsToSolver :: RRunTime -> [SolverInput]
 restrictionsToSolver rest = zip3 contexts eval_arit free_vars' where  -- 0
-  simplify_rest = (fmap deepSimplifyRunTime rest)                     -- 1 
+  simplify_rest = (fmap deepSimplifyRunTime rest)                     -- 1
   contexts = (allContext (foldRes (:++:) (id) simplify_rest))         -- 2
   f  = \bexp -> fmap (evalCondition bexp)                             -- 3
   eval_runt = map (foldr f simplify_rest) contexts                    -- 4
@@ -437,9 +444,3 @@ restrictionsToSolver rest = zip3 contexts eval_arit free_vars' where  -- 0
   free_vars_rest = map (foldRes (++) freeVars) eval_arit              -- 8
   free_vars = map rmdups (zipWith (++) free_vars_bool free_vars_rest) -- 9
   free_vars' = map (filter  (/="")) free_vars                         -- 10
-
-
-
-
-
-
