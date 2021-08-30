@@ -3,13 +3,10 @@ module Main where
 import ImpToSBV
 import Imp
 import ImpIO
-
+import Data.Ratio
+import Data.SBV
 -------------------------------------------------- { EJEMPLOS DE PROGRAMAS} ------------------------------------------------------------------
-zero :: RunTime
-zero = RunTimeArit (Lit 0)
 
-runTArit :: Float -> RunTime
-runTArit k = RunTimeArit (Lit k)
 
 -- li representa la linea del programa de arriba
 -- li_lj representa el programa de la linea i a la j
@@ -43,8 +40,8 @@ programa1 = Seq l0 l1_l9
 (runt, _) = vcGenerator0 programa1
 
 -- [w < 8]*4 + [w>=8]*5
-sumando1 = (Var "w" <: Lit 8) :<>: runTArit 4
-sumando2 = (Var "w" >=: Lit 8) :<>: runTArit 5
+sumando1 = (Var "w" <: Lit 8) :<>: rtLit 5
+sumando2 = (Var "w" >=: Lit 8) :<>: rtLit 8
 
 restriction:: Restriction RunTime
 restriction = runt :!<=: (sumando1 :++: sumando2)
@@ -60,7 +57,7 @@ input = showSolverInputs restriction 1
         Invariante correcto
 -}
 programa2 :: Program
-programa2 = While False' Empty (runTArit 5)
+programa2 = While False' Empty (rtLit 5)
 
 {-
     Programa 3
@@ -70,7 +67,7 @@ programa2 = While False' Empty (runTArit 5)
 -}
 
 programa3 :: Program
-programa3 = While True' Skip (runTArit 5)
+programa3 = While True' Skip (rtLit 5)
 
 {-
     Programa 4
@@ -80,13 +77,19 @@ programa3 = While True' Skip (runTArit 5)
         El invariante no es correcto
 -}
 
-invP4 = runTArit 1 :++: RunTimeArit (2 :*:Var "x")
+invP4 = rtOne :++: RunTimeArit (2 :*:Var "x")
 condP4 = Lit 0 :<=: Var "x"
 bodyP4 = Set "x" (Var "x" :+: Lit (-1))
 
 programa4 :: Program
 programa4 = While condP4 bodyP4 invP4
 
+solution = sat $ do
+        a <- sRational "a"
+        b <- sRational "b"
+        c <- sRational "c"
+        constrain $ a + 10.0 .< 19.0 + b
+        constrain $ a + b + c.<= 10
 
 main :: IO ()
-main = completeRoutine programa4 zero
+main = completeRoutine programa4 rtZero

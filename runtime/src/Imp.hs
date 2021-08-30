@@ -1,6 +1,7 @@
 module Imp where
 
 import Data.List
+import Data.Ratio
 
 {-
   MODULO QUE SE ENCARGA SE REPRESENTAR EXPRESIONES ARITMÉTICAS, BOOLEANAS, RUNTIMES Y PROGRAMAS
@@ -11,7 +12,7 @@ type Name = String -- Nombre de las variables
 
 type Names = [Name]
 
-type Constant = Float --  Constantes Númericas
+type Constant = Rational --  Constantes Númericas
 
 -- TODO: Parser para escribir los lenguajes de forma cómoda
 -- TODO: Averigüar como bajar el número de parentesis
@@ -63,7 +64,9 @@ instance Show AExp where
   show (Lit n)        = show n
   show (Var x)        = show x
   show (e_1 :+: e_2)  = show e_1 ++ " + " ++ show e_2
-  show (e_1 :*: e_2)  = show e_1 ++ " * " ++ show e_2
+  show (k :*: Lit n)  = show k   ++ "*" ++ show n
+  show (k :*: Var x)  = show k   ++ "*" ++ show x 
+  show (k :*: e_2)    = show k   ++ "*(" ++ show e_2 ++")"
 
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
@@ -120,12 +123,13 @@ normArit arit = foldr (:+:) (Lit 0) wvars -- 5
 
 -- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1. @Fede: y suma literales
 simplifyArit :: AExp -> AExp
-simplifyArit ((Lit 0) :+: arit) = simplifyArit arit
-simplifyArit (arit :+: (Lit 0)) = simplifyArit arit
-simplifyArit (1 :*: arit)       = simplifyArit arit
-simplifyArit (0 :*: _)          = Lit 0
---simplifyArit (k :*: arit)       = k :*: simplifyArit arit
-simplifyArit otherwise          = otherwise
+simplifyArit (Lit 0 :+: arit)  = simplifyArit arit
+simplifyArit (arit  :+: Lit 0)  = simplifyArit arit
+simplifyArit (arit_1 :+: arit_2) = simplifyArit arit_1 :+: simplifyArit arit_2
+simplifyArit (1 :*: arit)        = simplifyArit arit
+simplifyArit (0 :*: _)           = Lit 0
+simplifyArit (k :*: arit)        = k :*: simplifyArit arit
+simplifyArit otherwise           = otherwise
 
 -- | Retorna una versión normalizada de un AExp.
 completeNormArit :: AExp -> AExp
@@ -224,16 +228,46 @@ data RunTime
 
 ----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
 
+----------------------------------{ AZÚCAR SINTÁCTICA } -----------------------------------------------------
+-- | Azúcar sintáctica para el 0 runtime 
+rtZero :: RunTime
+rtZero = RunTimeArit (Lit 0)
+-- | Azúcar sintáctica para el 1 runtime
+rtOne :: RunTime
+rtOne = RunTimeArit (Lit 1)
+
+-- | Azúcar sintáctica para un literal runtime 
+rtLit :: Constant -> RunTime
+rtLit k = RunTimeArit (Lit k)
+
+-- | Azúcar sintáctica para un var runtime
+rtVar :: Name -> RunTime
+rtVar x = RunTimeArit (Var x) 
+
 -- | Definición de método show para la clase
+{-
 instance Show RunTime where
-  show (RunTimeArit arit) = show arit
-  show (e_b :<>: (RunTimeArit (Lit 1))) = "[" ++ show e_b ++ "]"
-  show (e_b :<>: (RunTimeArit (Lit n))) = "[" ++ show e_b ++ "]*" ++ show n
+  show (RunTimeArit arit)               = show arit
+  show (e_b :<>: rtOne)                 = "[" ++ show e_b ++ "]"
+  show (e_b :<>: rtLit n)               = "[" ++ show e_b ++ "]*" ++ show n
+  show (e_b :<>: rtVar x)               = "[" ++ show e_b ++ "]*" ++ show x
   show (e_b :<>: runt)                  = "[" ++ show e_b ++ "]*" ++ "(" ++ show runt ++ ")"
   show (e_1 :++: e_2)                   = show e_1 ++ " + " ++ show e_2
-  show (k :**: e_2)                     = show k ++ " * " ++ show e_2 -- @Fede: cambiaría e_1 por k, para dar cuenta de que representan expresiones de distinto tipo
-                                                                      -- @Luis: Hecho
-
+  show (k :**: rtLit n)                 = show k ++ "*" ++ show n
+  show (k :** rtVar x)                  = show k ++ "*" ++ show k
+  show (k :**: e_2)                     = show k ++ " * (" ++ show e_2 ++ ")"
+  -}
+                                                                     -- @Fede: cambiaría e_1 por k, para dar cuenta de que representan expresiones de distinto tipo
+instance Show RunTime where                                           -- @Luis: Hecho
+  show (RunTimeArit arit)               = show arit
+  show (e_b :<>: RunTimeArit (Lit 1))   = "[" ++ show e_b ++ "]"
+  show (e_b :<>: RunTimeArit (Lit n))   = "[" ++ show e_b ++ "]*" ++ show n
+  show (e_b :<>: RunTimeArit (Var x))   = "[" ++ show e_b ++ "]*" ++ show x
+  show (e_b :<>: runt)                  = "[" ++ show e_b ++ "]*" ++ "(" ++ show runt ++ ")"
+  show (e_1 :++: e_2)                   = show e_1 ++ " + " ++ show e_2
+  show (k :**: RunTimeArit (Lit n))     = show k ++ "*" ++ show n
+  show (k :**: RunTimeArit (Var x))     = show k ++ "*" ++ show k
+  show (k :**: e_2)                     = show k ++ " * (" ++ show e_2 ++ ")"
 -- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
 -- reemplaza todas las indicendias de "x" en la expresión runtIn por la expresión aritFor.
 sustRunTime :: Name -> AExp -> RunTime -> RunTime
@@ -318,10 +352,10 @@ type RRunTime = Restriction RunTime
 -- | Generador de restricciones y calcula un candidato a cota superior
 -- entrega un conjunto de restricciones y el tiempo de ejecución esperado
 vcGenerator :: Program -> RunTime -> (RunTime, [RRunTime])
-vcGenerator Skip runt               = (RunTimeArit (Lit 1) :++: runt, [])
+vcGenerator Skip runt               = (rtOne :++: runt, [])
 vcGenerator Empty runt              = (runt, [])
-vcGenerator (Set x arit) runt       = (RunTimeArit (Lit 1) :++: sustRunTime x arit runt, [])
-vcGenerator (If e_b e_t e_f) runt   = (RunTimeArit (Lit 1) :++: ((e_b :<>: fst vc_t) :++: (Not e_b :<>: fst vc_f)), snd vc_t ++ snd vc_f)
+vcGenerator (Set x arit) runt       = (rtOne :++: sustRunTime x arit runt, [])
+vcGenerator (If e_b e_t e_f) runt   = (rtOne :++: ((e_b :<>: fst vc_t) :++: (Not e_b :<>: fst vc_f)), snd vc_t ++ snd vc_f)
   where
     vc_t = vcGenerator e_t runt
     vc_f = vcGenerator e_f runt
@@ -332,11 +366,11 @@ vcGenerator (Seq p_1 p_2) runt      = (fst vc_1, snd vc_1 ++ snd vc_2)
 vcGenerator (While e_b p inv) runt  = (inv, (l_inv :!<=: inv) : snd vc_p)
   where
     vc_p = vcGenerator p inv
-    l_inv = RunTimeArit (Lit 1) :++: ((Not e_b :<>: runt) :++: (e_b :<>: fst vc_p))
+    l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: fst vc_p))
 
 -- | Genera las restricciones considerando al 0 como runtime
 vcGenerator0 :: Program -> (RunTime, [RRunTime])
-vcGenerator0 program = vcGenerator program (RunTimeArit (Lit 0))
+vcGenerator0 program = vcGenerator program rtZero
 
 ---------------------------{ SIMPLIFICAR EXPRESIONES BOOLEANAS }---------------------------------------------------------
 
@@ -361,23 +395,24 @@ deepSimplifyBExp (e_1 :<=: e_2) = completeNormArit e_1 :<=: completeNormArit e_2
 deepSimplifyBExp (e_1 :==: e_2) = completeNormArit e_1 :==: completeNormArit e_2
 deepSimplifyBExp (e_1 :|: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :|: deepSimplifyBExp e_2)
 deepSimplifyBExp (e_1 :&: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :&: deepSimplifyBExp e_2)
-deepSimplifyBExp (Not e_b)      = simplifyBExp (Not (deepSimplifyBExp e_b))
+deepSimplifyBExp (Not e_b)      = simplifyBExp (Not $ deepSimplifyBExp e_b)
 
 -------------------- {  SIMPLIFICAR RUNTIMES }------------------------------------------------------------------
 -- Acá es donde creo que si tomase un enfoque monádico, se podría simplificar la expresión.
 
 -- | Reglas de un sólo paso para simplificar un RunTime
 simplifyRunTime :: RunTime -> RunTime
-simplifyRunTime ((RunTimeArit (Lit m)) :++: (RunTimeArit (Lit n)))             = RunTimeArit (Lit (n + m))
-simplifyRunTime ((RunTimeArit (Lit m)) :++: ((RunTimeArit (Lit n)) :++: runt)) = RunTimeArit (Lit (n + m)) :++: runt
-simplifyRunTime (True' :<>: runt)                                              = runt
-simplifyRunTime (False' :<>: _)                                                = RunTimeArit (Lit 0)
-simplifyRunTime ((RunTimeArit (Lit 0)) :++: runt)                              = runt
-simplifyRunTime (runt :++: (RunTimeArit (Lit 0)))                              = runt
-simplifyRunTime (_ :**: (RunTimeArit (Lit 0)))                                 = RunTimeArit (Lit 0)
-simplifyRunTime (1 :**: runt)                                                  = runt
-simplifyRunTime (0 :**: _)                                                     = RunTimeArit (Lit 0)
-simplifyRunTime otherwise                                                      = otherwise
+simplifyRunTime (RunTimeArit (Lit m) :++: RunTimeArit (Lit n))             = rtLit (m + n)
+simplifyRunTime (RunTimeArit (Lit m) :++: (RunTimeArit (Lit n) :++: runt)) = (rtLit $ m + n) :++: runt
+simplifyRunTime (e_b :<>: RunTimeArit (Lit 0))                             = rtZero
+simplifyRunTime (True' :<>: runt)                                          = runt
+simplifyRunTime (False' :<>: _)                                            = rtZero
+simplifyRunTime (RunTimeArit (Lit 0) :++: runt)                            = runt
+simplifyRunTime (runt :++: RunTimeArit (Lit 0))                            = runt
+simplifyRunTime (_ :**: RunTimeArit (Lit 0))                               = rtZero
+simplifyRunTime (1 :**: runt)                                              = runt
+simplifyRunTime (0 :**: _)                                                 = rtZero
+simplifyRunTime otherwise                                                  = otherwise
 
 -- Reglas recursivas para simplificar un RunTime
 deepSimplifyRunTime :: RunTime -> RunTime
@@ -422,7 +457,7 @@ evalCondition :: BExp -> RunTime -> RunTime
 evalCondition bexp (RunTimeArit arit)     = RunTimeArit arit
 evalCondition bexp1 (bexp2 :<>: runt)
   | bexp1 == bexp2                        = evalCondition bexp1 runt
-  | deepSimplifyBExp (Not bexp1) == bexp2 = RunTimeArit (Lit 0)
+  | deepSimplifyBExp (Not bexp1) == bexp2 = rtZero
   | otherwise                             = bexp2 :<>: evalCondition bexp1 runt
 evalCondition bexp (e_1 :++: e_2)         = evalCondition bexp e_1 :++: evalCondition bexp e_2
 evalCondition bexp (k :**: runt)          = k :**: evalCondition bexp runt

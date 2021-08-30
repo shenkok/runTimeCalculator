@@ -63,7 +63,7 @@ showSolverInputs ::RRunTime -> Int -> IO()
 showSolverInputs runtr n = do
   print $ concat (replicate 50 "*")
   putStrLn $ "La restricción " ++ show n ++" es :"
-  print sruntr
+  print runtr
   putStr "Hay un total de "
   putStr.show $ l
   putStrLn " sub-problemas diferentes  "
@@ -71,7 +71,6 @@ showSolverInputs runtr n = do
   mapM_ (uncurry showSolverInput ) $ zip  inputs [1..l]
   print $ concat (replicate 50 "*")
   where
-    sruntr = fmap deepSimplifyRunTime runtr
     inputs = restrictionsToSolver runtr
     l = length inputs
 

@@ -2,6 +2,7 @@ module ImpToSBV where
 
 import Data.SBV
 import qualified Data.Map as M
+import Data.Maybe
 import Imp
 
 {-dummy-}
@@ -11,37 +12,30 @@ import Imp
 type Env a = M.Map String (SBV a)
 type IntEnv = Env Integer
 type FloatEnv = Env Float
-
+type ConstantEnv = Env Constant
 -- TODO: Seguir Probando como ahorrarse una función y no hacer dos iguales
 -- | Método que retorna una variable SBV para ir construyendo las variables aritméticas
 envLookup :: Name -> Env a -> SBV a
-envLookup x env = Data.Maybe.fromMaybe (error $ "Var not found: " ++ show x)
+envLookup x env = fromMaybe (error $ "Var not found: " ++ show x)
                             (M.lookup x env)
 
 -- Constructos de variables aritméticas de SBV
 -- NOTA: En este caso usé como base los Float, debo seguir investigando
 -- para usar de manera rápida y facil la variable entera sin la necesidad de 
 -- reescribir todo
-aexpFloat :: FloatEnv -> AExp -> SBV Float
-aexpFloat _ (Lit n)         = literal n
-aexpFloat env (Var x)       =  envLookup x env
-aexpFloat env (e_1 :+: e_2) = aexpFloat env e_1 + aexpFloat env e_2
-aexpFloat env (k :*: arit)  = literal k * aexpFloat env arit
+aexp :: ConstantEnv -> AExp -> SBV Constant
+aexp  _ (Lit n)        = literal n
+aexp env (Var x)       = envLookup x env
+aexp env (e_1 :+: e_2) = aexp env e_1 + aexp env e_2
+aexp env (k :*: arit)  = literal k * aexp env arit
 
-{-
-aexpInteger :: IntEnv -> AExp -> SBV Integer
-aexpInteger _ (Lit n) = literal n 
-aexpInteger env (Var x) =  envLookup x env
-aexpInteger env (e_1 :+: e_2) = (aexpInteger env e_1 ) + (aexpInteger env e_2)
-aexpInteger env (k :*: arit) = (literal k) * (aexpInteger env arit )
--}
 
 -- | Constructor de variables booleanas para SBV
-bexp :: FloatEnv -> BExp -> SBool
+bexp :: ConstantEnv -> BExp -> SBool
 bexp _ True'            = sTrue
 bexp _ False'           = sFalse
-bexp env (e_1 :<=: e_2) = aexpFloat env e_1 .<= aexpFloat env e_2
-bexp env (e_1 :==: e_2) = aexpFloat env e_1 .== aexpFloat env e_2
+bexp env (e_1 :<=: e_2) = aexp env e_1 .<= aexp env e_2
+bexp env (e_1 :==: e_2) = aexp env e_1 .== aexp env e_2
 bexp env (e_1 :|: e_2)  = bexp env e_1 .|| bexp env e_2
 bexp env (e_1 :&: e_2)  = bexp env e_1 .&&  bexp env e_2
 bexp env (Not e)        = sNot (bexp env e)
@@ -70,7 +64,7 @@ reOrganiceInput (context, rarit, names) = (names, new_context) where
 makeSBVModel :: SolverInput ->  SymbolicT IO ()
 makeSBVModel sinput = do
                     let (names, context) = reOrganiceInput sinput
-                    xs <- sFloats names
+                    xs <- sRationals names
                     let env = M.fromList (zip names xs)
                     constrain (sAnd (map (bexp env) context))
 
