@@ -27,14 +27,14 @@ runTArit k = RunTimeArit (Lit k)
 9            y:= 5
 -}
 
-l0 = Set "x" ((Var "x"):+:(Lit $ -1))
+l0 = Set "x" (Var "x":+:Lit (-1))
 l2 = Skip
-l3 = Set "y" (2:*:(Var "x"))
+l3 = Set "y" (2:*:Var "x")
 l6 = Set "w" (Lit 3)
-l7 = Set "x" ((Var  "w") :+: (Var "x"))
+l7 = Set "x" (Var  "w" :+: Var "x")
 l9 = Set "y" (Lit 5)
-l5_l9 = If ((Lit 8) :<=: (Var "w")) (Seq l6 l7) l9
-l1_l9 = If ((Var "y") :<=: (Var "x")) (Seq l2 l3) l5_l9
+l5_l9 = If (Lit 8 :<=: Var "w") (Seq l6 l7) l9
+l1_l9 = If (Var "y" :<=: Var "x") (Seq l2 l3) l5_l9
 
 programa1 :: Program
 programa1 = Seq l0 l1_l9
@@ -60,7 +60,7 @@ input = showSolverInputs restriction 1
         Invariante correcto
 -}
 programa2 :: Program
-programa2 = (While False' Empty (runTArit 5))
+programa2 = While False' Empty (runTArit 5)
 
 {-
     Programa 3
@@ -70,7 +70,7 @@ programa2 = (While False' Empty (runTArit 5))
 -}
 
 programa3 :: Program
-programa3 = (While True' Skip (runTArit 5))
+programa3 = While True' Skip (runTArit 5)
 
 {-
     Programa 4
@@ -80,9 +80,9 @@ programa3 = (While True' Skip (runTArit 5))
         El invariante no es correcto
 -}
 
-invP4 = (runTArit 1) :++: (RunTimeArit (2 :*:(Var "x")))
-condP4 = (Lit 0) :<=: (Var "x")
-bodyP4 = Set "x" ((Var "x" :+: (Lit $ -1)))
+invP4 = runTArit 1 :++: RunTimeArit (2 :*:Var "x")
+condP4 = Lit 0 :<=: Var "x"
+bodyP4 = Set "x" (Var "x" :+: Lit (-1))
 
 programa4 :: Program
 programa4 = While condP4 bodyP4 invP4

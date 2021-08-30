@@ -355,36 +355,36 @@ simplifyBExp otherwise        = otherwise
 
 -- | Reglas recursivas para simplificar un BExp
 deepSimplifyBExp :: BExp -> BExp
-deepSimplifyBExp True' = True'
-deepSimplifyBExp False' = False'
+deepSimplifyBExp True'          = True'
+deepSimplifyBExp False'         = False'
 deepSimplifyBExp (e_1 :<=: e_2) = completeNormArit e_1 :<=: completeNormArit e_2
 deepSimplifyBExp (e_1 :==: e_2) = completeNormArit e_1 :==: completeNormArit e_2
-deepSimplifyBExp (e_1 :|: e_2) = simplifyBExp (deepSimplifyBExp e_1 :|: deepSimplifyBExp e_2)
-deepSimplifyBExp (e_1 :&: e_2) = simplifyBExp (deepSimplifyBExp e_1 :&: deepSimplifyBExp e_2)
-deepSimplifyBExp (Not e_b) = simplifyBExp (Not (deepSimplifyBExp e_b))
+deepSimplifyBExp (e_1 :|: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :|: deepSimplifyBExp e_2)
+deepSimplifyBExp (e_1 :&: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :&: deepSimplifyBExp e_2)
+deepSimplifyBExp (Not e_b)      = simplifyBExp (Not (deepSimplifyBExp e_b))
 
 -------------------- {  SIMPLIFICAR RUNTIMES }------------------------------------------------------------------
 -- Acá es donde creo que si tomase un enfoque monádico, se podría simplificar la expresión.
 
 -- | Reglas de un sólo paso para simplificar un RunTime
 simplifyRunTime :: RunTime -> RunTime
-simplifyRunTime ((RunTimeArit (Lit m)) :++: (RunTimeArit (Lit n))) = RunTimeArit (Lit (n + m))
+simplifyRunTime ((RunTimeArit (Lit m)) :++: (RunTimeArit (Lit n)))             = RunTimeArit (Lit (n + m))
 simplifyRunTime ((RunTimeArit (Lit m)) :++: ((RunTimeArit (Lit n)) :++: runt)) = RunTimeArit (Lit (n + m)) :++: runt
-simplifyRunTime (True' :<>: runt) = runt
-simplifyRunTime (False' :<>: _) = RunTimeArit (Lit 0)
-simplifyRunTime ((RunTimeArit (Lit 0)) :++: runt) = runt
-simplifyRunTime (runt :++: (RunTimeArit (Lit 0))) = runt
-simplifyRunTime (_ :**: (RunTimeArit (Lit 0))) = RunTimeArit (Lit 0)
-simplifyRunTime (1 :**: runt) = runt
-simplifyRunTime (0 :**: _) = RunTimeArit (Lit 0)
-simplifyRunTime otherwise = otherwise
+simplifyRunTime (True' :<>: runt)                                              = runt
+simplifyRunTime (False' :<>: _)                                                = RunTimeArit (Lit 0)
+simplifyRunTime ((RunTimeArit (Lit 0)) :++: runt)                              = runt
+simplifyRunTime (runt :++: (RunTimeArit (Lit 0)))                              = runt
+simplifyRunTime (_ :**: (RunTimeArit (Lit 0)))                                 = RunTimeArit (Lit 0)
+simplifyRunTime (1 :**: runt)                                                  = runt
+simplifyRunTime (0 :**: _)                                                     = RunTimeArit (Lit 0)
+simplifyRunTime otherwise                                                      = otherwise
 
 -- Reglas recursivas para simplificar un RunTime
 deepSimplifyRunTime :: RunTime -> RunTime
 deepSimplifyRunTime (RunTimeArit arit) = RunTimeArit (completeNormArit arit)
-deepSimplifyRunTime (bexp :<>: runt) = simplifyRunTime (deepSimplifyBExp bexp :<>: deepSimplifyRunTime runt)
-deepSimplifyRunTime (e_1 :++: e_2) = simplifyRunTime (deepSimplifyRunTime e_1 :++: deepSimplifyRunTime e_2)
-deepSimplifyRunTime (k :**: runt) = simplifyRunTime (k :**: deepSimplifyRunTime runt)
+deepSimplifyRunTime (bexp :<>: runt)   = simplifyRunTime (deepSimplifyBExp bexp :<>: deepSimplifyRunTime runt)
+deepSimplifyRunTime (e_1 :++: e_2)     = simplifyRunTime (deepSimplifyRunTime e_1 :++: deepSimplifyRunTime e_2)
+deepSimplifyRunTime (k :**: runt)      = simplifyRunTime (k :**: deepSimplifyRunTime runt)
 
 ---------------------------{ PREPARACIÓN PARA SBV }-------------------------------------------------
 
@@ -399,12 +399,12 @@ findConditionRunTime :: RunTime -> Context
 findConditionRunTime runt = rmdups conds
   where
     conds = f runt
-    f (RunTimeArit _) = []
+    f (RunTimeArit _)        = []
     f ((Not bexp) :<>: runt) = bexp : findConditionRunTime runt
     -- @Fede: para mejorar la eficiencia, es preferible escribir bexp : (findConditionRunTime runt)
-    f (bexp :<>: runt) = bexp : findConditionRunTime runt
-    f (e_1 :++: e_2) = findConditionRunTime e_1 ++ findConditionRunTime e_2
-    f (_ :**: runt) = findConditionRunTime runt
+    f (bexp :<>: runt)       = bexp : findConditionRunTime runt
+    f (e_1 :++: e_2)         = findConditionRunTime e_1 ++ findConditionRunTime e_2
+    f (_ :**: runt)          = findConditionRunTime runt
 
 -- | Toma un RunTime runt y retorna todos los posibles context (matriz de BExp) que
 -- se pueden extraer a partir de los BExp que tiene el RunTime.
@@ -412,29 +412,29 @@ allContext :: RunTime -> Contexts
 allContext runt = map (zipWith f conds) lbools
   where
     f bexp True = bexp
-    f bexp _ = Not bexp
-    conds = findConditionRunTime runt
-    lbools = bools (length conds)
+    f bexp _    = Not bexp
+    conds       = findConditionRunTime runt
+    lbools      = bools (length conds)
 
 -- | Toma un BExp bexp y un RunTime runt, evalua todas las instancias de bexp
 -- dentro de runt
 evalCondition :: BExp -> RunTime -> RunTime
-evalCondition bexp (RunTimeArit arit) = RunTimeArit arit
+evalCondition bexp (RunTimeArit arit)     = RunTimeArit arit
 evalCondition bexp1 (bexp2 :<>: runt)
-  | bexp1 == bexp2 = evalCondition bexp1 runt
+  | bexp1 == bexp2                        = evalCondition bexp1 runt
   | deepSimplifyBExp (Not bexp1) == bexp2 = RunTimeArit (Lit 0)
-  | otherwise = bexp2 :<>: evalCondition bexp1 runt
-evalCondition bexp (e_1 :++: e_2) = evalCondition bexp e_1 :++: evalCondition bexp e_2
-evalCondition bexp (k :**: runt) = k :**: evalCondition bexp runt
+  | otherwise                             = bexp2 :<>: evalCondition bexp1 runt
+evalCondition bexp (e_1 :++: e_2)         = evalCondition bexp e_1 :++: evalCondition bexp e_2
+evalCondition bexp (k :**: runt)          = k :**: evalCondition bexp runt
 
 -- | Toma un RunTime runt y retorna su versión AExp en el caso de que se pueda
 -- NOTA: En un principio pensé en usar la mónada maybe para que el porgrama no se caiga
 -- pero en los ejemplos que vi siempre tiraban el error, así que quise seguir esa línea
 runTimeToArit :: RunTime -> AExp
 runTimeToArit (RunTimeArit arit) = arit
-runTimeToArit (e_1 :++: e_2) = runTimeToArit e_1 :+: runTimeToArit e_2
-runTimeToArit (k :**: e) = k :*: runTimeToArit e
-runTimeToArit _ = error $ "No hay versión directa a AExp" ++ show otherwise
+runTimeToArit (e_1 :++: e_2)     = runTimeToArit e_1 :+: runTimeToArit e_2
+runTimeToArit (k :**: e)         = k :*: runTimeToArit e
+runTimeToArit _                  = error $ "No hay versión directa a AExp" ++ show otherwise
 
 -- Versión monádica de la función anterior
 -- @Fede: me gusta esta forma monádica de escribirlo :)
