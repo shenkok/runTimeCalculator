@@ -283,6 +283,28 @@ freeVarsRunTime (b :<>: runt)      = freeVarsBExp b ++ freeVarsRunTime runt
 freeVarsRunTime (e_1 :++: e_2)     = freeVarsRunTime e_1 ++ freeVarsRunTime e_2
 freeVarsRunTime (_ :**: e)         = freeVarsRunTime e
 
+----------------------------------{ CONSTRUCCIONES PROBABILISTAS} ----------------------------------
+type PConstant        = Constant
+type Distribution a   = [(PConstant, a)]
+type AritDistribution = Distribution AExp
+type BoolDistribution = Distribution Bool
+
+massDistribution :: Distribution a -> PConstant
+massDistribution p_x = foldr (+) 0 (fst.unzip $ p_x)
+
+isDistribution :: Distribution a -> Bool
+isDistribution p_x = massDistribution p_x == 1
+
+bernoulli :: PConstant -> BoolDistribution
+bernoulli p = [(p, True), (1-p, False)]
+
+uniformN :: Integer -> Distribution AExp
+uniformN n = zip (repeat $ 1%n) (map Lit [1..(n%1)])
+
+--aritExpectation :: Distribution Arit -> RunTime
+--aritExpectation p_arit = deepSimplifyRunTime $ fold (:++:) (Lit 0) (map f p_arit) where
+--  f (k, arit) = k:**:arit
+
 ----------------------------------{ PROGRAMAS }-----------------------------------------------------
 -- NOTA : Se podría agregar el ciclo for
 -- La versión general
@@ -412,6 +434,7 @@ simplifyRunTime (runt :++: RunTimeArit (Lit 0))                            = run
 simplifyRunTime (_ :**: RunTimeArit (Lit 0))                               = rtZero
 simplifyRunTime (1 :**: runt)                                              = runt
 simplifyRunTime (0 :**: _)                                                 = rtZero
+simplifyRunTime (k :**: RunTimeArit (Lit n))                               = rtLit (k*n)
 simplifyRunTime otherwise                                                  = otherwise
 
 -- Reglas recursivas para simplificar un RunTime
