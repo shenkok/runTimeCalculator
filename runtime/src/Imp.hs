@@ -286,8 +286,8 @@ freeVarsRunTime (_ :**: e)         = freeVarsRunTime e
 ----------------------------------{ CONSTRUCCIONES PROBABILISTAS} ----------------------------------
 type PConstant        = Constant
 type Distribution a   = [(PConstant, a)]
-type AritDistribution = Distribution AExp
-type BoolDistribution = Distribution Bool
+type PAExp = Distribution AExp
+type PBExp = Distribution Bool
 
 massDistribution :: Distribution a -> PConstant
 massDistribution p_x = foldr (+) 0 (fst.unzip $ p_x)
@@ -295,15 +295,30 @@ massDistribution p_x = foldr (+) 0 (fst.unzip $ p_x)
 isDistribution :: Distribution a -> Bool
 isDistribution p_x = massDistribution p_x == 1
 
-bernoulli :: PConstant -> BoolDistribution
+bernoulli :: PConstant -> PBExp
 bernoulli p = [(p, True), (1-p, False)]
+
+-- | Nota: se podría hacer de manera monádica
+bernoullip :: PBExp -> Bool -> PConstant
+bernoullip ((p, True):xs) True  = p 
+bernoullip ((p, True):xs)  False = 1-p
+bernoullip ((p, False):xs) True  = p 
+bernoullip ((p, False):xs) False = 1-p
 
 uniformN :: Integer -> Distribution AExp
 uniformN n = zip (repeat $ 1%n) (map Lit [1..(n%1)])
 
---aritExpectation :: Distribution Arit -> RunTime
---aritExpectation p_arit = deepSimplifyRunTime $ fold (:++:) (Lit 0) (map f p_arit) where
---  f (k, arit) = k:**:arit
+-- | Calculo de esperanza. toma una distribución, una función de transformacion para un a
+--, una función * que retorna un c, una función + que retorna un d, un caso base para el fold y retorna un tipo d
+expectation :: Distribution a -> (a -> b) -> (PConstant -> b -> c)-> (c -> d -> d) -> d -> d
+expectation p_x h prod sum base =  foldr sum base (map f p_x) where
+  f (k, e) = prod k (h  e)  
+
+-- | esperanza para dsitribuciones obre expresiones aritméticas
+aexpE :: Distribution AExp -> Name -> RunTime -> RunTime 
+aexpE p_x x runt = deepSimplifyRunTime $ expectation p_x f (:**:) (:++:) rtZero where
+  f arit = sustRunTime x arit runt  
+
 
 ----------------------------------{ PROGRAMAS }-----------------------------------------------------
 -- NOTA : Se podría agregar el ciclo for
@@ -321,9 +336,12 @@ data Program
   = Skip -- programa vacío que toma una unidad de tiempo
   | Empty -- programacio vacío sin costo de tiempo
   | Set Name AExp -- Asignación
+  | PSet Name PAExp -- Asignación probabilista
   | Seq Program Program -- Composición secuencial de programas
   | If BExp Program Program -- guarda condicional
+  | PIf PBExp Program Program -- guarda condicional probabilista
   | While BExp Program RunTime
+  | PWhile PBExp Program RunTime
   deriving (Show, Eq) -- ciclo while
 
 ----------------------------------{ RESTRICCIONES }-----------------------------------------------------
@@ -374,21 +392,35 @@ type RRunTime = Restriction RunTime
 -- | Generador de restricciones y calcula un candidato a cota superior
 -- entrega un conjunto de restricciones y el tiempo de ejecución esperado
 vcGenerator :: Program -> RunTime -> (RunTime, [RRunTime])
-vcGenerator Skip runt               = (rtOne :++: runt, [])
-vcGenerator Empty runt              = (runt, [])
-vcGenerator (Set x arit) runt       = (rtOne :++: sustRunTime x arit runt, [])
-vcGenerator (If e_b e_t e_f) runt   = (rtOne :++: ((e_b :<>: fst vc_t) :++: (Not e_b :<>: fst vc_f)), snd vc_t ++ snd vc_f)
+vcGenerator Skip runt                = (rtOne :++: runt, [])
+vcGenerator Empty runt               = (runt, [])
+vcGenerator (Set x arit) runt        = (rtOne :++: sustRunTime x arit runt, [])
+vcGenerator (PSet x parit) runt      = (rtOne :++: aexpE parit x runt, [])
+vcGenerator (If e_b e_t e_f) runt    = (rtOne :++: ((e_b :<>: fst vc_t) :++: (Not e_b :<>: fst vc_f)), snd vc_t ++ snd vc_f)
   where
     vc_t = vcGenerator e_t runt
     vc_f = vcGenerator e_f runt
-vcGenerator (Seq p_1 p_2) runt      = (fst vc_1, snd vc_1 ++ snd vc_2)
+vcGenerator (PIf pe_b e_t e_f) runt  = (rtOne :++: ((p_true :**: fst vc_t) :++: (p_false :**: fst vc_f)), snd vc_t ++ snd vc_f)
+  where
+    p_true = bernoullip pe_b True
+    p_false = 1 - p_true
+    vc_t = vcGenerator e_t runt
+    vc_f = vcGenerator e_f runt
+vcGenerator (Seq p_1 p_2) runt       = (fst vc_1, snd vc_1 ++ snd vc_2)
   where
     vc_2 = vcGenerator p_2 runt
     vc_1 = vcGenerator p_1 (fst vc_2)
-vcGenerator (While e_b p inv) runt  = (inv, (l_inv :!<=: inv) : snd vc_p)
+vcGenerator (While e_b p inv) runt   = (inv, (l_inv :!<=: inv) : snd vc_p)
   where
     vc_p = vcGenerator p inv
     l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: fst vc_p))
+vcGenerator (PWhile pe_b p inv) runt = (inv, (l_inv :!<=: inv) : snd vc_p)
+  where
+    p_true = bernoullip pe_b True
+    p_false = 1 - p_true
+    vc_p = vcGenerator p inv
+    l_inv = rtOne :++: ((p_false :**: runt) :++: (p_true :**: fst vc_p))
+
 
 -- | Genera las restricciones considerando al 0 como runtime
 vcGenerator0 :: Program -> (RunTime, [RRunTime])
