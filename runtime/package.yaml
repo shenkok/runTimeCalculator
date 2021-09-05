@@ -24,7 +24,7 @@ dependencies:
 - containers >= 0.5
 - semigroups >= 0.5
 - transformers >= 0.2
-- sbv
+- sbv 
 library:
   source-dirs: src
 

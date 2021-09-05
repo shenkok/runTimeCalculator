@@ -4,6 +4,8 @@ import Data.SBV
 import qualified Data.Map as M
 import Data.Maybe
 import Imp
+import Data.SBV.Rational
+
 
 {-dummy-}
 {-
@@ -24,7 +26,7 @@ envLookup x env = fromMaybe (error $ "Var not found: " ++ show x)
 -- para usar de manera rápida y facil la variable entera sin la necesidad de 
 -- reescribir todo
 aexp :: ConstantEnv -> AExp -> SBV Constant
-aexp  _ (Lit n)        = literal n
+aexp  _ (Lit q)        = (literal $ numerator q) .% (literal $ denominator q)
 aexp env (Var x)       = envLookup x env
 aexp env (e_1 :+: e_2) = aexp env e_1 + aexp env e_2
 aexp env (k :*: arit)  = literal k * aexp env arit
@@ -61,6 +63,8 @@ reOrganiceInput (context, rarit, names) = (names, new_context) where
         constrain $ a + 10.0 .< 19.0 + b
         constrain $ a + b + c.<= 10 
 -}
+
+
 makeSBVModel :: SolverInput ->  SymbolicT IO ()
 makeSBVModel sinput = do
                     let (names, context) = reOrganiceInput sinput

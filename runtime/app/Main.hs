@@ -5,6 +5,7 @@ import Imp
 import ImpIO
 import Data.Ratio
 import Data.SBV
+import Data.SBV.Rational
 -------------------------------------------------- { EJEMPLOS DE PROGRAMAS} ------------------------------------------------------------------
 
 
@@ -84,12 +85,68 @@ bodyP4 = Set "x" (Var "x" :+: Lit (-1))
 programa4 :: Program
 programa4 = While condP4 bodyP4 invP4
 
-solution = sat $ do
-        a <- sRational "a"
-        b <- sRational "b"
-        c <- sRational "c"
-        constrain $ a + 10.0 .< 19.0 + b
-        constrain $ a + b + c.<= 10
+{-
+    p*<true> + (1-p)*<false> = ber p
+    if (ber 1/2){
+        succ:= true
+        }
+        else {
+            if (ber 1/2){
+                succ:=true
+                }
+            else {
+                succ:=false
+            }
+        }
+-}
+programa5 :: Program
+programa5 = PIf (bernoulli 0.5)
+                (Set "succ" (Lit 1))
+                (PIf (bernoulli 0.5)
+                    (Set "succ" (Lit 1))
+                    (Set "succ" (Lit 0)))
+{-
+    while (c=1) {Invariante = 1 + [c=1]*4}
+        c:~ 1/2*0 + 1/2*1
+-}
+ 
+invariante6 :: RunTime
+invariante6 = rtOne :++: ((Var "c":==: Lit 1) :<>: rtLit 4)  
+programa6 :: Program
+programa6 = While (Var "c":==: Lit 1) (PSet "c" (uniformN 2)) invariante6
+
+
+-- funciona
+solution1 = do 
+    xs <- sIntegers []
+    constrain $ (5 :: SInteger) .<= (5 :: SInteger)
+-- no funciona    
+--solution2 = do 
+--    constrain $ (5 :: SInteger) .<= (5 :: SInteger)
+-- No funciona
+--solution2 = do 
+--    xs <- sIntegers []
+--    constrain $ 5 .<= 5
+-- funciona
+solution3 = do 
+    [x] <- sRationals ["x"]
+    constrain $ 5.%1  .<= x 
+--solution4 = do 
+--    [x] <- sRationals ["x"]
+--    constrain $ 5%1  .<= x
+-- no funciona
+--solution4 = do 
+--    [x] <- sRationals ["x"]
+--    constrain $ 5.%1  .<= 3.%4
+-- no funciona
+solution5 = do 
+    [dummy] <- sRationals ["dummy"]
+    constrain $ dummy .== 0.%1
+    constrain $ (5.%1:: SRational)  .<= (5.%1:: SRational) + dummy
+solution4 = do
+    [dummy] <- sRationals ["dummy"]
+    constrain $ dummy .== 0.%1
+    constrain $ 5.%1  .>= 0.%1 + dummy 
 
 main :: IO ()
-main = completeRoutine programa4 rtZero
+main = completeRoutine programa6 rtZero

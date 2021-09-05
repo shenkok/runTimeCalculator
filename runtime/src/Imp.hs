@@ -284,20 +284,29 @@ freeVarsRunTime (e_1 :++: e_2)     = freeVarsRunTime e_1 ++ freeVarsRunTime e_2
 freeVarsRunTime (_ :**: e)         = freeVarsRunTime e
 
 ----------------------------------{ CONSTRUCCIONES PROBABILISTAS} ----------------------------------
+-- | Constante de dsitribuciones probabilisticas
 type PConstant        = Constant
+-- | Definición de una distribución de tipo a
 type Distribution a   = [(PConstant, a)]
+
+-- | Distribuciones útiles
 type PAExp = Distribution AExp
 type PBExp = Distribution Bool
 
+
+-- | Masa de una distribución  a
 massDistribution :: Distribution a -> PConstant
 massDistribution p_x = foldr (+) 0 (fst.unzip $ p_x)
 
+-- | Comprueba que la suma de masa de probabilidad sea igual 1
 isDistribution :: Distribution a -> Bool
 isDistribution p_x = massDistribution p_x == 1
 
+-- | def una moneda con probabilidad p
 bernoulli :: PConstant -> PBExp
 bernoulli p = [(p, True), (1-p, False)]
 
+-- Retorna el valor p de una bernoulli
 -- | Nota: se podría hacer de manera monádica
 bernoullip :: PBExp -> Bool -> PConstant
 bernoullip ((p, True):xs) True  = p 
@@ -305,6 +314,7 @@ bernoullip ((p, True):xs)  False = 1-p
 bernoullip ((p, False):xs) True  = p 
 bernoullip ((p, False):xs) False = 1-p
 
+-- Dado de N caras
 uniformN :: Integer -> Distribution AExp
 uniformN n = zip (repeat $ 1%n) (map Lit [1..(n%1)])
 
@@ -340,11 +350,10 @@ data Program
   | Seq Program Program -- Composición secuencial de programas
   | If BExp Program Program -- guarda condicional
   | PIf PBExp Program Program -- guarda condicional probabilista
-  | While BExp Program RunTime
+  | While BExp Program RunTime -- ciclo while probabilista
   | PWhile PBExp Program RunTime
   deriving (Show, Eq) -- ciclo while
-
-----------------------------------{ RESTRICCIONES }-----------------------------------------------------
+-----------------------------------{RESTRICCIONES }-----------------------------------------------------
 
 -- | Definición de restriccion
 data Restriction a
@@ -430,6 +439,8 @@ vcGenerator0 program = vcGenerator program rtZero
 
 -- | Reglas de un sólo paso para simplificar un BExp
 simplifyBExp :: BExp -> BExp
+--simplifyBExp eb@(e_1 :==: e_2)   = if e_1 == e_2 then True' else eb
+--simplifyBExp eb@(e_1 :<=: e_2)   = if e_1 == e_2 then True' else eb
 simplifyBExp (True' :|: _)    = True'
 simplifyBExp (_ :|: True')    = True'
 simplifyBExp (e_b :|: False') = e_b
@@ -445,8 +456,8 @@ simplifyBExp otherwise        = otherwise
 deepSimplifyBExp :: BExp -> BExp
 deepSimplifyBExp True'          = True'
 deepSimplifyBExp False'         = False'
-deepSimplifyBExp (e_1 :<=: e_2) = completeNormArit e_1 :<=: completeNormArit e_2
-deepSimplifyBExp (e_1 :==: e_2) = completeNormArit e_1 :==: completeNormArit e_2
+deepSimplifyBExp (e_1 :<=: e_2) = simplifyBExp (completeNormArit e_1 :<=: completeNormArit e_2)
+deepSimplifyBExp (e_1 :==: e_2) = simplifyBExp (completeNormArit e_1 :==: completeNormArit e_2)
 deepSimplifyBExp (e_1 :|: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :|: deepSimplifyBExp e_2)
 deepSimplifyBExp (e_1 :&: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :&: deepSimplifyBExp e_2)
 deepSimplifyBExp (Not e_b)      = simplifyBExp (Not $ deepSimplifyBExp e_b)
@@ -466,7 +477,7 @@ simplifyRunTime (runt :++: RunTimeArit (Lit 0))                            = run
 simplifyRunTime (_ :**: RunTimeArit (Lit 0))                               = rtZero
 simplifyRunTime (1 :**: runt)                                              = runt
 simplifyRunTime (0 :**: _)                                                 = rtZero
-simplifyRunTime (k :**: RunTimeArit (Lit n))                               = rtLit (k*n)
+simplifyRunTime (k :**: RunTimeArit arit)                                  = RunTimeArit $ completeNormArit (k:*:arit)
 simplifyRunTime otherwise                                                  = otherwise
 
 -- Reglas recursivas para simplificar un RunTime
