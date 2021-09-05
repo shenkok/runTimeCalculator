@@ -18,7 +18,7 @@ envLookup x env = fromMaybe (error $ "Var not found: " ++ show x)
 
 -- Constructos de variables aritméticas de SBV
 aexp :: ConstantEnv -> AExp -> SBV Constant
-aexp  _ (Lit q)        = (literal $ numerator q) .% (literal $ denominator q)
+aexp  _ (Lit q)        = literal q
 aexp env (Var x)       = envLookup x env
 aexp env (e_1 :+: e_2) = aexp env e_1 + aexp env e_2
 aexp env (k :*: arit)  = literal k * aexp env arit

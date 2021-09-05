@@ -27,6 +27,7 @@ library
   exposed-modules:
       Imp
       ImpIO
+      ImpParser
       ImpToSBV
       ImpToSBVInput
   other-modules:

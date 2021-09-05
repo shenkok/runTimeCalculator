@@ -3,7 +3,7 @@ module ImpToSBVInput where
 import Imp
 
 {-
-    MODULO QUE SE ENCARGA DE GENERAR EL IMPUT PARA SBV A PARTIR 
+    MODULO QUE SE ENCARGA DE GENERAR EL IMPUT PARA SBV A PARTIR
     DE LOS LENGUAJES IMPERATIVOS 
 -}
 -----------------------------------{RESTRICCIONES }-----------------------------------------------------
@@ -63,7 +63,7 @@ vcGenerator (If e_b e_t e_f) runt    = (rtOne :++: ((e_b :<>: fst vc_t) :++: (No
     vc_f = vcGenerator e_f runt
 vcGenerator (PIf pe_b e_t e_f) runt  = (rtOne :++: ((p_true :**: fst vc_t) :++: (p_false :**: fst vc_f)), snd vc_t ++ snd vc_f)
   where
-    p_true = bernoullip pe_b True
+    p_true = p pe_b
     p_false = 1 - p_true
     vc_t = vcGenerator e_t runt
     vc_f = vcGenerator e_f runt
@@ -75,11 +75,11 @@ vcGenerator (While e_b p inv) runt   = (inv, (l_inv :!<=: inv) : snd vc_p)
   where
     vc_p = vcGenerator p inv
     l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: fst vc_p))
-vcGenerator (PWhile pe_b p inv) runt = (inv, (l_inv :!<=: inv) : snd vc_p)
+vcGenerator (PWhile pe_b c inv) runt = (inv, (l_inv :!<=: inv) : snd vc_p)
   where
-    p_true = bernoullip pe_b True
+    p_true = p pe_b
     p_false = 1 - p_true
-    vc_p = vcGenerator p inv
+    vc_p = vcGenerator c inv
     l_inv = rtOne :++: ((p_false :**: runt) :++: (p_true :**: fst vc_p))
 
 

@@ -98,13 +98,6 @@ weightVar (e_1 :+: e_2) var = weightVar e_1 var + weightVar e_2 var
 weightVar (k :*: e) var     = k * weightVar e var
 
 ---------------------------------- { SIMPLIFICAR Y MORMALIZAR EXPRESIONES ARITMÉTICAS } -----------------------
-
--- | NOTA : El algoritmo puede ser mas elegante, pensaba en definir por una función de tome un polimio normalizado, un monomio
--- y retorne un polinomio normalizado. En base a eso se podría eliminar el considerar a  n:*:"" como equivalente a (Lit n).
--- En general creo que se podría implementar algo parecido a la tarea 1 de lenguajes 2019-2, Tarea de polinomios.
-
----------------------------------------------------------------------------------------------------------------
-
 -- | Descripción del algoritmo
 -- 1. Extraer las variables libres de la expresión
 -- 2. Calcular el peso asociado a cada una de las variables
@@ -123,11 +116,12 @@ normArit arit = foldr (:+:) (Lit 0) wvars -- 5
 
 -- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1. @Fede: y suma literales
 simplifyArit :: AExp -> AExp
-simplifyArit (Lit 0 :+: arit)  = simplifyArit arit
-simplifyArit (arit  :+: Lit 0)  = simplifyArit arit
+simplifyArit (Lit 0 :+: arit)    = simplifyArit arit
+simplifyArit (arit  :+: Lit 0)   = simplifyArit arit
 simplifyArit (arit_1 :+: arit_2) = simplifyArit arit_1 :+: simplifyArit arit_2
 simplifyArit (1 :*: arit)        = simplifyArit arit
 simplifyArit (0 :*: _)           = Lit 0
+simplifyArit (_ :*: Lit 0)       = Lit 0
 simplifyArit (k :*: arit)        = k :*: simplifyArit arit
 simplifyArit otherwise           = otherwise
 
@@ -136,19 +130,6 @@ completeNormArit :: AExp -> AExp
 completeNormArit = simplifyArit . normArit
 
 ---------------------------------- { EXPRESIONES BOOLEANAS} ------------------------------------------
--- NOTA: Se podría agregar el :<: como operador, considerando que es super común como condición
--- NOTA: Se podría generalizar la estructura para que no sólo reciba AExp.
-{-
-data BExp a = True'                        -- Constante True
-            | False'                       -- Constante False
-            | a :<=: a                     -- mayor igual entre expresiones a
-            | a :==: a                     -- igualdad expresiones a
-            | BExp a :|: BExp a             -- Or lógico
-            | BExp a :&: BExp a               -- And Lógico
-            | Not BExp a deriving (Show, Eq) -- Negación expresión booleana
--}
------------------------------------------------------------------------------------------------------
-
 -- | Definición de expresiones Boolenas
 data BExp
   = True' -- Constante True
@@ -201,23 +182,31 @@ freeVarsBExp (b_1 :|: b_2)        = freeVarsBExp b_1 ++ freeVarsBExp b_2
 freeVarsBExp (b_1 :&: b_2)        = freeVarsBExp b_1 ++ freeVarsBExp b_2
 freeVarsBExp (Not b)              = freeVarsBExp b
 
-----------------------------------{ RUNTIMES }-----------------------------------------------------
--- ACOTACIÓN: Se podría parametrizar la estructura para que sea más general.
-{-
-data RunTime a = RunTimeArit a                        -- RunTime hecho a partir de una expresión a
-             | BExp a :<>: RunTime a                  -- multiplicación por una condición
-             | RunTime a:++: RunTime a                -- suma de RunTime
-             | Constant :**: RunTime a deriving (Eq)  -- ponderación por constante
--}
--- Creo que varias de las funciones que defino abajo sobre RUNTIMES se podrían simplificar si se extendiera
--- a functor, functor aplicativo o mónada (sobre todo las de simplificar)
--- NOTA:       Sobre el conjunto de restricciones que se genera con los Runtime como base.
---            Si lo veo de un punto de vista geométrico, las restricciones son hiperplanos y su intersección son poliedros
---            Esto me recordó mucho los distintos problemas de optimización Real o mixta, dónde se
---            relajan ciertas restricciones para llegar a una aproximación.
---            Quizás algunas se esas aproximaciones/relajaciones se podrían aplicar con el fin de tener más constructores
---            Aunque también es cierto que sería un gran trabajo extra, pero lo menciono para dejarlo como trabajo a futuro
+---------------------------{ SIMPLIFICAR EXPRESIONES BOOLEANAS }---------------------------------------------------------
 
+-- | Reglas de un sólo paso para simplificar un BExp
+simplifyBExp :: BExp -> BExp
+simplifyBExp (True' :|: _)    = True'
+simplifyBExp (_ :|: True')    = True'
+simplifyBExp (e_b :|: False') = e_b
+simplifyBExp (False' :|: e_b) = e_b
+simplifyBExp (False' :&: _)   = False'
+simplifyBExp (_ :&: False')   = False'
+simplifyBExp (True' :&: e_b)  = e_b
+simplifyBExp (e_b :&: True')  = e_b
+simplifyBExp (Not (Not e_b))  = e_b
+simplifyBExp otherwise        = otherwise
+
+-- | Reglas recursivas para simplificar un BExp
+deepSimplifyBExp :: BExp -> BExp
+deepSimplifyBExp True'          = True'
+deepSimplifyBExp False'         = False'
+deepSimplifyBExp (e_1 :<=: e_2) = simplifyBExp (completeNormArit e_1 :<=: completeNormArit e_2)
+deepSimplifyBExp (e_1 :==: e_2) = simplifyBExp (completeNormArit e_1 :==: completeNormArit e_2)
+deepSimplifyBExp (e_1 :|: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :|: deepSimplifyBExp e_2)
+deepSimplifyBExp (e_1 :&: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :&: deepSimplifyBExp e_2)
+deepSimplifyBExp (Not e_b)      = simplifyBExp (Not $ deepSimplifyBExp e_b)
+----------------------------------{ RUNTIMES }-----------------------------------------------------
 -- | Definición de RunTimes
 data RunTime
   = RunTimeArit AExp -- RunTime hecho a partir de una expresión aritmética
@@ -225,8 +214,6 @@ data RunTime
   | RunTime :++: RunTime -- suma de RunTime
   | Constant :**: RunTime
   deriving (Eq) -- ponderación por constante
-
-----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
 
 ----------------------------------{ AZÚCAR SINTÁCTICA } -----------------------------------------------------
 -- | Azúcar sintáctica para el 0 runtime 
@@ -243,7 +230,7 @@ rtLit k = RunTimeArit (Lit k)
 -- | Azúcar sintáctica para un var runtime
 rtVar :: Name -> RunTime
 rtVar x = RunTimeArit (Var x) 
- 
+ ----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
 instance Show RunTime where                                         
   show (RunTimeArit arit)               = show arit
   show (e_b :<>: RunTimeArit (Lit 1))   = "[" ++ show e_b ++ "]"
@@ -269,6 +256,31 @@ freeVarsRunTime (b :<>: runt)      = freeVarsBExp b ++ freeVarsRunTime runt
 freeVarsRunTime (e_1 :++: e_2)     = freeVarsRunTime e_1 ++ freeVarsRunTime e_2
 freeVarsRunTime (_ :**: e)         = freeVarsRunTime e
 
+-------------------- {  SIMPLIFICAR RUNTIMES }------------------------------------------------------------------
+
+-- | Reglas de un sólo paso para simplificar un RunTime
+simplifyRunTime :: RunTime -> RunTime
+simplifyRunTime (RunTimeArit (Lit m) :++: RunTimeArit (Lit n))             = rtLit (m + n)
+simplifyRunTime (RunTimeArit (Lit m) :++: (RunTimeArit (Lit n) :++: runt)) = (rtLit $ m + n) :++: runt
+simplifyRunTime (e_b :<>: RunTimeArit (Lit 0))                             = rtZero
+simplifyRunTime (True' :<>: runt)                                          = runt
+simplifyRunTime (False' :<>: _)                                            = rtZero
+simplifyRunTime (RunTimeArit (Lit 0) :++: runt)                            = runt
+simplifyRunTime (runt :++: RunTimeArit (Lit 0))                            = runt
+simplifyRunTime (_ :**: RunTimeArit (Lit 0))                               = rtZero
+simplifyRunTime (1 :**: runt)                                              = runt
+simplifyRunTime (0 :**: _)                                                 = rtZero
+simplifyRunTime (k :**: RunTimeArit arit)                                  = RunTimeArit $ completeNormArit (k:*:arit)
+simplifyRunTime otherwise                                                  = otherwise
+
+-- Reglas recursivas para simplificar un RunTime
+deepSimplifyRunTime :: RunTime -> RunTime
+deepSimplifyRunTime (RunTimeArit arit) = RunTimeArit (completeNormArit arit)
+deepSimplifyRunTime (bexp :<>: runt)   = simplifyRunTime (deepSimplifyBExp bexp :<>: deepSimplifyRunTime runt)
+deepSimplifyRunTime (e_1 :++: e_2)     = simplifyRunTime (deepSimplifyRunTime e_1 :++: deepSimplifyRunTime e_2)
+deepSimplifyRunTime (k :**: runt)      = simplifyRunTime (k :**: deepSimplifyRunTime runt)
+
+
 ----------------------------------{ CONSTRUCCIONES PROBABILISTAS} ----------------------------------
 -- | Constante de dsitribuciones probabilisticas
 type PConstant        = Constant
@@ -277,7 +289,8 @@ type Distribution a   = [(PConstant, a)]
 
 -- | Distribuciones útiles
 type PAExp = Distribution AExp
-type PBExp = Distribution Bool
+
+newtype PBExp = Ber { p:: Constant} deriving (Eq, Show)
 
 -- | Masa de una distribución  a
 massDistribution :: Distribution a -> PConstant
@@ -287,18 +300,6 @@ massDistribution p_x = foldr (+) 0 (fst.unzip $ p_x)
 isDistribution :: Distribution a -> Bool
 isDistribution p_x = massDistribution p_x == 1
 
--- | def una moneda con probabilidad p
-bernoulli :: PConstant -> PBExp
-bernoulli p = [(p, True), (1-p, False)]
-
--- Retorna el valor p de una bernoulli
--- | Nota: se podría hacer de manera monádica
-bernoullip :: PBExp -> Bool -> PConstant
-bernoullip ((p, True):xs) True  = p 
-bernoullip ((p, True):xs)  False = 1-p
-bernoullip ((p, False):xs) True  = p 
-bernoullip ((p, False):xs) False = 1-p
-
 -- Dado de N caras
 uniformN :: Integer -> Distribution AExp
 uniformN n = zip (repeat $ 1%n) (map Lit [1..(n%1)])
@@ -307,12 +308,12 @@ uniformN n = zip (repeat $ 1%n) (map Lit [1..(n%1)])
 --, una función * que retorna un c, una función + que retorna un d, un caso base para el fold y retorna un tipo d
 expectation :: Distribution a -> (a -> b) -> (PConstant -> b -> c)-> (c -> d -> d) -> d -> d
 expectation p_x h prod sum base =  foldr sum base (map f p_x) where
-  f (k, e) = prod k (h  e)  
+  f (k, e) = prod k (h  e)
 
 -- | esperanza para dsitribuciones obre expresiones aritméticas
-aexpE :: Distribution AExp -> Name -> RunTime -> RunTime 
+aexpE :: Distribution AExp -> Name -> RunTime -> RunTime
 aexpE p_x x runt = deepSimplifyRunTime $ expectation p_x f (:**:) (:++:) rtZero where
-  f arit = sustRunTime x arit runt  
+  f arit = sustRunTime x arit runt
 
 
 ----------------------------------{ PROGRAMAS }-----------------------------------------------------
@@ -338,53 +339,3 @@ data Program
   | While BExp Program RunTime -- ciclo while probabilista
   | PWhile PBExp Program RunTime
   deriving (Show, Eq) -- ciclo while
-
----------------------------{ SIMPLIFICAR EXPRESIONES BOOLEANAS }---------------------------------------------------------
-
--- | Reglas de un sólo paso para simplificar un BExp
-simplifyBExp :: BExp -> BExp
-simplifyBExp (True' :|: _)    = True'
-simplifyBExp (_ :|: True')    = True'
-simplifyBExp (e_b :|: False') = e_b
-simplifyBExp (False' :|: e_b) = e_b
-simplifyBExp (False' :&: _)   = False'
-simplifyBExp (_ :&: False')   = False'
-simplifyBExp (True' :&: e_b)  = e_b
-simplifyBExp (e_b :&: True')  = e_b
-simplifyBExp (Not (Not e_b))  = e_b
-simplifyBExp otherwise        = otherwise
-
--- | Reglas recursivas para simplificar un BExp
-deepSimplifyBExp :: BExp -> BExp
-deepSimplifyBExp True'          = True'
-deepSimplifyBExp False'         = False'
-deepSimplifyBExp (e_1 :<=: e_2) = simplifyBExp (completeNormArit e_1 :<=: completeNormArit e_2)
-deepSimplifyBExp (e_1 :==: e_2) = simplifyBExp (completeNormArit e_1 :==: completeNormArit e_2)
-deepSimplifyBExp (e_1 :|: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :|: deepSimplifyBExp e_2)
-deepSimplifyBExp (e_1 :&: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :&: deepSimplifyBExp e_2)
-deepSimplifyBExp (Not e_b)      = simplifyBExp (Not $ deepSimplifyBExp e_b)
-
--------------------- {  SIMPLIFICAR RUNTIMES }------------------------------------------------------------------
-
--- | Reglas de un sólo paso para simplificar un RunTime
-simplifyRunTime :: RunTime -> RunTime
-simplifyRunTime (RunTimeArit (Lit m) :++: RunTimeArit (Lit n))             = rtLit (m + n)
-simplifyRunTime (RunTimeArit (Lit m) :++: (RunTimeArit (Lit n) :++: runt)) = (rtLit $ m + n) :++: runt
-simplifyRunTime (e_b :<>: RunTimeArit (Lit 0))                             = rtZero
-simplifyRunTime (True' :<>: runt)                                          = runt
-simplifyRunTime (False' :<>: _)                                            = rtZero
-simplifyRunTime (RunTimeArit (Lit 0) :++: runt)                            = runt
-simplifyRunTime (runt :++: RunTimeArit (Lit 0))                            = runt
-simplifyRunTime (_ :**: RunTimeArit (Lit 0))                               = rtZero
-simplifyRunTime (1 :**: runt)                                              = runt
-simplifyRunTime (0 :**: _)                                                 = rtZero
-simplifyRunTime (k :**: RunTimeArit arit)                                  = RunTimeArit $ completeNormArit (k:*:arit)
-simplifyRunTime otherwise                                                  = otherwise
-
--- Reglas recursivas para simplificar un RunTime
-deepSimplifyRunTime :: RunTime -> RunTime
-deepSimplifyRunTime (RunTimeArit arit) = RunTimeArit (completeNormArit arit)
-deepSimplifyRunTime (bexp :<>: runt)   = simplifyRunTime (deepSimplifyBExp bexp :<>: deepSimplifyRunTime runt)
-deepSimplifyRunTime (e_1 :++: e_2)     = simplifyRunTime (deepSimplifyRunTime e_1 :++: deepSimplifyRunTime e_2)
-deepSimplifyRunTime (k :**: runt)      = simplifyRunTime (k :**: deepSimplifyRunTime runt)
-

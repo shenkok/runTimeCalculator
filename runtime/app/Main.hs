@@ -101,9 +101,9 @@ programa4 = While condP4 bodyP4 invP4
         }
 -}
 programa5 :: Program
-programa5 = PIf (bernoulli 0.5)
+programa5 = PIf (Ber 0.5)
                 (Set "succ" (Lit 1))
-                (PIf (bernoulli 0.5)
+                (PIf (Ber 0.5)
                     (Set "succ" (Lit 1))
                     (Set "succ" (Lit 0)))
 {-
