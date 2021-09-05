@@ -3,6 +3,7 @@ module Main where
 import ImpToSBV
 import Imp
 import ImpIO
+import ImpToSBVInput
 import Data.Ratio
 import Data.SBV
 import Data.SBV.Rational
