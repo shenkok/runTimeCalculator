@@ -5,26 +5,18 @@ import qualified Data.Map as M
 import Data.Maybe
 import Imp
 import Data.SBV.Rational
-
-
-{-dummy-}
+import ImpToSBVInput
 {-
     MODULO QUE SE ENCARGA DE HACER EL PARSER ENTRE LOS LENGUAJES IMPERATIVOS Y LAS VARIABLES DE SBV
 -}
 type Env a = M.Map String (SBV a)
-type IntEnv = Env Integer
-type FloatEnv = Env Float
 type ConstantEnv = Env Constant
--- TODO: Seguir Probando como ahorrarse una función y no hacer dos iguales
 -- | Método que retorna una variable SBV para ir construyendo las variables aritméticas
 envLookup :: Name -> Env a -> SBV a
 envLookup x env = fromMaybe (error $ "Var not found: " ++ show x)
                             (M.lookup x env)
 
 -- Constructos de variables aritméticas de SBV
--- NOTA: En este caso usé como base los Float, debo seguir investigando
--- para usar de manera rápida y facil la variable entera sin la necesidad de 
--- reescribir todo
 aexp :: ConstantEnv -> AExp -> SBV Constant
 aexp  _ (Lit q)        = (literal $ numerator q) .% (literal $ denominator q)
 aexp env (Var x)       = envLookup x env
@@ -57,13 +49,12 @@ reOrganiceInput (context, rarit, names) = (names, new_context) where
 
 -- | Función que permite generar el modelo SBV en base a un problema
 {- Modela problemas del tipo
-        a <- sFloat "a"
-        b <- sFloat "b"
+        a <- sRational "a"
+        b <- sRational "b"
         c <- sFloat "c"
         constrain $ a + 10.0 .< 19.0 + b
         constrain $ a + b + c.<= 10 
 -}
-
 
 makeSBVModel :: SolverInput ->  SymbolicT IO ()
 makeSBVModel sinput = do

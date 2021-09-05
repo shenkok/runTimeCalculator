@@ -28,6 +28,7 @@ library
       Imp
       ImpIO
       ImpToSBV
+      ImpToSBVInput
   other-modules:
       Paths_runtime
   hs-source-dirs:

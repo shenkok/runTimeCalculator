@@ -35,10 +35,9 @@ packages:
 # These entries can reference officially published versions as well as
 # forks / in-progress versions pinned to a git hash. For example:
 #
-#extra-deps:
-#  - sbv
-#  - git: https://github.com/LeventErkok/sbv.git
-#    commit: aafc5f0634fb8bedfb33ab0e8539ae45c09de7c8
+extra-deps:
+  - git: https://github.com/LeventErkok/sbv.git
+    commit: aafc5f0634fb8bedfb33ab0e8539ae45c09de7c8
 #
 ##extra-deps:
 

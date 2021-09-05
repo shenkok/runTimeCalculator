@@ -3,7 +3,18 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    name: sbv
+    version: 8.16.5
+    git: https://github.com/LeventErkok/sbv.git
+    pantry-tree:
+      size: 64497
+      sha256: 0bde38fc30e64858ce33b7353c8979b9976a6fb5855a4d144b7efdde6d68c8df
+    commit: aafc5f0634fb8bedfb33ab0e8539ae45c09de7c8
+  original:
+    git: https://github.com/LeventErkok/sbv.git
+    commit: aafc5f0634fb8bedfb33ab0e8539ae45c09de7c8
 snapshots:
 - completed:
     size: 585817
