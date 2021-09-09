@@ -117,37 +117,7 @@ programa6 :: Program
 programa6 = While (Var "c":==: Lit 1) (PSet "c" (uniformN 2)) invariante6
 
 
--- funciona
-solution1 = do 
-    xs <- sIntegers []
-    constrain $ (5 :: SInteger) .<= (5 :: SInteger)
--- no funciona    
---solution2 = do 
---    constrain $ (5 :: SInteger) .<= (5 :: SInteger)
--- No funciona
---solution2 = do 
---    xs <- sIntegers []
---    constrain $ 5 .<= 5
--- funciona
-solution3 = do 
-    [x] <- sRationals ["x"]
-    constrain $ 5.%1  .<= x 
---solution4 = do 
---    [x] <- sRationals ["x"]
---    constrain $ 5%1  .<= x
--- no funciona
---solution4 = do 
---    [x] <- sRationals ["x"]
---    constrain $ 5.%1  .<= 3.%4
--- no funciona
-solution5 = do 
-    [dummy] <- sRationals ["dummy"]
-    constrain $ dummy .== 0.%1
-    constrain $ (5.%1:: SRational)  .<= (5.%1:: SRational) + dummy
-solution4 = do
-    [dummy] <- sRationals ["dummy"]
-    constrain $ dummy .== 0.%1
-    constrain $ 5.%1  .>= 0.%1 + dummy 
+
 
 main :: IO ()
 main = completeRoutine programa6 rtZero

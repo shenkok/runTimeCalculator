@@ -7,19 +7,29 @@ import ImpToSBVInput
 {-
     MODULO QUE SE ENCARGA SE IMPRIMIR LAS DIFERENTES VARIABLES DEL PROBLEMA ESTUDIADO
 -}
+index :: Int -> String
+index n = "[" ++ (show n) ++ "]"
+
+index2 :: (Int, Int) -> String
+index2 (n, m) = "[" ++ (show n) ++ ", " ++ (show m) ++ "]"
+
+showRestrictions :: [RRunTime] -> Int -> String
+showRestrictions [] _     = newLine
+showRestrictions (x:xs) n = (index n) ++ space ++ (show x) ++ (showRestrictions xs (n-1))  
 
 -- | Muestra la transformada calculada y las restricciones que se generaron
-showTransform :: RunTime -> [RRunTime] ->IO()
-showTransform ert restrictions = do
-                                let b = not (null restrictions)
-                                putStrLn "La transformada calculada es:"
-                                print ert
-                                if b
-                                    then do
-                                    putStrLn "Las restricciones son:"
-                                    print restrictions
-                                    else putStrLn "No hay restricciones"
-                                print $ concat (replicate 50 "-")
+showTransform :: RunTime -> [RRunTime] -> Int ->IO()
+showTransform ert restrictions n = if n > 0
+                                       then do 
+                                          putStrLn "Tiempo de ejecución calculado:"
+                                          putStrLn $ show ert
+                                          putStrLn "Las restricciones son:"
+                                          putStr newLine
+                                          putStrLn $ showRestrictions restrictions n
+                                          putStrLn $ concat (replicate 100 "-")
+                                        else
+                                          putStrLn "No hay restricciones asociadas"
+
 
 -- | Muestra las distintos componentes de un problema 
 --   en concreto.
@@ -32,20 +42,23 @@ showTransform ert restrictions = do
 -}
 -- Advierte si el problema no es satisfacible entregando un contraejemplo
 -- La n denota el subproblema n
-showSolverInput :: SolverInput -> Int -> IO()
-showSolverInput (contexto, rest, vars) n = do
+showSolverInput :: SolverInput -> (Int, Int) ->IO()
+showSolverInput (contexto, rest, vars) indice = do
   let model = makeSBVModel (contexto, rest, vars)
   let lenb = not (null vars)
   b <- isSatisfiable model
-  putStr "El sub-problema número "
-  print n
+  putStr newLine
+  putStrLn $ "El sub-problema indice " ++ (index2 indice) 
+  putStr newLine
   putStrLn "Las variables libres son :"
   print vars
+  putStr newLine
   putStrLn "El contexto es :"
   print contexto
+  putStr newLine
   putStrLn "La restricción es :"
   print rest
-  putStrLn "Se debe probar que contexto => restriccion "
+  putStr newLine
   if b
       then do   values <- sat model
                 putStrLn "El problema no es satisfacible"
@@ -56,20 +69,21 @@ showSolverInput (contexto, rest, vars) n = do
                   else
                     putStrLn ""
       else putStrLn "El problema es satisfacible"
-  print $ concat (replicate 50 "-")
+  putStrLn $ concat (replicate 100 "-")
 
 -- | Muestra un arreglo de problemas, n es un entero de denota la restricion n
 showSolverInputs ::RRunTime -> Int -> IO()
 showSolverInputs runtr n = do
-  print $ concat (replicate 50 "*")
-  putStrLn $ "La restricción " ++ show n ++" es :"
-  print runtr
-  putStr "Hay un total de "
-  putStr.show $ l
-  putStrLn " sub-problemas diferentes  "
-  print $ concat (replicate 50 "-")
-  mapM_ (uncurry showSolverInput ) $ zip  inputs [1..l]
-  print $ concat (replicate 50 "*")
+  putStrLn $ concat (replicate 100 "*")
+  putStr newLine
+  putStrLn $ "Para la restricción número " ++ index n
+  putStrLn $ (show runtr)
+  putStr newLine 
+  putStrLn $ "Hay un total de " ++ show l ++ " sub-problemas diferentes." 
+  putStr newLine
+  putStrLn $ concat (replicate 100 "-")
+  mapM_ (uncurry showSolverInput ) $ zip  inputs (zip (repeat n) [1..l])
+  putStrLn $ concat (replicate 100 "*")
   where
     inputs = restrictionsToSolver runtr
     l = length inputs
@@ -85,18 +99,19 @@ completeRoutine program runt = do
                         let simplifyRest = map (fmap deepSimplifyRunTime) rest
                         let len = length rest
                         let b = len > 0
-                        putStrLn "El programa es:"
-                        print program
+                        putStr newLine
+                        putStrLn "Programa Analizado:"
+                        putStrLn $ show program
+                        putStr newLine
                         putStrLn "Se calcula la transformada con respecto a"
-                        print runt
-                        putStrLn ""
-                        showTransform simplifyErt simplifyRest
-                        putStrLn " Se procede a analizar las restricciones"
-                        putStrLn ""
+                        putStrLn $ show runt
+                        putStr newLine
+                        showTransform simplifyErt simplifyRest len
+                        putStr newLine
                         if b
                             then
                             mapM_ (uncurry showSolverInputs ) $ zip simplifyRest [1..len]
-                            else putStrLn ""
+                            else putStr newLine
                         putStrLn "Calculo Finalizado"
 
 

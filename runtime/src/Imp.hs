@@ -32,6 +32,16 @@ bools n = map (False :) r ++ map (True :) r
   where
     r = bools (n -1)
 
+showLit :: Rational -> String
+showLit q 
+  | denominator q == 1 = show $ numerator q
+  | otherwise        = show (numerator q) ++ "/" ++ show (denominator q)
+
+newLine :: String
+newLine = "\n"
+
+space :: String
+space = "  "
 ---------------------------------------- { EXPRESIONES ARITMÉTICAS }--------------------------------
 
 -- | Definición de Expresiones Aritméticas
@@ -61,12 +71,12 @@ data AExp
 
 -- | Definición del método show para AExp
 instance Show AExp where
-  show (Lit n)        = show n
-  show (Var x)        = show x
-  show (e_1 :+: e_2)  = show e_1 ++ " + " ++ show e_2
-  show (k :*: Lit n)  = show k   ++ "*" ++ show n
-  show (k :*: Var x)  = show k   ++ "*" ++ show x 
-  show (k :*: e_2)    = show k   ++ "*(" ++ show e_2 ++")"
+  show (Lit n)           = showLit n
+  show (Var x)           = show x
+  show (e_1 :+: e_2)     = show e_1  ++ " + " ++ show e_2
+  show (k :*: Lit n)     = showLit k ++  "*"  ++ showLit n
+  show (k :*: Var x)     = showLit k ++  "*"  ++ show x 
+  show (k :*: e_2)       = showLit k ++  "*(" ++ show e_2 ++")"
 
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
@@ -234,13 +244,13 @@ rtVar x = RunTimeArit (Var x)
 instance Show RunTime where                                         
   show (RunTimeArit arit)               = show arit
   show (e_b :<>: RunTimeArit (Lit 1))   = "[" ++ show e_b ++ "]"
-  show (e_b :<>: RunTimeArit (Lit n))   = "[" ++ show e_b ++ "]*" ++ show n
+  show (e_b :<>: RunTimeArit (Lit n))   = "[" ++ show e_b ++ "]*" ++ showLit n
   show (e_b :<>: RunTimeArit (Var x))   = "[" ++ show e_b ++ "]*" ++ show x
   show (e_b :<>: runt)                  = "[" ++ show e_b ++ "]*" ++ "(" ++ show runt ++ ")"
   show (e_1 :++: e_2)                   = show e_1 ++ " + " ++ show e_2
-  show (k :**: RunTimeArit (Lit n))     = show k ++ "*" ++ show n
-  show (k :**: RunTimeArit (Var x))     = show k ++ "*" ++ show k
-  show (k :**: e_2)                     = show k ++ " * (" ++ show e_2 ++ ")"
+  show (k :**: RunTimeArit (Lit n))     = showLit k ++ "*" ++ showLit n
+  show (k :**: RunTimeArit (Var x))     = showLit k ++ "*" ++ show k
+  show (k :**: e_2)                     = showLit k ++ " * (" ++ show e_2 ++ ")"
 -- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
 -- reemplaza todas las indicendias de "x" en la expresión runtIn por la expresión aritFor.
 sustRunTime :: Name -> AExp -> RunTime -> RunTime
@@ -260,8 +270,8 @@ freeVarsRunTime (_ :**: e)         = freeVarsRunTime e
 
 -- | Reglas de un sólo paso para simplificar un RunTime
 simplifyRunTime :: RunTime -> RunTime
-simplifyRunTime (RunTimeArit (Lit m) :++: RunTimeArit (Lit n))             = rtLit (m + n)
-simplifyRunTime (RunTimeArit (Lit m) :++: (RunTimeArit (Lit n) :++: runt)) = (rtLit $ m + n) :++: runt
+simplifyRunTime (RunTimeArit arit_1 :++: RunTimeArit arit_2)               = RunTimeArit $ completeNormArit (arit_1 :+: arit_2)
+simplifyRunTime (RunTimeArit arit_1 :++: (RunTimeArit arit_2 :++: runt))   = (RunTimeArit $ completeNormArit $ arit_1 :+: arit_2) :++: runt
 simplifyRunTime (e_b :<>: RunTimeArit (Lit 0))                             = rtZero
 simplifyRunTime (True' :<>: runt)                                          = runt
 simplifyRunTime (False' :<>: _)                                            = rtZero
@@ -290,7 +300,20 @@ type Distribution a   = [(PConstant, a)]
 -- | Distribuciones útiles
 type PAExp = Distribution AExp
 
-newtype PBExp = Ber { p:: Constant} deriving (Eq, Show)
+-- | Método para mostar un punto de la distribución 
+showPoint :: (PConstant, AExp) -> String
+showPoint (1, arit) = "<" ++ show arit ++ ">" 
+showPoint (q, arit) =  showLit q ++ "*<" ++ show arit ++ ">"   
+
+showPAexp :: PAExp -> String
+showPAexp []       = ""
+showPAexp (y:x:xs) = showPoint y ++ " + "
+showPAexp (x: xs)  = showPoint x
+
+newtype PBExp = Ber { p:: Constant} deriving (Eq)
+  
+instance Show PBExp where
+  show (Ber q) = "ber " ++ showLit q
 
 -- | Masa de una distribución  a
 massDistribution :: Distribution a -> PConstant
@@ -338,4 +361,16 @@ data Program
   | PIf PBExp Program Program -- guarda condicional probabilista
   | While BExp Program RunTime -- ciclo while probabilista
   | PWhile PBExp Program RunTime
-  deriving (Show, Eq) -- ciclo while
+  deriving (Eq, Show) -- ciclo while
+
+{-
+instance Show  where
+  show Skip               = "skip"
+  show Empty              = "empty"
+  show (Set name arit)    = show name ++ " := " ++ show arit
+  show (PSet name paexp)  = show name ++ " :~ " ++ showPAexp paexp
+  show (Seq c_1  c_2)     = show c_1 ++ newLine ++ show c_2 ++ ";"
+  show (If be c_t c_f)    = "if (" ++ show be ++ "):" ++ newLine ++ index ++ "{" ++ show c_t ++ "}"
+                                   ++ newLine ++ "else:" ++ newLine ++ index ++ "{" ++ c_f ++ "}"
+  show
+  -}
