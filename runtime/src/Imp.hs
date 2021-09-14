@@ -37,11 +37,6 @@ showLit q
   | denominator q == 1 = show $ numerator q
   | otherwise        = show (numerator q) ++ "/" ++ show (denominator q)
 
-newLine :: String
-newLine = "\n"
-
-space :: String
-space = "  "
 ---------------------------------------- { EXPRESIONES ARITMÉTICAS }--------------------------------
 
 -- | Definición de Expresiones Aritméticas

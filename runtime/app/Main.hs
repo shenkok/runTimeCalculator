@@ -116,8 +116,14 @@ invariante6 = rtOne :++: ((Var "c":==: Lit 1) :<>: rtLit 4)
 programa6 :: Program
 programa6 = While (Var "c":==: Lit 1) (PSet "c" (uniformN 2)) invariante6
 
+boolIO :: Bool -> IO Bool
+boolIO = return
 
+array :: [IO Bool]
+array = map boolIO [True, True, False, False, True]
 
+ioAnd :: IO Bool -> IO Bool -> IO Bool
+ioAnd b_1 b_2 = (&&) <$> b_1 <*> b_2
 
 main :: IO ()
-main = completeRoutine programa6 rtZero
+main = print "no"

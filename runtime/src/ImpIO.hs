@@ -7,6 +7,12 @@ import ImpToSBVInput
 {-
     MODULO QUE SE ENCARGA SE IMPRIMIR LAS DIFERENTES VARIABLES DEL PROBLEMA ESTUDIADO
 -}
+
+newLine :: String
+newLine = "\n"
+
+space :: String
+space = "  "
 index :: Int -> String
 index n = "[" ++ (show n) ++ "]"
 
