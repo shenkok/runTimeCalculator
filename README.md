@@ -126,6 +126,10 @@ sobre stack:
 
       https://docs.haskellstack.org/en/stable/README/
 
+tutorial parser
+    
+    https://jakewheat.github.io/intro_to_parsing/#an-issue-with-token-parsers
+
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Sobre la distribución de archivos
