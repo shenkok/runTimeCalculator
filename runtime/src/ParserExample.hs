@@ -1,6 +1,5 @@
-module ParserExample where
 {-# LANGUAGE RecordWildCards #-}
-
+module ParserExample where
 import Imp
 import           Text.Parsec
 import           Text.Parsec.Char
