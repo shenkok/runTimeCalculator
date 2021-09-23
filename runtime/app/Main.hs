@@ -7,6 +7,7 @@ import ImpToSBVInput
 import Data.Ratio
 import Data.SBV
 import Data.SBV.Rational
+import ImpParser
 -------------------------------------------------- { EJEMPLOS DE PROGRAMAS} ------------------------------------------------------------------
 
 
@@ -116,14 +117,7 @@ invariante6 = rtOne :++: ((Var "c":==: Lit 1) :<>: rtLit 4)
 programa6 :: Program
 programa6 = While (Var "c":==: Lit 1) (PSet "c" (uniformN 2)) invariante6
 
-boolIO :: Bool -> IO Bool
-boolIO = return
-
-array :: [IO Bool]
-array = map boolIO [True, True, False, False, True]
-
-ioAnd :: IO Bool -> IO Bool -> IO Bool
-ioAnd b_1 b_2 = (&&) <$> b_1 <*> b_2
+arit_1 = regularParse aexp "10/1*x + 3/2*y + 1/1 + 3/1"
 
 main :: IO ()
-main = print "no"
+main =  completeRoutine programa4 rtZero

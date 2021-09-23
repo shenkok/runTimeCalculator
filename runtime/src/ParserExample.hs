@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 module ParserExample where
-import Imp
+
 import           Text.Parsec
 import           Text.Parsec.Char
 import           Text.Parsec.Expr
@@ -11,6 +11,7 @@ import qualified Control.Applicative as A
 
 import           Data.Char (isLetter, isDigit)
 import qualified Text.Parsec.Token    as Token
+
 
 regularParse :: Parser a -> String -> Either ParseError a
 regularParse p = parse p ""
@@ -139,4 +140,10 @@ lexeme p = p A.<* whitespace
 
 whitespace :: Parser ()
 whitespace = void $ oneOf " \n\t"
+ ----------------------------------------------------- Mis expresiones ---------------------------------------------------------
 
+data SimpleExpr1 = Num1 Integer
+                | V1 String
+                | Add1 SimpleExpr SimpleExpr
+                | Weight1 Integer SimpleExpr
+                  deriving (Eq,Show)

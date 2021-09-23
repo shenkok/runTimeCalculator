@@ -18,6 +18,28 @@ binary name fun = Infix (fun <$ reservedOp name) AssocLeft
 whitespace :: Parser ()
 whitespace = void $ many $ oneOf " \n\t"
 
+regularParse :: Parser a -> String -> Either ParseError a
+regularParse p = parse p ""
+
+parseWithEof :: Parser a -> String -> Either ParseError a
+parseWithEof p = parse (p <* eof) ""
+
+parseWithLeftOver :: Parser a -> String -> Either ParseError (a,String)
+parseWithLeftOver p = parse ((,) <$> p <*> leftOver) ""
+   where leftOver = manyTill anyToken eof
+
+parseWithWSEof :: Parser a -> String -> Either ParseError a
+parseWithWSEof p = parseWithEof (whiteSpace *> p)
+   where whiteSpace = void $ many $ oneOf " \n\t"
+
+parseWithWhitespace :: Parser a -> String -> Either ParseError a
+parseWithWhitespace p = parseWithEof wrapper
+  where
+    wrapper = do
+        whitespace
+        p
+-- regularParse anyCha
+
 {-
 identifier :: Parser String
 identifier = lexeme ((:) <$> firstChar <*> many nonFirstChar)
@@ -25,8 +47,8 @@ identifier = lexeme ((:) <$> firstChar <*> many nonFirstChar)
     firstChar = letter <|> char '_'
     nonFirstChar = digit <|> firstChar
 -}
-rational :: Parser Rational
-rational = do
+rationalFractional :: Parser Rational
+rationalFractional = do
     whitespace
     num <- many1 digit
     void $ char '/'
@@ -34,16 +56,31 @@ rational = do
     whitespace
     return $ toRational $ (read num)/ (read den)
 
+rationalInteger :: Parser Rational
+rationalInteger = do
+  n <- integer
+  return $ toRational n
 
+rational :: Parser Rational
+rational = try rationalFractional <|> rationalInteger
+
+rationalAExp :: Parser AExp
+rationalAExp = do
+  q <- rational
+  return $ Lit q
+
+varAExp :: Parser AExp
+varAExp = do
+  x <- identifier
+  return $ Var x
 
 aexp :: Parser AExp
-aexp = buildExpressionParser table term
- where term =  Lit  <$> rational
+aexp = buildExpressionParser table term 
+ where term = try ((:*:) <$> (rational <* reservedOp "*") <*> varAExp)
+           <|> Lit  <$> rational
            <|> Var <$> identifier
-           <|> ((:*:) <$> (rational <* reservedOp "*") <*> aexp)
-           <|> parens aexp
-       table = [ [ binary "+" (:+:)]]
-          
+           <|> try (parens aexp)
+       table = [[binary "+" (:+:) ]]
 
 bexp :: Parser BExp
 bexp = buildExpressionParser table term

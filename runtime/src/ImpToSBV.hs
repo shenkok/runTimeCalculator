@@ -17,22 +17,22 @@ envLookup x env = fromMaybe (error $ "Var not found: " ++ show x)
                             (M.lookup x env)
 
 -- Constructos de variables aritméticas de SBV
-aexp :: ConstantEnv -> AExp -> SBV Constant
-aexp  _ (Lit q)        = literal q
-aexp env (Var x)       = envLookup x env
-aexp env (e_1 :+: e_2) = aexp env e_1 + aexp env e_2
-aexp env (k :*: arit)  = literal k * aexp env arit
+sAExp :: ConstantEnv -> AExp -> SBV Constant
+sAExp  _ (Lit q)        = literal q
+sAExp env (Var x)       = envLookup x env
+sAExp env (e_1 :+: e_2) = sAExp env e_1 + sAExp env e_2
+sAExp env (k :*: arit)  = literal k * sAExp env arit
 
 
 -- | Constructor de variables booleanas para SBV
-bexp :: ConstantEnv -> BExp -> SBool
-bexp _ True'            = sTrue
-bexp _ False'           = sFalse
-bexp env (e_1 :<=: e_2) = aexp env e_1 .<= aexp env e_2
-bexp env (e_1 :==: e_2) = aexp env e_1 .== aexp env e_2
-bexp env (e_1 :|: e_2)  = bexp env e_1 .|| bexp env e_2
-bexp env (e_1 :&: e_2)  = bexp env e_1 .&&  bexp env e_2
-bexp env (Not e)        = sNot (bexp env e)
+sBExp :: ConstantEnv -> BExp -> SBool
+sBExp _ True'            = sTrue
+sBExp _ False'           = sFalse
+sBExp env (e_1 :<=: e_2) = sAExp env e_1 .<= sAExp env e_2
+sBExp env (e_1 :==: e_2) = sAExp env e_1 .== sAExp env e_2
+sBExp env (e_1 :|: e_2)  = sBExp env e_1 .|| sBExp env e_2
+sBExp env (e_1 :&: e_2)  = sBExp env e_1 .&&  sBExp env e_2
+sBExp env (Not e)        = sNot (sBExp env e)
 
 
 -- | Función que permite reorganizar el input
@@ -61,5 +61,5 @@ makeSBVModel sinput = do
                     let (names, context) = reOrganiceInput sinput
                     xs <- sRationals names
                     let env = M.fromList (zip names xs)
-                    constrain (sAnd (map (bexp env) context))
+                    constrain (sAnd (map (sBExp env) context))
 

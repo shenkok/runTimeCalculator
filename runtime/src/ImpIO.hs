@@ -7,6 +7,20 @@ import ImpToSBVInput
 {-
     MODULO QUE SE ENCARGA SE IMPRIMIR LAS DIFERENTES VARIABLES DEL PROBLEMA ESTUDIADO
 -}
+uncurry3                        :: (a -> b -> c -> d) -> (a, b, c) -> d
+uncurry3 f ~(a, b, c)           = f a b c
+
+uncurry4                        :: (a -> b -> c -> d -> e) -> (a, b, c, d) -> e
+uncurry4 f ~(a, b, c, d)        = f a b c d
+
+boolIO :: Bool -> IO Bool
+boolIO = return
+
+array :: [IO Bool]
+array = map boolIO [True, True, False, False, True]
+
+ioAnd :: IO Bool -> IO Bool -> IO Bool
+ioAnd b_1 b_2 = (&&) <$> b_1 <*> b_2
 
 newLine :: String
 newLine = "\n"
@@ -16,8 +30,8 @@ space = "  "
 index :: Int -> String
 index n = "[" ++ (show n) ++ "]"
 
-index2 :: (Int, Int) -> String
-index2 (n, m) = "[" ++ (show n) ++ ", " ++ (show m) ++ "]"
+index2 :: Int -> Int -> String
+index2 n m = "[" ++ (show n) ++ ", " ++ (show m) ++ "]"
 
 showRestrictions :: [RRunTime] -> Int -> String
 showRestrictions [] _     = newLine
@@ -29,12 +43,11 @@ showTransform ert restrictions n = if n > 0
                                        then do 
                                           putStrLn "Tiempo de ejecución calculado:"
                                           putStrLn $ show ert
-                                          putStrLn "Las restricciones son:"
                                           putStr newLine
+                                          putStrLn "Obligaciones de prueba asociadas:"
                                           putStrLn $ showRestrictions restrictions n
-                                          putStrLn $ concat (replicate 100 "-")
                                         else
-                                          putStrLn "No hay restricciones asociadas"
+                                          putStrLn "No hay obligaciones de prueba asociadas"
 
 
 -- | Muestra las distintos componentes de un problema 
@@ -47,34 +60,27 @@ showTransform ert restrictions n = if n > 0
         constrain $ a + b + c.<= 10 
 -}
 -- Advierte si el problema no es satisfacible entregando un contraejemplo
--- La n denota el subproblema n
-showSolverInput :: SolverInput -> (Int, Int) ->IO()
-showSolverInput (contexto, rest, vars) indice = do
+showSolverInput :: SolverInput -> Int -> Int ->IO()
+showSolverInput (contexto, rest, vars) n m = do
   let model = makeSBVModel (contexto, rest, vars)
   let lenb = not (null vars)
   b <- isSatisfiable model
   putStr newLine
-  putStrLn $ "El sub-problema indice " ++ (index2 indice) 
-  putStr newLine
-  putStrLn "Las variables libres son :"
-  print vars
-  putStr newLine
-  putStrLn "El contexto es :"
-  print contexto
-  putStr newLine
-  putStrLn "La restricción es :"
-  print rest
+  putStrLn $ "Sub-problema " ++ (index2 n m) 
+  putStr newLine 
+  putStrLn $ show contexto ++ " ----> " ++ show rest
   putStr newLine
   if b
       then do   values <- sat model
-                putStrLn "El problema no es satisfacible"
+                putStrLn "El Sub-problema no es válido"
+                putStr newLine
                 if lenb
                   then do
                       putStrLn "Un contraejemplo es"
                       print values
                   else
                     putStrLn ""
-      else putStrLn "El problema es satisfacible"
+      else putStrLn "El Sub-problema es válido"
   putStrLn $ concat (replicate 100 "-")
 
 -- | Muestra un arreglo de problemas, n es un entero de denota la restricion n
@@ -82,17 +88,16 @@ showSolverInputs ::RRunTime -> Int -> IO()
 showSolverInputs runtr n = do
   putStrLn $ concat (replicate 100 "*")
   putStr newLine
-  putStrLn $ "Para la restricción número " ++ index n
+  putStrLn $ "Para la obligación de prueba " ++ index n
   putStrLn $ (show runtr)
   putStr newLine 
-  putStrLn $ "Hay un total de " ++ show l ++ " sub-problemas diferentes." 
-  putStr newLine
+  putStrLn $ "Hay un total de " ++ show m ++ " sub-problemas diferentes." 
   putStrLn $ concat (replicate 100 "-")
-  mapM_ (uncurry showSolverInput ) $ zip  inputs (zip (repeat n) [1..l])
+  mapM_ (uncurry3 showSolverInput ) $ zip3  inputs (repeat n) [1..m]
   putStrLn $ concat (replicate 100 "*")
   where
     inputs = restrictionsToSolver runtr
-    l = length inputs
+    m = length inputs
 
 
 -- | Muestra una rutina completa
