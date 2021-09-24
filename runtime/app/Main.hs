@@ -117,7 +117,15 @@ invariante6 = rtOne :++: ((Var "c":==: Lit 1) :<>: rtLit 4)
 programa6 :: Program
 programa6 = While (Var "c":==: Lit 1) (PSet "c" (uniformN 2)) invariante6
 
-arit_1 = regularParse aexp "10/1*x + 3/2*y + 1/1 + 3/1"
+arit_1 = regularParse aexp "9 + 10 + 11"
+arit_2 = regularParse aexp "9*p + 10/6 - 11"
+arit_3 = regularParse aexp "9*p - 10/6*x - 11"
+arit_4 = regularParse aexp "-11"
+
+rtarit_1 = regularParse runtime "9 ++ 10 ++ 11"
+rtarit_2 = regularParse runtime "9*p ++ 10/6 -- 11"
+rtarit_3 = regularParse runtime "9*p -- 10/6*x -- 11"
+rtarit_4 = regularParse runtime "-11"
 
 main :: IO ()
 main =  completeRoutine programa4 rtZero

@@ -60,11 +60,15 @@ data AExp
   | Var Name -- Variables x, y, z
   | AExp :+: AExp -- Suma de expresiones aritméticas
   | Constant :*: AExp
-  deriving (Eq) -- Ponderación por una constante
+  deriving (Eq, Show)  -- Ponderación por una constante
+
+-----------------------------------------{ AZÚCAR SINTÁCTICA}------------------------------------------------
+(-:) :: AExp -> AExp -> AExp
+arit_1 -: arit_2 = arit_1 :+: ((-1) :*: arit_2) 
 
 ---------------------------------------- { FUNCIONES EXPRESIONES ARITMÉTICAS }--------------------------------
-
 -- | Definición del método show para AExp
+{-
 instance Show AExp where
   show (Lit n)           = showLit n
   show (Var x)           = show x
@@ -72,7 +76,7 @@ instance Show AExp where
   show (k :*: Lit n)     = showLit k ++  "*"  ++ showLit n
   show (k :*: Var x)     = showLit k ++  "*"  ++ show x 
   show (k :*: e_2)       = showLit k ++  "*(" ++ show e_2 ++")"
-
+-}
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
 sustAExp _ _ (Lit n)             = Lit n
@@ -218,12 +222,17 @@ data RunTime
   | BExp :<>: RunTime -- multiplicación por una condición
   | RunTime :++: RunTime -- suma de RunTime
   | Constant :**: RunTime
-  deriving (Eq) -- ponderación por constante
+  deriving (Eq, Show) -- ponderación por constante
 
 ----------------------------------{ AZÚCAR SINTÁCTICA } -----------------------------------------------------
+-- | Azúcar sintáctica para el menos
+(--:) :: RunTime -> RunTime -> RunTime
+runt_1 --: runt_2 = runt_1 :++: ((-1) :**: runt_2)
+
 -- | Azúcar sintáctica para el 0 runtime 
 rtZero :: RunTime
 rtZero = RunTimeArit (Lit 0)
+
 -- | Azúcar sintáctica para el 1 runtime
 rtOne :: RunTime
 rtOne = RunTimeArit (Lit 1)
@@ -235,7 +244,12 @@ rtLit k = RunTimeArit (Lit k)
 -- | Azúcar sintáctica para un var runtime
 rtVar :: Name -> RunTime
 rtVar x = RunTimeArit (Var x) 
+
+-- |Azúcar para Función Indicatriz 
+indicator :: BExp -> RunTime
+indicator e_b = e_b :<>: rtOne
  ----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
+{-
 instance Show RunTime where                                         
   show (RunTimeArit arit)               = show arit
   show (e_b :<>: RunTimeArit (Lit 1))   = "[" ++ show e_b ++ "]"
@@ -246,6 +260,7 @@ instance Show RunTime where
   show (k :**: RunTimeArit (Lit n))     = showLit k ++ "*" ++ showLit n
   show (k :**: RunTimeArit (Var x))     = showLit k ++ "*" ++ show k
   show (k :**: e_2)                     = showLit k ++ " * (" ++ show e_2 ++ ")"
+-}
 -- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
 -- reemplaza todas las indicendias de "x" en la expresión runtIn por la expresión aritFor.
 sustRunTime :: Name -> AExp -> RunTime -> RunTime
@@ -305,7 +320,7 @@ showPAexp []       = ""
 showPAexp (y:x:xs) = showPoint y ++ " + "
 showPAexp (x: xs)  = showPoint x
 
-newtype PBExp = Ber { p:: Constant} deriving (Eq)
+newtype PBExp = Ber { p:: PConstant} deriving (Eq)
   
 instance Show PBExp where
   show (Ber q) = "ber " ++ showLit q
@@ -328,7 +343,7 @@ expectation :: Distribution a -> (a -> b) -> (PConstant -> b -> c)-> (c -> d -> 
 expectation p_x h prod sum base =  foldr sum base (map f p_x) where
   f (k, e) = prod k (h  e)
 
--- | esperanza para dsitribuciones obre expresiones aritméticas
+-- | esperanza para dsitribuciones sobre expresiones aritméticas
 aexpE :: Distribution AExp -> Name -> RunTime -> RunTime
 aexpE p_x x runt = deepSimplifyRunTime $ expectation p_x f (:**:) (:++:) rtZero where
   f arit = sustRunTime x arit runt

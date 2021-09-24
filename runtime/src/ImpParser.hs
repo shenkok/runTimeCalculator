@@ -38,28 +38,29 @@ parseWithWhitespace p = parseWithEof wrapper
     wrapper = do
         whitespace
         p
--- regularParse anyCha
 
-{-
-identifier :: Parser String
-identifier = lexeme ((:) <$> firstChar <*> many nonFirstChar)
-  where
-    firstChar = letter <|> char '_'
-    nonFirstChar = digit <|> firstChar
--}
-rationalFractional :: Parser Rational
-rationalFractional = do
-    whitespace
-    num <- many1 digit
-    void $ char '/'
-    den <- many1 digit
-    whitespace
-    return $ toRational $ (read num)/ (read den)
+--------------------------------------------------------------------------- {PARSER PARA EXPRESIONES ARITMÉTICAS}---------------------------------
+
+-- AExp singular o monomio
+-- monomio = n | x | n*x
+
+-- AExp en Forma Normal Débil aefnd
+-- aefnd = monomio | monomio + aefnd
+
 
 rationalInteger :: Parser Rational
 rationalInteger = do
   n <- integer
   return $ toRational n
+
+rationalFractional :: Parser Rational
+rationalFractional = do
+    whitespace
+    num <- integer
+    void $ char '/'
+    den <- integer
+    whitespace
+    return $ (toRational num)/ (toRational den)
 
 rational :: Parser Rational
 rational = try rationalFractional <|> rationalInteger
@@ -77,10 +78,10 @@ varAExp = do
 aexp :: Parser AExp
 aexp = buildExpressionParser table term 
  where term = try ((:*:) <$> (rational <* reservedOp "*") <*> varAExp)
-           <|> Lit  <$> rational
-           <|> Var <$> identifier
+           <|> try rationalAExp
+           <|> try varAExp
            <|> try (parens aexp)
-       table = [[binary "+" (:+:) ]]
+       table = [[binary "+" (:+:), binary "-" (-:) ]]
 
 bexp :: Parser BExp
 bexp = buildExpressionParser table term
@@ -92,15 +93,20 @@ bexp = buildExpressionParser table term
         table = [ [ Prefix (Not <$ reservedOp "!") ]
                 , [ binary "&&" (:&:), binary "||" (:|:) ]
                 ]
-{-
+
+----------------------------------- { PARSER PARA RUNTIME} -------------------
+-- RunTime singular o rts
+-- rts = monomio | q*[bool]<>x | [bool]<>x | q*[bool]
+
+-- RunTime en Forma Normal Débil o rtfnd
+-- rtfnd = rts| rts ++ rtfnd
+
 runtime :: Parser RunTime
 runtime = buildExpressionParser table term
- where term =  RunTimeArit <$> aexp
-           <|> Var <$> identifier
-           <|> ((:**:) <$> (rational <* reservedOp "**") <*> rational)
-           <|> parens aexp
-       table = [ [ binary "+" (:+:)]]
--}        
+ where term =  try (RunTimeArit <$> aexp)
+           <|> try (parens runtime)
+       table = [ [ binary "++" (:++:), binary "--" (--:) ]]
+        
 {-
 cmd :: Parser Cmd
 cmd = foldl Seq Skip <$> (statement `sepBy1` symbol ";")
