@@ -40,6 +40,9 @@ parseWithWhitespace p = parseWithEof wrapper
         p
 
 --------------------------------------------------------------------------- {PARSER PARA EXPRESIONES ARITMÉTICAS}---------------------------------
+-- | Parser que permite encerrar entre 0 o 1 parentesis una expresión
+parens01 :: Parser a -> Parser a
+parens01 parser = try parser <|> parens parser
 
 -- AExp singular o monomio
 -- monomio = n | x | n*x
@@ -68,8 +71,8 @@ rational :: Parser Rational
 rational = try rationalFractional <|> rationalInteger
 
 -- | Parser para escribir los literales de AExp
-rationalAExp :: Parser AExp
-rationalAExp = do
+litAExp :: Parser AExp
+litAExp = do
   q <- rational
   return $ Lit q
 
@@ -79,12 +82,18 @@ varAExp = do
   x <- identifier
   return $ Var x
 
+-- | Parser para los casos base de AExp
+aexpBase :: Parser AExp
+aexpBase = try litAExp <|> varAExp
+
+aexp' :: Parser AExp
+aexp' = try ((:*:) <$> (rational <* reservedOp "*") <*> parens01 aexpBase)
+
 -- | Parser para AExp
 aexp :: Parser AExp
 aexp = buildExpressionParser table term 
- where term = try ((:*:) <$> (rational <* reservedOp "*") <*> varAExp)
-           <|> try rationalAExp
-           <|> try varAExp
+ where term = try ((:*:) <$> (rational <* reservedOp "*") <*> aexpBase)
+           <|> try aexpBase
            <|> try (parens aexp)
        table = [[binary "+" (:+:), binary "-" (-:) ]]
 
@@ -113,12 +122,41 @@ aritRunTime = do
   arit <- aexp
   return $ RunTimeArit arit
 
+-- | Parser para indicatrices 
+indicator :: Parser RunTime
+indicator = do 
+  b <- brackets bexp
+  return $ toIndicator b
+
+indArit :: Parser RunTime
+indArit =((<>:) <$> (indicator <* reservedOp "<>") <*> parens01 aexp)
+
+runtimeBase :: Parser RunTime
+runtimeBase = try indArit <|> indicator <|> aritRunTime
+
+
 runtime :: Parser RunTime
 runtime = buildExpressionParser table term
- where term =  try aritRunTime
+ where term =  try ((:**:) <$> (rational <* reservedOp "**") <*> parens01 runtimeBase)
+           <|> try (parens01 runtimeBase)
            <|> try (parens runtime)
        table = [ [ binary "++" (:++:), binary "--" (--:) ]]
-        
+
+-- | Parser para expresiones booleanas probabilistas 
+pbexp :: Parser PBExp
+pbexp = do 
+  q <- angles rational
+  return $ Ber q
+
+
+paexp :: Parser PAExp
+paexp = buildExpressionParser table term
+ where term =  try ((*~:) <$> (rational <* reservedOp "*~") <*> parens01 aexp)
+           <|> try (parens paexp)
+       table = [[ binary "+~" (++) ]]
+
+-- | Parser para expresiones booleanas probabilistas
+
 {-
 cmd :: Parser Cmd
 cmd = foldl Seq Skip <$> (statement `sepBy1` symbol ";")

@@ -247,13 +247,13 @@ rtVar :: Name -> RunTime
 rtVar x = RunTimeArit (Var x) 
 
 -- |Azúcar sintpactica para Función Indicatriz 
-indicator :: BExp -> RunTime
-indicator e_b = e_b :<>: rtOne
+toIndicator :: BExp -> RunTime
+toIndicator e_b = e_b :<>: rtOne
 
 -- | Azúcar sintáctica para operar una función indicatriz con una variable 
-(<>:) :: RunTime -> Name -> RunTime
-(e_b :<>: (RunTimeArit (Lit 1))) <>: x = e_b :<>: (rtVar x)
-otherwise <>: _ = error $ "El runtime no tiene la forma de indicatriz " ++ show otherwise
+(<>:) :: RunTime -> AExp -> RunTime
+(e_b :<>: (RunTimeArit (Lit 1))) <>: arit = e_b :<>: (RunTimeArit arit) 
+otherwise <>: _                           = error $ "El runtime no tiene la forma de indicatriz " ++ show otherwise
  ----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
 {-
 instance Show RunTime where                                         
@@ -315,6 +315,13 @@ type Distribution a   = [(PConstant, a)]
 
 -- | Distribuciones útiles
 type PAExp = Distribution AExp
+
+----------------------------------{ AZÚCAR SINTÁCTICA}----------------------------------------------
+-- | Azúcar sintáctica para generar una expresión aritmética
+--  probalilista singular
+(*~:) :: PConstant -> a -> [(PConstant, a)]
+q *~: a = [(q, a)]
+
 
 -- | Método para mostar un punto de la distribución 
 showPoint :: (PConstant, AExp) -> String
