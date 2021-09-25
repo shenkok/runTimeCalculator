@@ -47,12 +47,13 @@ parseWithWhitespace p = parseWithEof wrapper
 -- AExp en Forma Normal Débil aefnd
 -- aefnd = monomio | monomio + aefnd
 
-
+-- | Parser para escribir a los racionales como enteros
 rationalInteger :: Parser Rational
 rationalInteger = do
   n <- integer
   return $ toRational n
 
+-- | Parser para escribir a los racionales de la forma Int/Int
 rationalFractional :: Parser Rational
 rationalFractional = do
     whitespace
@@ -62,19 +63,23 @@ rationalFractional = do
     whitespace
     return $ (toRational num)/ (toRational den)
 
+-- | Parser para ecribir racionales
 rational :: Parser Rational
 rational = try rationalFractional <|> rationalInteger
 
+-- | Parser para escribir los literales de AExp
 rationalAExp :: Parser AExp
 rationalAExp = do
   q <- rational
   return $ Lit q
 
+-- | Parser para escibir las variables de AExp
 varAExp :: Parser AExp
 varAExp = do
   x <- identifier
   return $ Var x
 
+-- | Parser para AExp
 aexp :: Parser AExp
 aexp = buildExpressionParser table term 
  where term = try ((:*:) <$> (rational <* reservedOp "*") <*> varAExp)
@@ -83,6 +88,7 @@ aexp = buildExpressionParser table term
            <|> try (parens aexp)
        table = [[binary "+" (:+:), binary "-" (-:) ]]
 
+-- | Parser para BExp
 bexp :: Parser BExp
 bexp = buildExpressionParser table term
   where term =  True' <$ reserved "true"
@@ -101,9 +107,15 @@ bexp = buildExpressionParser table term
 -- RunTime en Forma Normal Débil o rtfnd
 -- rtfnd = rts| rts ++ rtfnd
 
+-- | Parser para RunTimes Aritméticos
+aritRunTime :: Parser RunTime
+aritRunTime = do
+  arit <- aexp
+  return $ RunTimeArit arit
+
 runtime :: Parser RunTime
 runtime = buildExpressionParser table term
- where term =  try (RunTimeArit <$> aexp)
+ where term =  try aritRunTime
            <|> try (parens runtime)
        table = [ [ binary "++" (:++:), binary "--" (--:) ]]
         

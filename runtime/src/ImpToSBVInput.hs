@@ -136,7 +136,7 @@ runTimeToArit :: RunTime -> AExp
 runTimeToArit (RunTimeArit arit) = arit
 runTimeToArit (e_1 :++: e_2)     = runTimeToArit e_1 :+: runTimeToArit e_2
 runTimeToArit (k :**: e)         = k :*: runTimeToArit e
-runTimeToArit _                  = error $ "No hay versión directa a AExp" ++ show otherwise
+runTimeToArit  otherwise         = error $ "No hay versión directa a AExp" ++ show otherwise
 
 -- Versión monádica de la función anterior
 -- @Fede: me gusta esta forma monádica de escribirlo :)

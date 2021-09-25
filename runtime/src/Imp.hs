@@ -225,6 +225,7 @@ data RunTime
   deriving (Eq, Show) -- ponderación por constante
 
 ----------------------------------{ AZÚCAR SINTÁCTICA } -----------------------------------------------------
+
 -- | Azúcar sintáctica para el menos
 (--:) :: RunTime -> RunTime -> RunTime
 runt_1 --: runt_2 = runt_1 :++: ((-1) :**: runt_2)
@@ -245,9 +246,14 @@ rtLit k = RunTimeArit (Lit k)
 rtVar :: Name -> RunTime
 rtVar x = RunTimeArit (Var x) 
 
--- |Azúcar para Función Indicatriz 
+-- |Azúcar sintpactica para Función Indicatriz 
 indicator :: BExp -> RunTime
 indicator e_b = e_b :<>: rtOne
+
+-- | Azúcar sintáctica para operar una función indicatriz con una variable 
+(<>:) :: RunTime -> Name -> RunTime
+(e_b :<>: (RunTimeArit (Lit 1))) <>: x = e_b :<>: (rtVar x)
+otherwise <>: _ = error $ "El runtime no tiene la forma de indicatriz " ++ show otherwise
  ----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
 {-
 instance Show RunTime where                                         

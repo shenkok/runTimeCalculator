@@ -30,7 +30,6 @@ library
       ImpParser
       ImpToSBV
       ImpToSBVInput
-      ParserExample
   other-modules:
       Paths_runtime
   hs-source-dirs:
