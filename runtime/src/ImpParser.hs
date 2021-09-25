@@ -157,15 +157,21 @@ paexp = buildExpressionParser table term
 
 -- | Parser para expresiones booleanas probabilistas
 
-{-
-cmd :: Parser Cmd
-cmd = foldl Seq Skip <$> (statement `sepBy1` symbol ";")
+program :: Parser Program
+program = foldl Seq Skip  <$> (statement `sepBy1` symbol ";")
   where statement =  If <$> (reserved "if" *> bexp)
-                        <*> braces cmd
-                        <*> (reserved "else" *> braces cmd)
+                        <*> braces program
+                        <*> (reserved "else" *> braces program)
+                 <|> PIf <$> (reserved "pif" *> pbexp)
+                        <*> braces program
+                        <*> (reserved "pelse" *> braces program)
                  <|> While <$> (reserved "while" *> bexp)
-                           <*> braces cmd
-                 <|> Set <$> (name <* reservedOp ":=") <*> aexp
+                           <*> braces runtime                 
+                           <*> braces program
+                 <|> PWhile <$> (reserved "pwhile" *> pbexp)
+                           <*> braces runtime                 
+                           <*> braces program
+                 <|> Set  <$> (identifier <* reservedOp ":=") <*> aexp
+                 <|> PSet <$> (identifier <* reservedOp ":~") <*> paexp
 
-parseCmd file = parse (cmd <* eof) file
--}
+--parseCmd file = parse (cmd <* eof) filmpty
