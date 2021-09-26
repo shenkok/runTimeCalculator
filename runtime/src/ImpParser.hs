@@ -104,6 +104,10 @@ bexp = buildExpressionParser table term
             <|> False' <$ reserved "false"
             <|> try ((:<=:) <$> (aexp <* reservedOp "<=") <*> aexp)
             <|> try ((:==:) <$> (aexp <* reservedOp "==") <*> aexp)
+            <|> try ((>=:)  <$> (aexp <* reservedOp ">=") <*> aexp)
+            <|> try ((>:)   <$> (aexp <* reservedOp ">")  <*> aexp)
+            <|> try ((<:)   <$> (aexp <* reservedOp "<")  <*> aexp)
+            <|> try ((!=:)  <$> (aexp <* reservedOp "!=") <*> aexp)            
             <|> try (parens bexp)
         table = [ [ Prefix (Not <$ reservedOp "!") ]
                 , [ binary "&&" (:&:), binary "||" (:|:) ]
@@ -151,7 +155,7 @@ pbexp = do
 
 paexp :: Parser PAExp
 paexp = buildExpressionParser table term
- where term =  try ((*~:) <$> (rational <* reservedOp "*~") <*> parens01 aexp)
+ where term =  try ((*~:) <$> (rational <* reservedOp "*~") <*> angles aexp)
            <|> try (parens paexp)
        table = [[ binary "+~" (++) ]]
 
@@ -164,13 +168,13 @@ program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
                         <*> (reserved "else" *> braces program)
                  <|> PIf <$> (reserved "pif" *> parens pbexp)
                         <*> braces program
-                        <*> (reserved "else" *> braces program)
+                        <*> (reserved "pelse" *> braces program)
                  <|> While <$> (reserved "while" *> parens bexp)
                            <*> braces program
                            <*>(reserved "invariant" *> braces runtime)      
                  <|> PWhile <$> (reserved "pwhile" *> parens pbexp)                
                            <*> braces program
-                           <*>(reserved "invariant" *> braces runtime)                       
+                           <*>(reserved "pinvariant" *> braces runtime)                       
                  <|> Set  <$> (identifier <* reservedOp ":=") <*> aexp
                  <|> PSet <$> (identifier <* reservedOp ":~") <*> paexp
                  <|> Skip <$ reserved "Skip"
