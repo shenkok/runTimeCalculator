@@ -129,7 +129,3 @@ completeRoutine program runt = do
                             mapM_ (uncurry showSolverInputs ) $ zip simplifyRest [1..len]
                             else putStr newLine
                         putStrLn "Calculo Finalizado"
-
-
-
-

@@ -165,12 +165,6 @@ program = foldl Seq Skip  <$> (statement `sepBy1` symbol ";")
                  <|> PIf <$> (reserved "pif" *> pbexp)
                         <*> braces program
                         <*> (reserved "pelse" *> braces program)
-                 <|> While <$> (reserved "while" *> bexp)
-                           <*> braces runtime                 
-                           <*> braces program
-                 <|> PWhile <$> (reserved "pwhile" *> pbexp)
-                           <*> braces runtime                 
-                           <*> braces program
                  <|> Set  <$> (identifier <* reservedOp ":=") <*> aexp
                  <|> PSet <$> (identifier <* reservedOp ":~") <*> paexp
 
