@@ -220,7 +220,7 @@ data RunTime
   | BExp :<>: RunTime -- multiplicación por una condición
   | RunTime :++: RunTime -- suma de RunTime
   | Constant :**: RunTime
-  deriving (Eq, Show) -- ponderación por constante
+  deriving (Eq) -- ponderación por constante
 
 ----------------------------------{ AZÚCAR SINTÁCTICA } -----------------------------------------------------
 
@@ -308,8 +308,12 @@ deepSimplifyRunTime (k :**: runt)      = simplifyRunTime (k :**: deepSimplifyRun
 ----------------------------------{ CONSTRUCCIONES PROBABILISTAS} ----------------------------------
 -- | Constante de dsitribuciones probabilisticas
 type PConstant        = Constant
+
+-- | Definición de una expresión porbabilista singletón
+type PBase a = (PConstant, a)
+
 -- | Definición de una distribución de tipo a
-type Distribution a   = [(PConstant, a)]
+type Distribution a   = [PBase a]
 
 -- | Distribuciones útiles
 type PAExp = Distribution AExp
@@ -317,9 +321,11 @@ type PAExp = Distribution AExp
 ----------------------------------{ AZÚCAR SINTÁCTICA}----------------------------------------------
 -- | Azúcar sintáctica para generar una expresión aritmética
 --  probalilista singular
-(*~:) :: PConstant -> a -> [(PConstant, a)]
-q *~: a = [(q, a)]
+(*~:) :: PConstant -> a -> Distribution a
+(*~:) q a = [(q, a)]
 
+(+~:) :: PAExp -> PAExp -> PAExp
+(+~:) = (++)
 
 -- | Método para mostar un punto de la distribución 
 showPoint :: (PConstant, AExp) -> String
@@ -334,7 +340,7 @@ showPAexp (x: xs)  = showPoint x
 newtype PBExp = Ber { p:: PConstant} deriving (Eq)
   
 instance Show PBExp where
-  show (Ber q) = "ber " ++ showLit q
+  show (Ber q) = "<" ++ showLit q ++ ">"
 
 -- | Masa de una distribución  a
 massDistribution :: Distribution a -> PConstant

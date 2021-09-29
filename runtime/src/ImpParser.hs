@@ -86,13 +86,11 @@ varAExp = do
 aexpBase :: Parser AExp
 aexpBase = try litAExp <|> varAExp
 
-aexp' :: Parser AExp
-aexp' = try ((:*:) <$> (rational <* reservedOp "*") <*> parens01 aexpBase)
-
 -- | Parser para AExp
 aexp :: Parser AExp
 aexp = buildExpressionParser table term 
  where term = try ((:*:) <$> (rational <* reservedOp "*") <*> aexpBase)
+           <|> try ((:*:) <$> (rational <* reservedOp "*") <*> parens aexp)
            <|> try aexpBase
            <|> try (parens aexp)
        table = [[binary "+" (:+:), binary "-" (-:) ]]
@@ -137,12 +135,13 @@ indArit =((<>:) <$> (indicator <* reservedOp "<>") <*> parens01 aexp)
 
 runtimeBase :: Parser RunTime
 runtimeBase = try indArit <|> indicator <|> aritRunTime
-
-
 runtime :: Parser RunTime
 runtime = buildExpressionParser table term
- where term =  try ((:**:) <$> (rational <* reservedOp "**") <*> parens01 runtimeBase)
-           <|> try (parens01 runtimeBase)
+ where term =  try ((:**:) <$> (rational <* reservedOp "**") <*> runtimeBase)
+           <|> try ((:**:) <$> (rational <* reservedOp "**") <*> parens runtime)
+           <|> try ((:<>:) <$> (brackets bexp <* reservedOp "<>") <*> runtimeBase)
+           <|> try ((:<>:) <$> (brackets bexp <* reservedOp "<>") <*>  parens runtime)
+           <|> try runtimeBase
            <|> try (parens runtime)
        table = [ [ binary "++" (:++:), binary "--" (--:) ]]
 
@@ -155,14 +154,14 @@ pbexp = do
 
 paexp :: Parser PAExp
 paexp = buildExpressionParser table term
- where term =  try ((*~:) <$> (rational <* reservedOp "*~") <*> angles aexp)
+ where term =  try ((*~:) <$> (rational <* reservedOp "*") <*> angles aexp)
            <|> try (parens paexp)
-       table = [[ binary "+~" (++) ]]
+       table = [[ binary "+" (++) ]]
 
 -- | Parser para expresiones booleanas probabilistas
 
 program :: Parser Program
-program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
+program = foldl Seq Skip  <$> (statement `sepBy1` symbol ";")
   where statement =  If <$> (reserved "if" *> parens bexp)
                         <*> braces program
                         <*> (reserved "else" *> braces program)
@@ -177,4 +176,14 @@ program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
                            <*>(reserved "pinvariant" *> braces runtime)                       
                  <|> Set  <$> (identifier <* reservedOp ":=") <*> aexp
                  <|> PSet <$> (identifier <* reservedOp ":~") <*> paexp
-                 <|> Skip <$ reserved "Skip"
+                 <|> Imp.Empty <$ reserved "empty"
+
+{-
+parseCmd file = parse (cmd <* eof) file
+
+run :: String -> IO ()
+run input = case parseCmd "<interactive>" input of
+  Left err  -> print err
+  Right cmd -> print $ evalCmd [] cmd
+
+-}
