@@ -60,7 +60,7 @@ data AExp
   | Var Name -- Variables x, y, z
   | AExp :+: AExp -- Suma de expresiones aritméticas
   | Constant :*: AExp
-  deriving (Eq, Show)  -- Ponderación por una constante
+  deriving (Eq)  -- Ponderación por una constante
 
 -----------------------------------------{ AZÚCAR SINTÁCTICA}------------------------------------------------
 (-:) :: AExp -> AExp -> AExp
@@ -68,7 +68,6 @@ arit_1 -: arit_2 = arit_1 :+: ((-1) :*: arit_2)
 
 ---------------------------------------- { FUNCIONES EXPRESIONES ARITMÉTICAS }--------------------------------
 -- | Definición del método show para AExp
-{-
 instance Show AExp where
   show (Lit n)           = showLit n
   show (Var x)           = show x
@@ -76,7 +75,6 @@ instance Show AExp where
   show (k :*: Lit n)     = showLit k ++  "*"  ++ showLit n
   show (k :*: Var x)     = showLit k ++  "*"  ++ show x 
   show (k :*: e_2)       = showLit k ++  "*(" ++ show e_2 ++")"
--}
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
 sustAExp _ _ (Lit n)             = Lit n
@@ -255,18 +253,18 @@ toIndicator e_b = e_b :<>: rtOne
 (e_b :<>: (RunTimeArit (Lit 1))) <>: arit = e_b :<>: (RunTimeArit arit) 
 otherwise <>: _                           = error $ "El runtime no tiene la forma de indicatriz " ++ show otherwise
  ----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
-{-
+
 instance Show RunTime where                                         
   show (RunTimeArit arit)               = show arit
   show (e_b :<>: RunTimeArit (Lit 1))   = "[" ++ show e_b ++ "]"
-  show (e_b :<>: RunTimeArit (Lit n))   = "[" ++ show e_b ++ "]*" ++ showLit n
-  show (e_b :<>: RunTimeArit (Var x))   = "[" ++ show e_b ++ "]*" ++ show x
-  show (e_b :<>: runt)                  = "[" ++ show e_b ++ "]*" ++ "(" ++ show runt ++ ")"
-  show (e_1 :++: e_2)                   = show e_1 ++ " + " ++ show e_2
-  show (k :**: RunTimeArit (Lit n))     = showLit k ++ "*" ++ showLit n
-  show (k :**: RunTimeArit (Var x))     = showLit k ++ "*" ++ show k
-  show (k :**: e_2)                     = showLit k ++ " * (" ++ show e_2 ++ ")"
--}
+  show (e_b :<>: RunTimeArit (Lit n))   = "[" ++ show e_b ++ "]<>" ++ showLit n
+  show (e_b :<>: RunTimeArit (Var x))   = "[" ++ show e_b ++ "]<>" ++ show x
+  show (e_b :<>: runt)                  = "[" ++ show e_b ++ "]<>" ++ "(" ++ show runt ++ ")"
+  show (e_1 :++: e_2)                   = show e_1 ++ " ++ " ++ show e_2
+  show (k :**: RunTimeArit (Lit n))     = showLit k ++ "**" ++ showLit n
+  show (k :**: RunTimeArit (Var x))     = showLit k ++ "**" ++ show k
+  show (k :**: e_2)                     = showLit k ++ "**(" ++ show e_2 ++ ")"
+
 -- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
 -- reemplaza todas las indicendias de "x" en la expresión runtIn por la expresión aritFor.
 sustRunTime :: Name -> AExp -> RunTime -> RunTime
