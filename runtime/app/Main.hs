@@ -17,7 +17,7 @@ import ImpParser
 -- li_lj representa el programa de la linea i a la j
 {-
     Programa 1
-0    x:= x - 1
+0    x:= x - 1;
 1    if(x>= y)
 2        skip
 3        y:= 2*x
@@ -124,14 +124,12 @@ solution =  do
     constrain $ x + y .<= 2
 
 
--- EJEMPLOS DE EPRESIONES PARSEADAS
+-- EJEMPLOS DE EPRESIONES PARSEADAS aexp 
 arit_1 = regularParse aexp "(9 + 10 + 11)"
 arit_2 = regularParse aexp "9*p0 + 10/6 - 11"
 arit_3 = regularParse aexp "9*p - 10/6*x - 11"
 arit_4 = regularParse aexp "-11"
-
-arit_5 = regularParse aexp' "2*x"
-arit_6 = regularParse aexp' "2*(x)"
+arit_5 = regularParse aexp "9*p - 10/6*x - 11*(1 + 3*y)"
 
 rtarit_1 = regularParse runtime "9 ++ 10 ++ 11"
 rtarit_2 = regularParse runtime "9*p ++ 10/6 -- 11"
