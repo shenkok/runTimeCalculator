@@ -163,8 +163,8 @@ data BExp
 (<:) arit_1 arit_2 = Not $ arit_2 :<=: arit_1
 
 -- | Azúcar sintáctica para /=
-(!=:) :: AExp -> AExp -> BExp
-(!=:) arit_1 arit_2 = Not $ arit_1 :==: arit_2
+(/=:) :: AExp -> AExp -> BExp
+(/=:) arit_1 arit_2 = Not $ arit_1 :==: arit_2
 
 ---------------------------------- { FUNCIONES EXPRESIONES BOOLEANAS } ------------------------------------------
 

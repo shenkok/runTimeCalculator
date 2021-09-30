@@ -105,7 +105,7 @@ bexp = buildExpressionParser table term
             <|> try ((>=:)  <$> (aexp <* reservedOp ">=") <*> aexp)
             <|> try ((>:)   <$> (aexp <* reservedOp ">")  <*> aexp)
             <|> try ((<:)   <$> (aexp <* reservedOp "<")  <*> aexp)
-            <|> try ((!=:)  <$> (aexp <* reservedOp "!=") <*> aexp)            
+            <|> try ((/=:)  <$> (aexp <* reservedOp "!=") <*> aexp)            
             <|> try (parens bexp)
         table = [ [ Prefix (Not <$ reservedOp "!") ]
                 , [ binary "&&" (:&:), binary "||" (:|:) ]
@@ -135,6 +135,7 @@ indArit =((<>:) <$> (indicator <* reservedOp "<>") <*> parens01 aexp)
 
 runtimeBase :: Parser RunTime
 runtimeBase = try indArit <|> indicator <|> aritRunTime
+
 runtime :: Parser RunTime
 runtime = buildExpressionParser table term
  where term =  try ((:**:) <$> (rational <* reservedOp "**") <*> runtimeBase)
@@ -151,39 +152,32 @@ pbexp = do
   q <- angles rational
   return $ Ber q
 
-
 paexp :: Parser PAExp
 paexp = buildExpressionParser table term
- where term =  try ((*~:) <$> (rational <* reservedOp "*") <*> angles aexp)
+ where term =  try ((*~:) <$> (rational <* reservedOp "*") <*> brackets aexp)
            <|> try (parens paexp)
        table = [[ binary "+" (++) ]]
 
 -- | Parser para expresiones booleanas probabilistas
 
 program :: Parser Program
-program = foldl Seq Skip  <$> (statement `sepBy1` symbol ";")
-  where statement =  If <$> (reserved "if" *> parens bexp)
+program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
+  where statement = If <$> try (reserved "if" *> parens bexp)
                         <*> braces program
                         <*> (reserved "else" *> braces program)
-                 <|> PIf <$> (reserved "pif" *> parens pbexp)
+                 <|> PIf <$> try (reserved "pif" *> parens pbexp)
                         <*> braces program
                         <*> (reserved "pelse" *> braces program)
-                 <|> While <$> (reserved "while" *> parens bexp)
+                 <|> While <$> try (reserved "while" *> parens bexp)
                            <*> braces program
                            <*>(reserved "invariant" *> braces runtime)      
-                 <|> PWhile <$> (reserved "pwhile" *> parens pbexp)                
+                 <|> PWhile <$> try (reserved "pwhile" *> parens pbexp)                
                            <*> braces program
                            <*>(reserved "pinvariant" *> braces runtime)                       
-                 <|> Set  <$> (identifier <* reservedOp ":=") <*> aexp
-                 <|> PSet <$> (identifier <* reservedOp ":~") <*> paexp
+                 <|> Set   <$> try (identifier <* reservedOp ":=") <*> aexp
+                 <|> PSet  <$> try (identifier <* reservedOp ":~") <*> paexp
+                 <|> Skip  <$ reserved "skip"
                  <|> Imp.Empty <$ reserved "empty"
 
-{-
-parseCmd file = parse (cmd <* eof) file
 
-run :: String -> IO ()
-run input = case parseCmd "<interactive>" input of
-  Left err  -> print err
-  Right cmd -> print $ evalCmd [] cmd
-
--}
+parseProgram file = parse (program <* eof) file
