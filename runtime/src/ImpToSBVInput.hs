@@ -103,7 +103,6 @@ findConditionRunTime runt = rmdups conds
     conds = f runt
     f (RunTimeArit _)        = []
     f ((Not bexp) :<>: runt) = bexp : findConditionRunTime runt
-    -- @Fede: para mejorar la eficiencia, es preferible escribir bexp : (findConditionRunTime runt)
     f (bexp :<>: runt)       = bexp : findConditionRunTime runt
     f (e_1 :++: e_2)         = findConditionRunTime e_1 ++ findConditionRunTime e_2
     f (_ :**: runt)          = findConditionRunTime runt
@@ -195,3 +194,4 @@ restrictionsToSolver rest = zip3 contexts eval_arit free_vars' -- 0
     free_vars_rest = map (foldRes (++) freeVars) eval_arit -- 8
     free_vars = map rmdups (zipWith (++) free_vars_bool free_vars_rest) -- 9
     free_vars' = map (filter (/= "")) free_vars -- 10
+

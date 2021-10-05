@@ -63,3 +63,10 @@ makeSBVModel sinput = do
                     let env = M.fromList (zip names xs)
                     constrain (sAnd (map (sBExp env) context))
 
+routineInput :: Program -> RunTime -> ([[IO SatResult]], [[SolverInput]], RunTime)
+routineInput program runt = (problems, inputs, sert) where
+    (ert, rests) = vcGenerator program runt
+    sert         = deepSimplifyRunTime ert
+    inputs       = map restrictionsToSolver rests
+    problems     = map (map $ sat.makeSBVModel) inputs
+

@@ -27,7 +27,7 @@ dependencies:
 - sbv
 - text
 - parsec
-- mtl
+- ilist
 library:
   source-dirs: src
 

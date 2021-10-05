@@ -20,25 +20,6 @@ whitespace = void $ many $ oneOf " \n\t"
 
 regularParse :: Parser a -> String -> Either ParseError a
 regularParse p = parse p ""
-
-parseWithEof :: Parser a -> String -> Either ParseError a
-parseWithEof p = parse (p <* eof) ""
-
-parseWithLeftOver :: Parser a -> String -> Either ParseError (a,String)
-parseWithLeftOver p = parse ((,) <$> p <*> leftOver) ""
-   where leftOver = manyTill anyToken eof
-
-parseWithWSEof :: Parser a -> String -> Either ParseError a
-parseWithWSEof p = parseWithEof (whiteSpace *> p)
-   where whiteSpace = void $ many $ oneOf " \n\t"
-
-parseWithWhitespace :: Parser a -> String -> Either ParseError a
-parseWithWhitespace p = parseWithEof wrapper
-  where
-    wrapper = do
-        whitespace
-        p
-
 --------------------------------------------------------------------------- {PARSER PARA EXPRESIONES ARITMÉTICAS}---------------------------------
 -- | Parser que permite encerrar entre 0 o 1 parentesis una expresión
 parens01 :: Parser a -> Parser a
@@ -154,7 +135,7 @@ pbexp = do
 
 paexp :: Parser PAExp
 paexp = buildExpressionParser table term
- where term =  try ((*~:) <$> (rational <* reservedOp "*") <*> brackets aexp)
+ where term =  try ((*~:) <$> (rational <* reservedOp "*") <*> angles aexp)
            <|> try (parens paexp)
        table = [[ binary "+" (++) ]]
 
@@ -173,7 +154,7 @@ program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
                            <*>(reserved "invariant" *> braces runtime)      
                  <|> PWhile <$> try (reserved "pwhile" *> parens pbexp)                
                            <*> braces program
-                           <*>(reserved "pinvariant" *> braces runtime)                       
+                           <*>(reserved "pinvariant" *> braces runtime)                  
                  <|> Set   <$> try (identifier <* reservedOp ":=") <*> aexp
                  <|> PSet  <$> try (identifier <* reservedOp ":~") <*> paexp
                  <|> Skip  <$ reserved "skip"

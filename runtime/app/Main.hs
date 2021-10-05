@@ -7,6 +7,7 @@ import ImpToSBVInput
 import Data.Ratio
 import Data.SBV
 import Data.SBV.Rational
+import Data.Maybe
 import ImpParser
 --import System.IO.Unsafe
 -- unsafePerformIO a
@@ -38,11 +39,11 @@ l9 = Set "y" (Lit 5)
 l5_l9 = If (Lit 8 :<=: Var "w") (Seq l6 l7) l9
 l1_l9 = If (Var "y" :<=: Var "x") (Seq l2 l3) l5_l9
 
-programa1 :: Program
-programa1 = Seq l0 l1_l9
+programa1' :: Program
+programa1' = Seq l0 l1_l9
 
 -- EJEMPLOS
-(runt, _) = vcGenerator0 programa1
+(runt, _) = vcGenerator0 programa1'
 
 -- [w < 8]*4 + [w>=8]*5
 sumando1 = (Var "w" <: Lit 8) :<>: rtLit 5
@@ -61,8 +62,8 @@ input = showSolverInputs restriction 1
             Empty
         Invariante correcto
 -}
-programa2 :: Program
-programa2 = While False' Empty (rtLit 5)
+programa2' :: Program
+programa2' = While False' Empty (rtLit 5)
 
 {-
     Programa 3
@@ -71,8 +72,8 @@ programa2 = While False' Empty (rtLit 5)
         Invariante incorrecto
 -}
 
-programa3 :: Program
-programa3 = While True' Skip (rtLit 5)
+programa3' :: Program
+programa3' = While True' Skip (rtLit 5)
 
 {-
     Programa 4
@@ -86,8 +87,8 @@ invP4 = rtOne :++: RunTimeArit (2 :*:Var "x")
 condP4 = Lit 0 :<=: Var "x"
 bodyP4 = Set "x" (Var "x" :+: Lit (-1))
 
-programa4 :: Program
-programa4 = While condP4 bodyP4 invP4
+programa4' :: Program
+programa4' = While condP4 bodyP4 invP4
 
 {-
     p*<true> + (1-p)*<false> = ber p
@@ -103,8 +104,8 @@ programa4 = While condP4 bodyP4 invP4
             }
         }
 -}
-programa5 :: Program
-programa5 = PIf (Ber 0.5)
+programa5' :: Program
+programa5' = PIf (Ber 0.5)
                 (Set "succ" (Lit 1))
                 (PIf (Ber 0.5)
                     (Set "succ" (Lit 1))
@@ -114,32 +115,45 @@ programa5 = PIf (Ber 0.5)
         c:~ 1/2*0 + 1/2*1
 -}
  
-invariante6 :: RunTime
+invariante6:: RunTime
 invariante6 = rtOne :++: ((Var "c":==: Lit 1) :<>: rtLit 4)  
-programa6 :: Program
-programa6 = While (Var "c":==: Lit 1) (PSet "c" (uniformN 2)) invariante6
+programa6' :: Program
+programa6' = While (Var "c":==: Lit 1) (PSet "c" (uniformN 2)) invariante6
 
-solution =  do 
-    [x, y] <- sFloats ["x", "z"]
-    constrain $ x + y .<= 2
+solution :: SymbolicT IO ()
+solution =  do
+    [x, y, z] <- sRationals ["x", "y", "z" ]
+    constrain $ x + y .< 10
+    constrain $ x .<= z
+
+solution1 :: SymbolicT IO ()
+solution1 = do
+    [x, y, z] <- sRationals ["x", "y", "z" ]
+    constrain $ x  .< 10
+    constrain $ x .> 100
+
+solution2 :: SymbolicT IO ()
+solution2 = do
+    [x, y, z] <- sRationals ["x", "y", "z" ]
+    constrain $ z  .< 10
+    constrain $ x .> 100
+
+solution3 :: SymbolicT IO ()
+solution3 = do
+    [x, y, z] <- sRationals ["x", "y", "z" ]
+    constrain $ z  .< 10
+    constrain $ x .> 100
 
 
--- EJEMPLOS DE EPRESIONES PARSEADAS aexp 
-arit_1 = regularParse aexp "(9 + 10 + 11)"
-arit_2 = regularParse aexp "9*p0 + 10/6 - 11"
-arit_3 = regularParse aexp "9*p - 10/6*x - 11"
-arit_4 = regularParse aexp "-11"
-arit_5 = regularParse aexp "9*p - 10/6*x - 11*(1 + 3*y)"
+showModel :: SymbolicT IO () -> [String] -> IO ()
+showModel solution xs = do
+    solution' <- sat solution
+    let showValue  x = putStrLn $ x ++ ":= " ++ (showLit $ fromMaybe 0 (flip getModelValue solution' x :: Maybe Rational))
+    mapM_ showValue xs
 
-rtarit_1 = regularParse runtime "9 ++ 10 ++ 11"
-rtarit_2 = regularParse runtime "9*p ++ 10/6 -- 11"
-rtarit_3 = regularParse runtime "9*p -- 10/6*x -- 11"
-rtarit_4 = regularParse runtime "-11"
-ind_1 = regularParse runtime "[true]"
-ind_2 = regularParse runtime "[a <= x] ++ 33 -- 23 "
-ind_3 = regularParse runtime "2**[f == 3*x + 5/2] <> w"
-
+lista :: [[SymbolicT IO ()]]
+lista = [[solution, solution1], [solution3], [solution2]]
 --------------------------------------------------{ }----------------------------------------------------------------------------------
 
 main :: IO ()
-main =  completeRoutine programa4 rtZero
+main =  completeRoutine programa4' rtZero

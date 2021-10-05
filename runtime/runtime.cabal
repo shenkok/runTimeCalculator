@@ -28,6 +28,8 @@ library
       Imp
       ImpIO
       ImpParser
+      ImpProgram
+      ImpToIO
       ImpToSBV
       ImpToSBVInput
   other-modules:
@@ -37,7 +39,7 @@ library
   build-depends:
       base >=4.5 && <5
     , containers >=0.5
-    , mtl
+    , ilist
     , parsec
     , sbv
     , semigroups >=0.5
@@ -55,7 +57,7 @@ executable runtime-exe
   build-depends:
       base >=4.5 && <5
     , containers >=0.5
-    , mtl
+    , ilist
     , parsec
     , runtime
     , sbv
@@ -75,7 +77,7 @@ test-suite runtime-test
   build-depends:
       base >=4.5 && <5
     , containers >=0.5
-    , mtl
+    , ilist
     , parsec
     , runtime
     , sbv

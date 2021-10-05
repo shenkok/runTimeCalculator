@@ -390,14 +390,21 @@ data Program
   | PWhile PBExp Program RunTime
   deriving (Eq, Show) -- ciclo while
 
-{-
-instance Show  where
-  show Skip               = "skip"
-  show Empty              = "empty"
-  show (Set name arit)    = show name ++ " := " ++ show arit
-  show (PSet name paexp)  = show name ++ " :~ " ++ showPAexp paexp
-  show (Seq c_1  c_2)     = show c_1 ++ newLine ++ show c_2 ++ ";"
-  show (If be c_t c_f)    = "if (" ++ show be ++ "):" ++ newLine ++ index ++ "{" ++ show c_t ++ "}"
-                                   ++ newLine ++ "else:" ++ newLine ++ index ++ "{" ++ c_f ++ "}"
-  show
-  -}
+-- | Simplificador de Programas
+-- Simplifica la expresión entregada por el parser
+
+
+simplifyProgram :: Program -> Program
+simplifyProgram (Seq Empty program) = program
+simplifyProgram otherwise           = otherwise
+
+deepSimplifyProgram :: Program -> Program
+deepSimplifyProgram Skip                           = Skip
+deepSimplifyProgram Empty                          = Empty
+deepSimplifyProgram (Set name arit)                = Set name arit
+deepSimplifyProgram (PSet name parit)              = PSet name parit
+deepSimplifyProgram (Seq program_1 program_2)      = simplifyProgram (Seq (deepSimplifyProgram program_1) (deepSimplifyProgram program_2))
+deepSimplifyProgram (If e_b program_1 program_2)   = If e_b (deepSimplifyProgram program_1) (deepSimplifyProgram program_2)
+deepSimplifyProgram (PIf pe_b program_1 program_2) = PIf pe_b (deepSimplifyProgram program_1) (deepSimplifyProgram program_2)
+deepSimplifyProgram (While e_b program runt)       = While e_b (deepSimplifyProgram program) runt
+deepSimplifyProgram (PWhile pe_b program runt)     = PWhile pe_b (deepSimplifyProgram program) runt
