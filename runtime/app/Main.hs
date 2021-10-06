@@ -145,11 +145,7 @@ solution3 = do
     constrain $ x .> 100
 
 
-showModel :: SymbolicT IO () -> [String] -> IO ()
-showModel solution xs = do
-    solution' <- sat solution
-    let showValue  x = putStrLn $ x ++ ":= " ++ (showLit $ fromMaybe 0 (flip getModelValue solution' x :: Maybe Rational))
-    mapM_ showValue xs
+
 
 lista :: [[SymbolicT IO ()]]
 lista = [[solution, solution1], [solution3], [solution2]]
