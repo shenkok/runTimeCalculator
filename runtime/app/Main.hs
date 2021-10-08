@@ -1,9 +1,9 @@
 module Main where
 
-import ImpToSBV
+import ImpSBV
 import Imp
 import ImpIO
-import ImpToSBVInput
+import ImpVCGen
 import Data.Ratio
 import Data.SBV
 import Data.SBV.Rational

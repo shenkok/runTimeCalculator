@@ -248,7 +248,7 @@ rtVar x = RunTimeArit (Var x)
 toIndicator :: BExp -> RunTime
 toIndicator e_b = e_b :<>: rtOne
 
--- | Azúcar sintáctica para operar una función indicatriz con una variable 
+-- | Azúcar sintáctica para operar una función indicatriz con expresión aritmética
 (<>:) :: RunTime -> AExp -> RunTime
 (e_b :<>: (RunTimeArit (Lit 1))) <>: arit = e_b :<>: (RunTimeArit arit) 
 otherwise <>: _                           = error $ "El runtime no tiene la forma de indicatriz " ++ show otherwise
@@ -408,3 +408,13 @@ deepSimplifyProgram (If e_b program_1 program_2)   = If e_b (deepSimplifyProgram
 deepSimplifyProgram (PIf pe_b program_1 program_2) = PIf pe_b (deepSimplifyProgram program_1) (deepSimplifyProgram program_2)
 deepSimplifyProgram (While e_b program runt)       = While e_b (deepSimplifyProgram program) runt
 deepSimplifyProgram (PWhile pe_b program runt)     = PWhile pe_b (deepSimplifyProgram program) runt
+
+----------------------------------{ AZÚCAR SINTÁCTICA PARA PROGRAMAS }-----------------------------------------------------
+
+-- | Azúcar sintáctica para If con Empty en la rama false y un programa en la rama True
+ift :: BExp -> Program -> Program
+ift b program = If b program Empty
+
+-- | Azúcar sintáctica para PIf con Empty en la rama false y un programa en la rama True
+pift :: PBExp -> Program -> Program
+pift ber program = PIf ber program Empty

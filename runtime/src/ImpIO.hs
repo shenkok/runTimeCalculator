@@ -1,9 +1,9 @@
 module ImpIO where
 
 import Data.SBV
-import ImpToSBV
+import ImpSBV
 import Imp
-import ImpToSBVInput
+import ImpVCGen
 {-
     MODULO QUE SE ENCARGA SE IMPRIMIR LAS DIFERENTES VARIABLES DEL PROBLEMA ESTUDIADO
 -}

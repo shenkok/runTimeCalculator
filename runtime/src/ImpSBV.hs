@@ -1,11 +1,11 @@
-module ImpToSBV where
+module ImpSBV where
 
 import Data.SBV
 import qualified Data.Map as M
 import Data.Maybe
 import Imp
 import Data.SBV.Rational
-import ImpToSBVInput
+import ImpVCGen
 {-
     MODULO QUE SE ENCARGA DE HACER EL PARSER ENTRE LOS LENGUAJES IMPERATIVOS Y LAS VARIABLES DE SBV
 -}

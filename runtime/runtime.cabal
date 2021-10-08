@@ -29,9 +29,9 @@ library
       ImpIO
       ImpParser
       ImpProgram
+      ImpSBV
       ImpToIO
-      ImpToSBV
-      ImpToSBVInput
+      ImpVCGen
   other-modules:
       Paths_runtime
   hs-source-dirs:

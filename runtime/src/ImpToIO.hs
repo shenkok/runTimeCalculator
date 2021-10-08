@@ -1,9 +1,9 @@
 module ImpToIO where
 
 import Data.SBV
-import ImpToSBV
+import ImpSBV
 import Imp
-import ImpToSBVInput
+import ImpVCGen
 
 uncurry3                        :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f ~(a, b, c)           = f a b c
@@ -32,6 +32,7 @@ showRestrictions :: [RRunTime] -> Int -> String
 showRestrictions [] _     = newLine
 showRestrictions (x:xs) n = (index n) ++ space ++ (show x) ++ (showRestrictions xs (n-1))
 
+{-
 showModel :: IO SatResult -> [String] -> IO ()
 showModel solution xs = do
     solution' <- solution
@@ -39,6 +40,7 @@ showModel solution xs = do
     mapM_ showValue xs
 
 -- | Muestra la transformada calculada y las restricciones que se generaron
+
 showTransform :: RunTime -> [RRunTime] -> Int ->IO()
 showTransform ert restrictions n = if n > 0
                                        then do 
@@ -71,7 +73,7 @@ showSolverInput model (contexto, rest, vars) b n m = do
       else putStrLn "El Sub-problema es válido"
   putStrLn $ concat (replicate 100 "-")
 
-showSolverInputs :: RRunTime -> [IO SatResult] -> [SolverInput] -> [IO Bool] -> Int -> IO() -
+showSolverInputs :: RRunTime -> [IO SatResult] -> [SolverInput] -> [IO Bool] -> Int -> IO()
 showSolverInputs runtr models inputs bs n = do
   let m = length inputs
   let b_restrict = foldl ioAnd (pure True) bs
@@ -119,3 +121,4 @@ completeRoutine program runt = do
                               else putStrLn "Existen invariantes NO válidos, por favor reviselos e intentelo otra vez"
                             else putStr newLine
                         putStrLn "Calculo Finalizado"
+-}

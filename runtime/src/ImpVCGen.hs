@@ -1,4 +1,4 @@
-module ImpToSBVInput where
+module ImpVCGen where
 
 import Imp
 
@@ -87,8 +87,35 @@ vcGenerator (PWhile pe_b c inv) runt = (inv, (l_inv :!<=: inv) : snd vc_p)
 vcGenerator0 :: Program -> (RunTime, [RRunTime])
 vcGenerator0 program = vcGenerator program rtZero
 
+----------------------------------{ OMEGA - CPO TÓPICOS}-------------------------------------------------
 
----------------------------{ PREPARACIÓN PARA SBV }-------------------------------------------------
+bottom :: RunTime
+bottom = rtLit 0
+
+top :: RunTime
+top = rtLit (1/0)
+
+-- | Función característica de un while
+cfWhile :: BExp -> Program -> RunTime -> RunTime -> RunTime  
+cfWhile b program runt x = rtOne :++: (((Not b) :<>: runt) :++: (b :<>: (fst (vcGenerator program x))))
+
+-- | Función característica de un pwhile
+cfPWhile :: PBExp -> Program -> RunTime -> RunTime ->  RunTime 
+cfPWhile (Ber p) program runt x = rtOne :++: (((1 - p) :**: runt) :++: (p :**: (fst (vcGenerator program x))))
+
+-- | Iteración de punto fijo para un while
+fpWhile ::  RunTime -> BExp -> Program -> RunTime -> Integer -> RunTime
+fpWhile x b program runt 0 = x
+fpWhile x b program runt n = fpWhile (cfw x) b program runt (n - 1) where
+  cfw = cfWhile b program runt
+
+-- | Iteración de punto fijo para un pwhile
+fpPWhile ::  RunTime -> PBExp -> Program -> RunTime -> Integer -> RunTime
+fpPWhile x ber program runt 0 = x
+fpPWhile x ber program runt n = fpPWhile (cfpw x) ber program runt (n - 1) where
+  cfpw = cfPWhile ber program runt
+
+-----------------------------------------------{PREPARACIÓN PARA SBV} -----------------------------------------
 
 type Context = [BExp]
 
