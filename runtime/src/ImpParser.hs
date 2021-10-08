@@ -47,6 +47,7 @@ rationalFractional = do
     whitespace
     return $ (toRational num)/ (toRational den)
 
+
 -- | Parser para ecribir racionales
 rational :: Parser Rational
 rational = try rationalFractional <|> rationalInteger
@@ -75,6 +76,13 @@ aexp = buildExpressionParser table term
            <|> try aexpBase
            <|> try (parens aexp)
        table = [[binary "+" (:+:), binary "-" (-:) ]]
+
+aexp' :: Parser AExp
+aexp' = do
+  void $ char '<'
+  arit <- aexp
+  void $ char '>'
+  return arit
 
 -- | Parser para BExp
 bexp :: Parser BExp
@@ -146,19 +154,22 @@ program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
   where statement = If <$> try (reserved "if" *> parens bexp)
                         <*> braces program
                         <*> (reserved "else" *> braces program)
+                 <|> ift <$> try (reserved "ift" *> parens bexp)
+                     <*> braces program       
                  <|> PIf <$> try (reserved "pif" *> parens pbexp)
-                        <*> braces program
-                        <*> (reserved "pelse" *> braces program)
-                 <|> While <$> try (reserved "while" *> parens bexp)
-                           <*> braces program
-                           <*>(reserved "invariant" *> braces runtime)      
-                 <|> PWhile <$> try (reserved "pwhile" *> parens pbexp)                
-                           <*> braces program
-                           <*>(reserved "pinvariant" *> braces runtime)                  
-                 <|> Set   <$> try (identifier <* reservedOp ":=") <*> aexp
-                 <|> PSet  <$> try (identifier <* reservedOp ":~") <*> paexp
-                 <|> Skip  <$ reserved "skip"
+                      <*> braces program
+                      <*> (reserved "pelse" *> braces program)
+                 <|> pift <$> try (reserved "pift" *> parens pbexp)
+                        <*> braces program   
+                 <|> flipw While <$> try (reserved "while" *> parens bexp)
+                          <*> braces (reserved "inv" *> reserved "=" *> runtime)
+                          <*> braces program   
+                 <|> flipw PWhile <$> try (reserved "pwhile" *> parens pbexp)                
+                          <*> braces (reserved "pinv" *> reserved "=" *> runtime)
+                          <*> braces program
+                 <|> Set  <$> try (identifier <* reservedOp ":=") <*> aexp
+                 <|> PSet <$> try (identifier <* reservedOp ":~") <*> paexp
+                 <|> Skip <$ reserved "skip"
                  <|> Imp.Empty <$ reserved "empty"
-
 
 parseProgram file = parse (program <* eof) file

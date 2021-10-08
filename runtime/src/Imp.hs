@@ -389,11 +389,11 @@ data Program
   | While BExp Program RunTime -- ciclo while probabilista
   | PWhile PBExp Program RunTime
   deriving (Eq, Show) -- ciclo while
-
--- | Simplificador de Programas
--- Simplifica la expresión entregada por el parser
-
-
+-------------------------------------------{ FUNCIONES AUXILIARES }----------------------------------------------------------
+-- | Función flip para usar en el while
+flipw :: (a -> b -> c -> d) -> a -> c -> b -> d
+flipw f b p runt = f b runt p
+-------------------------------------------{ SIMPLIFICADOR PORGRAMAS } ------------------------------------------------------
 simplifyProgram :: Program -> Program
 simplifyProgram (Seq Empty program) = program
 simplifyProgram otherwise           = otherwise

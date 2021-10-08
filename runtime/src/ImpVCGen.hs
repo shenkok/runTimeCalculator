@@ -93,7 +93,7 @@ bottom :: RunTime
 bottom = rtLit 0
 
 top :: RunTime
-top = rtLit (1/0)
+top = rtLit $ toRational (1/0)
 
 -- | Función característica de un while
 cfWhile :: BExp -> Program -> RunTime -> RunTime -> RunTime  
@@ -106,13 +106,13 @@ cfPWhile (Ber p) program runt x = rtOne :++: (((1 - p) :**: runt) :++: (p :**: (
 -- | Iteración de punto fijo para un while
 fpWhile ::  RunTime -> BExp -> Program -> RunTime -> Integer -> RunTime
 fpWhile x b program runt 0 = x
-fpWhile x b program runt n = fpWhile (cfw x) b program runt (n - 1) where
+fpWhile x b program runt n = cfw (fpWhile x b program runt (n - 1)) where
   cfw = cfWhile b program runt
 
 -- | Iteración de punto fijo para un pwhile
 fpPWhile ::  RunTime -> PBExp -> Program -> RunTime -> Integer -> RunTime
 fpPWhile x ber program runt 0 = x
-fpPWhile x ber program runt n = fpPWhile (cfpw x) ber program runt (n - 1) where
+fpPWhile x ber program runt n = cfpw (fpPWhile x ber program runt (n - 1)) where
   cfpw = cfPWhile ber program runt
 
 -----------------------------------------------{PREPARACIÓN PARA SBV} -----------------------------------------
@@ -165,7 +165,6 @@ runTimeToArit (k :**: e)         = k :*: runTimeToArit e
 runTimeToArit  otherwise         = error $ "No hay versión directa a AExp" ++ show otherwise
 
 -- Versión monádica de la función anterior
--- @Fede: me gusta esta forma monádica de escribirlo :)
 runTimeToArit' :: RunTime -> Maybe AExp
 runTimeToArit' (RunTimeArit arit) = Just arit
 runTimeToArit' (e_1 :++: e_2) = do
