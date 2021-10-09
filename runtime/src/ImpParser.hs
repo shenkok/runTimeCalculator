@@ -151,15 +151,15 @@ paexp = buildExpressionParser table term
 
 program :: Parser Program
 program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
-  where statement = If <$> try (reserved "if" *> parens bexp)
+  where statement = If <$> try (reserved "ite" *> parens bexp)
                         <*> braces program
                         <*> (reserved "else" *> braces program)
-                 <|> ift <$> try (reserved "ift" *> parens bexp)
+                 <|> it <$> try (reserved "it" *> parens bexp)
                      <*> braces program       
-                 <|> PIf <$> try (reserved "pif" *> parens pbexp)
+                 <|> PIf <$> try (reserved "pite" *> parens pbexp)
                       <*> braces program
                       <*> (reserved "pelse" *> braces program)
-                 <|> pift <$> try (reserved "pift" *> parens pbexp)
+                 <|> pit <$> try (reserved "pit" *> parens pbexp)
                         <*> braces program   
                  <|> flipw While <$> try (reserved "while" *> parens bexp)
                           <*> braces (reserved "inv" *> reserved "=" *> runtime)

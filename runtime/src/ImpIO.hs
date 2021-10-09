@@ -40,13 +40,15 @@ showRestrictions (x:xs) n = (index n) ++ space ++ (show x) ++ (showRestrictions 
 
 -- | Muestra la transformada calculada y las restricciones que se generaron
 showTransform :: RunTime -> [RRunTime] -> Int ->IO()
-showTransform ert restrictions n = if n > 0
+showTransform ert restrictions n = do
+                                    putStrLn "Tiempo de ejecución calculado:"
+                                    putStrLn $ show ert
+                                    putStr newLine
+                                    if n > 0
                                        then do 
-                                          putStrLn "Tiempo de ejecución calculado:"
-                                          putStrLn $ show ert
-                                          putStr newLine
                                           putStrLn "Obligaciones de prueba asociadas:"
                                           putStrLn $ showRestrictions restrictions n
+                                          putStr newLine
                                         else
                                           putStrLn "No hay obligaciones de prueba asociadas"
 

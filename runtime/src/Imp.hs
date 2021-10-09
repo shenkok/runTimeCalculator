@@ -166,6 +166,10 @@ data BExp
 (/=:) :: AExp -> AExp -> BExp
 (/=:) arit_1 arit_2 = Not $ arit_1 :==: arit_2
 
+-- | Convierte boolealos en BExp
+toBExp :: Bool -> BExp
+toBExp True  = True'
+toBExp False = False'
 ---------------------------------- { FUNCIONES EXPRESIONES BOOLEANAS } ------------------------------------------
 
 -- | Función de sustitución toma una variable "x", un AExp aritFor y una expresión booleana AritIn
@@ -193,16 +197,21 @@ freeVarsBExp (Not b)              = freeVarsBExp b
 
 -- | Reglas de un sólo paso para simplificar un BExp
 simplifyBExp :: BExp -> BExp
-simplifyBExp (True' :|: _)    = True'
-simplifyBExp (_ :|: True')    = True'
-simplifyBExp (e_b :|: False') = e_b
-simplifyBExp (False' :|: e_b) = e_b
-simplifyBExp (False' :&: _)   = False'
-simplifyBExp (_ :&: False')   = False'
-simplifyBExp (True' :&: e_b)  = e_b
-simplifyBExp (e_b :&: True')  = e_b
-simplifyBExp (Not (Not e_b))  = e_b
-simplifyBExp otherwise        = otherwise
+simplifyBExp (Lit q :<=: Lit p) = toBExp (q <= p)
+simplifyBExp (e_b1 :<=: e_b2)   = toBExp (e_b1 == e_b2)
+simplifyBExp (e_b1 :==: e_b2)   = toBExp (e_b1 == e_b2)
+simplifyBExp (True' :|: _)      = True'
+simplifyBExp (_ :|: True')      = True'
+simplifyBExp (e_b :|: False')   = e_b
+simplifyBExp (False' :|: e_b)   = e_b
+simplifyBExp (False' :&: _)     = False'
+simplifyBExp (_ :&: False')     = False'
+simplifyBExp (True' :&: e_b)    = e_b
+simplifyBExp (e_b :&: True')    = e_b
+simplifyBExp (Not (Not e_b))    = e_b
+simplifyBExp (Not (True'))      = False'
+simplifyBExp (Not(False'))      = True'
+simplifyBExp otherwise          = otherwise
 
 -- | Reglas recursivas para simplificar un BExp
 deepSimplifyBExp :: BExp -> BExp
@@ -412,9 +421,9 @@ deepSimplifyProgram (PWhile pe_b program runt)     = PWhile pe_b (deepSimplifyPr
 ----------------------------------{ AZÚCAR SINTÁCTICA PARA PROGRAMAS }-----------------------------------------------------
 
 -- | Azúcar sintáctica para If con Empty en la rama false y un programa en la rama True
-ift :: BExp -> Program -> Program
-ift b program = If b program Empty
+it :: BExp -> Program -> Program
+it b program = If b program Empty
 
 -- | Azúcar sintáctica para PIf con Empty en la rama false y un programa en la rama True
-pift :: PBExp -> Program -> Program
-pift ber program = PIf ber program Empty
+pit :: PBExp -> Program -> Program
+pit ber program = PIf ber program Empty
