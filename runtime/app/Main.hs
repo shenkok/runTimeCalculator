@@ -118,7 +118,7 @@ programa5' = PIf (Ber 0.5)
 invariante6:: RunTime
 invariante6 = rtOne :++: ((Var "c":==: Lit 1) :<>: rtLit 4)  
 programa6' :: Program
-programa6' = While (Var "c":==: Lit 1) (PSet "c" (uniformN 2)) invariante6
+programa6' = While (Var "c":==: Lit 1) (PSet "c" (Imp.uniform 2 5)) invariante6
 
 solution :: SymbolicT IO ()
 solution =  do

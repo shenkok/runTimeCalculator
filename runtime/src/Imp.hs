@@ -198,8 +198,9 @@ freeVarsBExp (Not b)              = freeVarsBExp b
 -- | Reglas de un sólo paso para simplificar un BExp
 simplifyBExp :: BExp -> BExp
 simplifyBExp (Lit q :<=: Lit p) = toBExp (q <= p)
-simplifyBExp (e_b1 :<=: e_b2)   = toBExp (e_b1 == e_b2)
-simplifyBExp (e_b1 :==: e_b2)   = toBExp (e_b1 == e_b2)
+simplifyBExp (e_b1 :<=: e_b2)   = if (e_b1 == e_b2) then True' else (e_b1 :<=: e_b2)
+simplifyBExp (Lit q :==: Lit p) = toBExp (q == p)
+simplifyBExp (e_b1 :==: e_b2)   = if (e_b1 == e_b2) then True' else (e_b1 :==: e_b2)
 simplifyBExp (True' :|: _)      = True'
 simplifyBExp (_ :|: True')      = True'
 simplifyBExp (e_b :|: False')   = e_b
@@ -357,11 +358,30 @@ massDistribution p_x = foldr (+) 0 (fst.unzip $ p_x)
 
 -- | Comprueba que la suma de masa de probabilidad sea igual 1
 isDistribution :: Distribution a -> Bool
-isDistribution p_x = massDistribution p_x == 1
+isDistribution p_x = (massDistribution p_x == 1) && foldr (&&) True ps where
+  predicate x = (0 <= x) && (x <= 1)
+  ps          = map (predicate . fst) p_x
+
+----------------------------------------{AZÚCAR SINTÁCTICA PARA DISTRIBUCIONES CONOCIDAS}------------------------------
+-- Muestra de dsitribución de Dirac
+dirac :: AExp -> PAExp
+dirac arit = [(1, arit)]
+
+-- Muestra bernoulli de expresiones Ariméticas
+coin :: PConstant -> PAExp
+coin p = [(p, Lit 0), (1-p, Lit 1)]
 
 -- Dado de N caras
-uniformN :: Integer -> Distribution AExp
-uniformN n = zip (repeat $ 1%n) (map Lit [1..(n%1)])
+uniform :: Constant -> Constant -> Distribution AExp
+uniform a b = zip (repeat $ 1%len) values  where
+  values = map Lit [a..b]
+  len = toInteger $ length values
+
+-- Variable aleatoria con 1 como inicio o fin
+uniform1 :: Constant -> Distribution AExp
+uniform1 q  | q <= 1 = uniform q 1
+            | otherwise = uniform 1 q
+----------------------------------------{AZÚCAR SINTÁCTICA PARA DISTRIBUCIONES CONOCIDAS}------------------------------
 
 -- | Calculo de esperanza. toma una distribución, una función de transformacion para un a
 --, una función * que retorna un c, una función + que retorna un d, un caso base para el fold y retorna un tipo d

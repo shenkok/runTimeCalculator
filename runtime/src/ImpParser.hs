@@ -77,12 +77,6 @@ aexp = buildExpressionParser table term
            <|> try (parens aexp)
        table = [[binary "+" (:+:), binary "-" (-:) ]]
 
-aexp' :: Parser AExp
-aexp' = do
-  void $ char '<'
-  arit <- aexp
-  void $ char '>'
-  return arit
 
 -- | Parser para BExp
 bexp :: Parser BExp
@@ -141,22 +135,54 @@ pbexp = do
   q <- angles rational
   return $ Ber q
 
+---------------------------------------------------{DISTRIBUCIONES CONOCIDAS} ------------------------------
+dirac :: Parser PAExp
+dirac = do
+  arit <- angles aexp
+  return $ Imp.dirac arit
+
+coin :: Parser PAExp
+coin = Imp.coin <$> (reserved "coin_flip" *> parens rational)
+
+uniform :: Parser PAExp
+uniform = do
+  void $ string "uniform"
+  whitespace
+  void $ char '('
+  whitespace
+  q <- rational
+  whitespace
+  void $ comma
+  whitespace
+  p <- rational
+  whitespace
+  void $ char ')'
+  return $ Imp.uniform q p
+
+uniform1 :: Parser PAExp
+uniform1 = Imp.uniform1 <$> (reserved "uniform" *> parens rational)
+
+-- | Distribuciones discretas
+discrete :: Parser PAExp
+discrete = try ImpParser.dirac <|> ImpParser.coin 
+         <|> ImpParser.uniform <|> ImpParser.uniform1
+
+-- | Parser para expresiones aritméticas probabilistas
 paexp :: Parser PAExp
 paexp = buildExpressionParser table term
  where term =  try ((*~:) <$> (rational <* reservedOp "*") <*> angles aexp)
            <|> try (parens paexp)
+           <|> try discrete
        table = [[ binary "+" (++) ]]
-
--- | Parser para expresiones booleanas probabilistas
 
 program :: Parser Program
 program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
-  where statement = If <$> try (reserved "ite" *> parens bexp)
+  where statement = If <$> try (reserved "if" *> parens bexp)
                         <*> braces program
                         <*> (reserved "else" *> braces program)
                  <|> it <$> try (reserved "it" *> parens bexp)
                      <*> braces program       
-                 <|> PIf <$> try (reserved "pite" *> parens pbexp)
+                 <|> PIf <$> try (reserved "pif" *> parens pbexp)
                       <*> braces program
                       <*> (reserved "pelse" *> braces program)
                  <|> pit <$> try (reserved "pit" *> parens pbexp)
@@ -172,4 +198,27 @@ program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
                  <|> Skip <$ reserved "skip"
                  <|> Imp.Empty <$ reserved "empty"
 
-parseProgram file = parse (program <* eof) file
+------------------------------------------------{ PARSERS PARA LAS DIFERENTES ESTRUCTURAS}--------------------------
+parseStruct :: Parser a -> SourceName -> String -> Either ParseError a
+parseStruct p = parse (p <* eof)
+
+parseAExp :: SourceName -> String -> Either ParseError AExp
+parseAExp = parseStruct aexp
+
+parseBExp :: SourceName -> String -> Either ParseError BExp
+parseBExp = parseStruct bexp
+
+parseRunTime :: SourceName -> String -> Either ParseError RunTime
+parseRunTime = parseStruct runtime
+
+parsePBExp :: SourceName -> String -> Either ParseError PBExp
+parsePBExp = parseStruct pbexp
+
+parsePAExp :: SourceName -> String -> Either ParseError PAExp
+parsePAExp = parseStruct paexp
+
+parseProgram :: SourceName -> String -> Either ParseError Program
+parseProgram str = parse (program <* eof) str
+
+parseProgram' ::  SourceName -> String -> Either ParseError Program
+parseProgram' = parseStruct program

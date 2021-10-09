@@ -31,11 +31,6 @@ instance Applicative Restriction where
   (f_1 :!<=: f_2) <*> (a_1 :!<=: a_2) = f_1 a_1 :!<=: f_2 a_2
   (f_1 :!<=: f_2) <*> (a_1 :!==: a_2) = f_1 a_1 :!==: f_2 a_2
 
--- | Extender a Mónada
-instance Monad Restriction where
-  -- (>>=) :: Restriction a -> (a -> Restriction b) -> Restriction b
-  (a :!==: _) >>= f = f a
-  (a :!<=: _) >>= f = f a
 
 -- | Definición de un función de fold para la estructura Restriction
 foldRes :: (b -> b -> c) -> (a -> b) -> Restriction a -> c
@@ -104,13 +99,13 @@ cfPWhile :: PBExp -> Program -> RunTime -> RunTime ->  RunTime
 cfPWhile (Ber p) program runt x = rtOne :++: (((1 - p) :**: runt) :++: (p :**: (fst (vcGenerator program x))))
 
 -- | Iteración de punto fijo para un while
-fpWhile ::  RunTime -> BExp -> Program -> RunTime -> Integer -> RunTime
+fpWhile :: RunTime -> BExp -> Program -> RunTime -> Int -> RunTime
 fpWhile x b program runt 0 = x
 fpWhile x b program runt n = cfw (fpWhile x b program runt (n - 1)) where
   cfw = cfWhile b program runt
 
 -- | Iteración de punto fijo para un pwhile
-fpPWhile ::  RunTime -> PBExp -> Program -> RunTime -> Integer -> RunTime
+fpPWhile :: RunTime -> PBExp -> Program -> RunTime -> Int -> RunTime
 fpPWhile x ber program runt 0 = x
 fpPWhile x ber program runt n = cfpw (fpPWhile x ber program runt (n - 1)) where
   cfpw = cfPWhile ber program runt
