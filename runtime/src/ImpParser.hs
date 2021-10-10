@@ -164,15 +164,15 @@ uniform1 = Imp.uniform1 <$> (reserved "uniform" *> parens rational)
 
 -- | Distribuciones discretas
 discrete :: Parser PAExp
-discrete = try ImpParser.dirac <|> ImpParser.coin 
-         <|> ImpParser.uniform <|> ImpParser.uniform1
+discrete = try ImpParser.dirac <|> try ImpParser.coin 
+         <|> try ImpParser.uniform <|> try ImpParser.uniform1
 
 -- | Parser para expresiones aritméticas probabilistas
 paexp :: Parser PAExp
 paexp = buildExpressionParser table term
  where term =  try ((*~:) <$> (rational <* reservedOp "*") <*> angles aexp)
-           <|> try (parens paexp)
-           <|> try discrete
+          <|> try discrete
+          <|> try (parens paexp)
        table = [[ binary "+" (++) ]]
 
 program :: Parser Program
@@ -190,11 +190,12 @@ program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
                  <|> flipw While <$> try (reserved "while" *> parens bexp)
                           <*> braces (reserved "inv" *> reserved "=" *> runtime)
                           <*> braces program   
-                 <|> flipw PWhile <$> try (reserved "pwhile" *> parens pbexp)                
+                 <|> flipw PWhile <$> try (reserved "pwhile" *> parens pbexp) 
                           <*> braces (reserved "pinv" *> reserved "=" *> runtime)
                           <*> braces program
                  <|> Set  <$> try (identifier <* reservedOp ":=") <*> aexp
                  <|> PSet <$> try (identifier <* reservedOp ":~") <*> paexp
+                 <|> flip for  <$> try (reserved "for" *> parens integer) <*> braces program
                  <|> Skip <$ reserved "skip"
                  <|> Imp.Empty <$ reserved "empty"
 

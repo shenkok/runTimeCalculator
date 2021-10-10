@@ -56,7 +56,14 @@ p3_3 = "pit(<9/10>){ if(x > 10){skip} else{ x:= x-1}}"
 p4_1 = "pwhile(<1/2>){pinv = 3}{skip}"
 p4_2 = "while(c == 1){inv = 1 ++ 4**[c == 1]}{c:~ 1/2* <0> + 1/2* <1>}"
 p4_3 = "pwhile(<9/10>) {pinv = 1 ++ 10**(1 ++ 4**[c == 1])}{while(c == 1){inv = 1 ++ 4**[c == 1]} {c:~ 1/2* <0> + 1/2* <1>}}"
-------------------------------{MÉTODOS PARA UNIR LOS PROCESOS}---------------------------------------------
+-----------------------------{DISTRIBUCIONES PROBABILÍSTICAS}------------------------------------------------------------------
+p5_1 = "y :~ <12> "
+p5_2 = "coin :~ coin_flip(2/4)"
+p5_3 = "euler:~ uniform(-4, 7)"
+p5_4 = "pi:~ uniform(10)"
+p5_5 = "v:~ uniform(1)"
+p5_6 = "v:~ uniform(-1, -4)"
+------------------------------{MÉTODOS PARA UNIR LOS PROCESOS}-----------------------------------------------------------------
 run' :: String -> IO ()
 run' input = case parseProgram "<interactive>" input of
   Left err  -> print err
@@ -67,6 +74,11 @@ run :: String -> IO ()
 run input = case parseProgram "<interactive>" input of
   Left err  -> print err
   Right program -> completeRoutine (deepSimplifyProgram program) rtZero
+
+run'' :: String -> IO ()
+run'' input = case parseProgram "<interactive>" input of
+  Left err  -> print err
+  Right program -> print (deepSimplifyProgram program) 
 
 {-
 fpd :: String -> String -> String -> String -> Int ->IO ()

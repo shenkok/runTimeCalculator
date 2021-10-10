@@ -381,6 +381,8 @@ uniform a b = zip (repeat $ 1%len) values  where
 uniform1 :: Constant -> Distribution AExp
 uniform1 q  | q <= 1 = uniform q 1
             | otherwise = uniform 1 q
+
+
 ----------------------------------------{AZÚCAR SINTÁCTICA PARA DISTRIBUCIONES CONOCIDAS}------------------------------
 
 -- | Calculo de esperanza. toma una distribución, una función de transformacion para un a
@@ -447,3 +449,9 @@ it b program = If b program Empty
 -- | Azúcar sintáctica para PIf con Empty en la rama false y un programa en la rama True
 pit :: PBExp -> Program -> Program
 pit ber program = PIf ber program Empty
+
+-- | Azúcar sintáctica para el For
+for :: Program -> Integer -> Program
+for _       0 = Empty
+for program 1 = program
+for program n = Seq program (for program (n -1 )) 
