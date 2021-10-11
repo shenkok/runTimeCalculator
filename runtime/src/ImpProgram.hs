@@ -2,7 +2,7 @@ module ImpProgram where
 import ImpParser
 import Imp (rtZero, deepSimplifyProgram, deepSimplifyRunTime)
 import ImpVCGen (bottom, vcGenerator0, fpPWhile, fpWhile)
-import ImpIO (completeRoutine)
+import ImpToIO (completeRoutine)
 import Text.Parsec
 import Data.Either (fromRight)
 -- EJEMPLOS DE EPRESIONES PARSEADAS aexp 
@@ -56,6 +56,7 @@ p3_3 = "pit(<9/10>){ if(x > 10){skip} else{ x:= x-1}}"
 p4_1 = "pwhile(<1/2>){pinv = 3}{skip}"
 p4_2 = "while(c == 1){inv = 1 ++ 4**[c == 1]}{c:~ 1/2* <0> + 1/2* <1>}"
 p4_3 = "pwhile(<9/10>) {pinv = 1 ++ 10**(1 ++ 4**[c == 1])}{while(c == 1){inv = 1 ++ 4**[c == 1]} {c:~ 1/2* <0> + 1/2* <1>}}"
+p4_4 = "for(3){pwhile(<1/2>){pinv = 3}{skip}}"
 -----------------------------{DISTRIBUCIONES PROBABILÍSTICAS}------------------------------------------------------------------
 p5_1 = "y :~ <12> "
 p5_2 = "coin :~ coin_flip(2/4)"
@@ -73,14 +74,14 @@ run' input = case parseProgram "<interactive>" input of
 run :: String -> IO ()
 run input = case parseProgram "<interactive>" input of
   Left err  -> print err
-  Right program -> completeRoutine (deepSimplifyProgram program) rtZero
+  Right program -> completeRoutine (deepSimplifyProgram program) input rtZero
 
 run'' :: String -> IO ()
 run'' input = case parseProgram "<interactive>" input of
   Left err  -> print err
   Right program -> print (deepSimplifyProgram program) 
-
 {-
+
 fpd :: String -> String -> String -> String -> Int ->IO ()
 fpd x b p runt n = do
   let runt' = fromRight $ parseRunTime "<interactive>" runt
