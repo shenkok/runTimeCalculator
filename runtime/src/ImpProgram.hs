@@ -1,6 +1,6 @@
 module ImpProgram where
 import ImpParser
-import Imp (rtZero, deepSimplifyProgram, deepSimplifyRunTime)
+import Imp
 import ImpVCGen (bottom, vcGenerator0, fpPWhile, fpWhile)
 import ImpIO (completeRoutine)
 import Text.Parsec
@@ -57,6 +57,7 @@ p4_1 = "pwhile(<1/2>){pinv = 3}{skip}"
 p4_2 = "while(c == 1){inv = 1 ++ 4**[c == 1]}{c:~ 1/2* <0> + 1/2* <1>}"
 p4_3 = "pwhile(<9/10>) {pinv = 1 ++ 10**(1 ++ 4**[c == 1])}{while(c == 1){inv = 1 ++ 4**[c == 1]} {c:~ 1/2* <0> + 1/2* <1>}}"
 p4_4 = "for(3){pwhile(<1/2>){pinv = 3}{skip}}"
+p4_5 = "pwhile(<1/2>){pinv = 9}{skip};pwhile(<1/2>){pinv = 6}{skip};pwhile(<1/2>){pinv = 3}{skip}"
 -----------------------------{DISTRIBUCIONES PROBABILÍSTICAS}------------------------------------------------------------------
 p5_1 = "y :~ <12> "
 p5_2 = "coin :~ coin_flip(2/4)"
@@ -81,22 +82,16 @@ run'' :: String -> IO ()
 run'' input = case parseProgram "<interactive>" input of
   Left err  -> print err
   Right program -> print (deepSimplifyProgram program) 
-{-
 
-fpd :: String -> String -> String -> String -> Int ->IO ()
-fpd x b p runt n = do
-  let runt' = fromRight $ parseRunTime "<interactive>" runt
-  let b'    = fromRight $ parseBExp "<interactive>" b
-  let p'    = fromRight $ parseProgram "<interactive>" p
-  let x'    = fromRight $ parseRunTime "<interactive>" x
-  print $ fpWhile x' b' p' runt' n
+
+fp :: String -> String -> String -> String -> Int ->IO ()
+fp x b p runt n = case (parseRunTime "<interactive>" x, parseBExp "<interactive>" b, parseProgram "<interactive>" p, parseRunTime "<interactive>" runt) of
+  (Right x', Right b',Right p',Right runt') -> print $ deepSimplifyRunTime $ fpWhile x' b' p' runt' n
+  (_, _,  _, _) -> error "Ha ocurrido un error"
+
+
 
 fpp :: String -> String -> String -> String -> Int ->IO ()
-fpp x pb p runt n = do
-  let runt' = fromRight $ parseRunTime "<interactive>" runt
-  let pb'    = fromRight $ parsePBExp "<interactive>" pb
-  let p'    = fromRight $ parseProgram "<interactive>" p
-  let x'    = fromRight $ parseRunTime "<interactive>" x
-  print $ fpPWhile x' pb' p' runt' n
-
-  -}
+fpp x pb p runt n = case (parseRunTime "<interactive>" x, parsePBExp "<interactive>" pb, parseProgram "<interactive>" p, parseRunTime "<interactive>" runt) of
+  (Right x', Right pb',Right p',Right runt') ->  print $ deepSimplifyRunTime $ fpPWhile x' pb' p' runt' n
+  (_, _,  _, _) -> error "Ha ocurrido un error"
