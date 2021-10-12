@@ -30,7 +30,6 @@ library
       ImpParser
       ImpProgram
       ImpSBV
-      ImpToIO
       ImpVCGen
   other-modules:
       Paths_runtime

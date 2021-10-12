@@ -4,24 +4,22 @@ import Data.SBV
 import ImpSBV
 import Imp
 import ImpVCGen
-{-
-    MODULO QUE SE ENCARGA SE IMPRIMIR LAS DIFERENTES VARIABLES DEL PROBLEMA ESTUDIADO
--}
+import Data.List (zip4, zip5, zip6)
+
+-- Estraído de https://hackage.haskell.org/package/hxt-9.3.1.22/docs/src/Text.XML.HXT.DOM.Util.html#uncurry4
+
+
 uncurry3                        :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f ~(a, b, c)           = f a b c
 
 uncurry4                        :: (a -> b -> c -> d -> e) -> (a, b, c, d) -> e
 uncurry4 f ~(a, b, c, d)        = f a b c d
 
-boolIO :: Bool -> IO Bool
-boolIO = pure
+uncurry5                        :: (a -> b -> c -> d -> e -> f) -> (a, b, c, d, e) -> f
+uncurry5 f ~(a, b, c, d, e)     = f a b c d e
 
-
-array :: [IO Bool]
-array = map boolIO [True, True, False, False, True]
-
-ioAnd :: IO Bool -> IO Bool -> IO Bool
-ioAnd b_1 b_2 = (&&) <$> b_1 <*> b_2
+uncurry6                         :: (a -> b -> c -> d -> e -> f -> g) -> (a, b, c, d, e, f) -> g
+uncurry6 fun ~(a, b, c, d, e, f) = fun a b c d e f
 
 newLine :: String
 newLine = "\n"
@@ -34,96 +32,83 @@ index n = "[" ++ (show n) ++ "]"
 index2 :: Int -> Int -> String
 index2 n m = "[" ++ (show n) ++ ", " ++ (show m) ++ "]"
 
-showRestrictions :: [RRunTime] -> Int -> String
-showRestrictions [] _     = newLine
-showRestrictions (x:xs) n = (index n) ++ space ++ (show x) ++ (showRestrictions xs (n-1))  
+showRestriction :: RRunTime -> Int -> IO Bool -> IO ()
+showRestriction x n b = do
+                          b' <- b
+                          putStrLn $ (index n) ++ space ++ (show x) ++ ", " ++ (if b' then "Es satisfacible" else "No es satisfacible")
+
+showModel :: IO SatResult -> [String] -> IO ()
+showModel solution xs = do
+                          solution' <- solution
+                          let showValue  x =  case (flip getModelValue solution' x :: Maybe Rational) of 
+                                Just q ->  putStrLn $ x ++  " = " ++ (showLit q) ++ " Racional"
+                                Nothing ->  error "A ocurrido un error, por favor revise este caso"
+                          mapM_ showValue xs
+
+
+showSolverInput :: IO Bool -> IO SatResult -> SolverInput -> Int -> Int ->IO()
+showSolverInput b model (contexto, rest, vars) n m = do
+      let len = length vars
+      b' <- b
+      if not b'
+            then do  putStr newLine
+                     putStrLn $ concat (replicate 100 "-")
+                     putStr newLine
+                     putStrLn $ "Sub-problema " ++ (index2 n m)
+                     putStr newLine 
+                     putStrLn $ (show contexto) ++ " ----> " ++ show rest
+                     putStr newLine
+                     putStrLn "El problema no es satisfacible"
+                     if (len > 0 )
+                           then do putStrLn "Un contraejemplo encontrado es:"
+                                   showModel model vars
+                           else putStr newLine        
+                     putStrLn $ concat (replicate 100 "-")
+            else  putStr ""
+
+
+showSolverInputs :: IO Bool -> [IO Bool] -> RRunTime -> [IO SatResult] -> [SolverInput] -> Int -> IO()
+showSolverInputs b bs runtr models inputs n = do
+                                            b' <- b
+                                            if not b'
+                                                then do  let m = length inputs
+                                                         putStrLn $ concat (replicate 100 "*")
+                                                         putStr newLine
+                                                         putStrLn $ "Para la obligación de prueba " ++ index n
+                                                         putStrLn $ (show runtr)
+                                                         putStr newLine 
+                                                         putStrLn $ "Hay un total de " ++ show m ++ " sub-problemas diferentes." 
+                                                         mapM_ (uncurry5 showSolverInput ) $ zip5 bs models inputs (repeat n) [1..m]
+                                                else putStr ""                                                     
 
 -- | Muestra la transformada calculada y las restricciones que se generaron
-showTransform :: RunTime -> [RRunTime] -> Int ->IO()
-showTransform ert restrictions n = do
-                                    putStrLn "Tiempo de ejecución calculado:"
-                                    putStrLn $ show ert
-                                    putStr newLine
-                                    if n > 0
-                                       then do 
-                                          putStrLn "Obligaciones de prueba asociadas:"
-                                          putStrLn $ showRestrictions restrictions n
-                                          putStr newLine
-                                        else
-                                          putStrLn "No hay obligaciones de prueba asociadas"
+
+showRestrictions :: [RRunTime] -> [[SolverInput]] -> [[IO SatResult]] -> [[IO Bool]] -> [IO Bool] -> Bool -> Int -> IO ()
+showRestrictions restrictions modelss inputss bss bs b n = do 
+                                                        if (n > 0)
+                                                            then do putStrLn "Obligaciones de prueba asociadas:"
+                                                                    mapM_ (uncurry3 showRestriction) $ zip3 restrictions [1..n] bs
+                                                                    putStr newLine
+                                                                    if b
+                                                                        then do (putStrLn "Las obligaciones de prueba son satisfacibles")
+                                                                        else  (mapM_ (uncurry6 showSolverInputs) $ zip6 bs bss restrictions  inputss modelss [1..n])
+                                                            else putStrLn "No hay obligaciones de prueba asociadas"
 
 
--- | Muestra las distintos componentes de un problema 
---   en concreto.
-{- Ejemplo de problema
-        a <- sFloat "a"
-        b <- sFloat "b"
-        c <- sFloat "c"
-        constrain $ a + 10.0 .< 19.0 + b
-        constrain $ a + b + c.<= 10 
--}
--- Advierte si el problema no es satisfacible entregando un contraejemplo
-showSolverInput :: SolverInput -> Int -> Int ->IO()
-showSolverInput (contexto, rest, vars) n m = do
-  let model = makeSBVModel (contexto, rest, vars)
-  let lenb = not (null vars)
-  b <- isSatisfiable model
-  putStr newLine
-  putStrLn $ "Sub-problema " ++ (index2 n m) 
-  putStr newLine 
-  putStrLn $ show contexto ++ " ----> " ++ show rest
-  putStr newLine
-  if b
-      then do   values <- sat model
-                putStrLn "El Sub-problema no es válido"
-                putStr newLine
-                if lenb
-                  then do
-                      putStrLn "Un contraejemplo es"
-                      print values
-                  else
-                    putStrLn ""
-      else putStrLn "El Sub-problema es válido"
-  putStrLn $ concat (replicate 100 "-")
-
--- | Muestra un arreglo de problemas, n es un entero de denota la restricion n
-showSolverInputs ::RRunTime -> Int -> IO()
-showSolverInputs runtr n = do
-  putStrLn $ concat (replicate 100 "*")
-  putStr newLine
-  putStrLn $ "Para la obligación de prueba " ++ index n
-  putStrLn $ (show runtr)
-  putStr newLine 
-  putStrLn $ "Hay un total de " ++ show m ++ " sub-problemas diferentes." 
-  putStrLn $ concat (replicate 100 "-")
-  mapM_ (uncurry3 showSolverInput ) $ zip3  inputs (repeat n) [1..m]
-  putStrLn $ concat (replicate 100 "*")
-  where
-    inputs = restrictionsToSolver runtr
-    m = length inputs
-
-
--- | Muestra una rutina completa
--- Parte con un programa y un runtime
--- luego muestra toda la información necesaria
-completeRoutine :: Program -> RunTime -> IO()
-completeRoutine program runt = do
-                        let (ert, rest) = vcGenerator program runt
-                        let simplifyErt = deepSimplifyRunTime ert
-                        let simplifyRest = map (fmap deepSimplifyRunTime) rest
-                        let len = length rest
-                        let b = len > 0
-                        putStr newLine
-                        putStrLn "Programa Analizado:"
-                        putStrLn $ show program
-                        putStr newLine
-                        putStrLn "Se calcula la transformada con respecto a"
-                        putStrLn $ show runt
-                        putStr newLine
-                        showTransform simplifyErt simplifyRest len
-                        putStr newLine
-                        if b
-                            then
-                            mapM_ (uncurry showSolverInputs ) $ zip simplifyRest [1..len]
-                            else putStr newLine
-                        putStrLn "Calculo Finalizado"
+completeRoutine :: Program -> String -> RunTime -> IO()
+completeRoutine program str runt = do let (ert, rest, modelss, inputss, bss, bs, b) = routineInput program runt 
+                                      let len = length rest
+                                      b' <- b
+                                      putStr newLine
+                                      putStrLn "Programa Analizado:"
+                                      putStrLn str
+                                      putStr newLine
+                                      putStrLn "Se calcula la transformada con respecto a"
+                                      putStrLn $ show runt
+                                      putStr newLine
+                                      putStrLn "Tiempo de ejecución calculado:"
+                                      putStrLn $ show ert
+                                      putStr newLine
+                                      showRestrictions rest inputss modelss bss bs b' len
+                                      putStr newLine
+                                      putStrLn "Calculo Finalizado"

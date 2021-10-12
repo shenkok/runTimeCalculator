@@ -68,13 +68,13 @@ ioAnd b_1 b_2 = (&&) <$> b_1 <*> b_2
 
 
 routineInput :: Program -> RunTime -> (RunTime, [RRunTime],[[IO SatResult]], [[SolverInput]], [[IO Bool]], [IO Bool], IO Bool)
-routineInput program runt = (sert, rests, model_problems, inputs, b_problems, b_restrictions, b_all) where
+routineInput program runt = (sert, rests, modelss, inputss, bss, bs, b) where
     (ert, rest)    = vcGenerator program runt
     sert           = deepSimplifyRunTime ert
     rests          = map (fmap deepSimplifyRunTime) rest
-    inputs         = map restrictionsToSolver rests
-    problems       = map (map makeSBVModel) inputs
-    model_problems = map (map sat) problems
-    b_problems     = map (map isVacuous) problems
-    b_restrictions = map (foldr ioAnd (pure True)) b_problems
-    b_all          = foldr ioAnd (pure True) b_restrictions
+    inputss        = map restrictionsToSolver rests
+    problemss      = map (map makeSBVModel) inputss
+    modelss        = map (map sat) problemss
+    bss            = map (map isVacuous) problemss
+    bs             = map (foldr ioAnd (pure True)) bss
+    b              = foldr ioAnd (pure True) bs

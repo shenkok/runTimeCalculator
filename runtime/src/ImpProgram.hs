@@ -2,7 +2,7 @@ module ImpProgram where
 import ImpParser
 import Imp (rtZero, deepSimplifyProgram, deepSimplifyRunTime)
 import ImpVCGen (bottom, vcGenerator0, fpPWhile, fpWhile)
-import ImpToIO (completeRoutine)
+import ImpIO (completeRoutine)
 import Text.Parsec
 import Data.Either (fromRight)
 -- EJEMPLOS DE EPRESIONES PARSEADAS aexp 
@@ -65,6 +65,7 @@ p5_4 = "pi:~ uniform(10)"
 p5_5 = "v:~ uniform(1)"
 p5_6 = "v:~ uniform(-1, -4)"
 ------------------------------{MÉTODOS PARA UNIR LOS PROCESOS}-----------------------------------------------------------------
+
 run' :: String -> IO ()
 run' input = case parseProgram "<interactive>" input of
   Left err  -> print err
