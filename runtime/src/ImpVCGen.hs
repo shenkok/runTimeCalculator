@@ -91,12 +91,12 @@ top :: RunTime
 top = rtLit $ toRational (1/0)
 
 -- | Función característica de un while
-cfWhile :: BExp -> Program -> RunTime -> RunTime -> RunTime  
-cfWhile b program runt x = rtOne :++: (((Not b) :<>: runt) :++: (b :<>: (fst (vcGenerator program x))))
+cfWhile :: BExp -> Program -> RunTime -> RunTime -> RunTime
+cfWhile b program runt x = rtOne :++: ((Not b :<>: runt) :++: (b :<>: fst (vcGenerator program x)))
 
 -- | Función característica de un pwhile
-cfPWhile :: PBExp -> Program -> RunTime -> RunTime ->  RunTime 
-cfPWhile (Ber p) program runt x = rtOne :++: (((1 - p) :**: runt) :++: (p :**: (fst (vcGenerator program x))))
+cfPWhile :: PBExp -> Program -> RunTime -> RunTime ->  RunTime
+cfPWhile (Ber p) program runt x = rtOne :++: (((1 - p) :**: runt) :++: (p :**: fst (vcGenerator program x)))
 
 -- | Iteración de punto fijo para un while
 fpWhile :: RunTime -> BExp -> Program -> RunTime -> Int -> RunTime

@@ -8,7 +8,8 @@ import           Text.Parsec.Language (javaStyle)
 import           Text.Parsec.String
 import           Control.Monad (void, ap)
 import qualified Text.Parsec.Token    as Token
-import           Imp                  
+import           Imp
+import Control.Exception (bracket_)
 
 -- pretending Haskell has a good module system…
 Token.TokenParser {..} = Token.makeTokenParser javaStyle
@@ -33,9 +34,7 @@ parens01 parser = try parser <|> parens parser
 
 -- | Parser para escribir a los racionales como enteros
 rationalInteger :: Parser Rational
-rationalInteger = do
-  n <- integer
-  return $ toRational n
+rationalInteger = toRational <$> integer
 
 -- | Parser para escribir a los racionales de la forma Int/Int
 rationalFractional :: Parser Rational
@@ -45,7 +44,7 @@ rationalFractional = do
     void $ char '/'
     den <- integer
     whitespace
-    return $ (toRational num)/ (toRational den)
+    return $ toRational num/ toRational den
 
 
 -- | Parser para ecribir racionales
@@ -54,15 +53,11 @@ rational = try rationalFractional <|> rationalInteger
 
 -- | Parser para escribir los literales de AExp
 litAExp :: Parser AExp
-litAExp = do
-  q <- rational
-  return $ Lit q
+litAExp = Lit <$> rational
 
 -- | Parser para escibir las variables de AExp
 varAExp :: Parser AExp
-varAExp = do
-  x <- identifier
-  return $ Var x
+varAExp = Var <$> identifier
 
 -- | Parser para los casos base de AExp
 aexpBase :: Parser AExp
@@ -70,7 +65,7 @@ aexpBase = try litAExp <|> varAExp
 
 -- | Parser para AExp
 aexp :: Parser AExp
-aexp = buildExpressionParser table term 
+aexp = buildExpressionParser table term
  where term = try ((:*:) <$> (rational <* reservedOp "*") <*> aexpBase)
            <|> try ((:*:) <$> (rational <* reservedOp "*") <*> parens aexp)
            <|> try aexpBase
@@ -88,7 +83,7 @@ bexp = buildExpressionParser table term
             <|> try ((>=:)  <$> (aexp <* reservedOp ">=") <*> aexp)
             <|> try ((>:)   <$> (aexp <* reservedOp ">")  <*> aexp)
             <|> try ((<:)   <$> (aexp <* reservedOp "<")  <*> aexp)
-            <|> try ((/=:)  <$> (aexp <* reservedOp "!=") <*> aexp)            
+            <|> try ((/=:)  <$> (aexp <* reservedOp "!=") <*> aexp)
             <|> try (parens bexp)
         table = [ [ Prefix (Not <$ reservedOp "!") ]
                 , [ binary "&&" (:&:), binary "||" (:|:) ]
@@ -103,18 +98,14 @@ bexp = buildExpressionParser table term
 
 -- | Parser para RunTimes Aritméticos
 aritRunTime :: Parser RunTime
-aritRunTime = do
-  arit <- aexp
-  return $ RunTimeArit arit
+aritRunTime = RunTimeArit <$> aexp
 
 -- | Parser para indicatrices 
 indicator :: Parser RunTime
-indicator = do 
-  b <- brackets bexp
-  return $ toIndicator b
+indicator = toIndicator <$> brackets bexp
 
 indArit :: Parser RunTime
-indArit =((<>:) <$> (indicator <* reservedOp "<>") <*> parens01 aexp)
+indArit = (<>:) <$> (indicator <* reservedOp "<>") <*> parens01 aexp
 
 runtimeBase :: Parser RunTime
 runtimeBase = try indArit <|> indicator <|> aritRunTime
@@ -131,15 +122,11 @@ runtime = buildExpressionParser table term
 
 -- | Parser para expresiones booleanas probabilistas 
 pbexp :: Parser PBExp
-pbexp = do 
-  q <- angles rational
-  return $ Ber q
+pbexp = Ber <$> angles rational
 
 ---------------------------------------------------{DISTRIBUCIONES CONOCIDAS} ------------------------------
 dirac :: Parser PAExp
-dirac = do
-  arit <- angles aexp
-  return $ Imp.dirac arit
+dirac = Imp.dirac <$> angles aexp
 
 coin :: Parser PAExp
 coin = Imp.coin <$> (reserved "coin_flip" *> parens rational)
@@ -152,7 +139,7 @@ uniform = do
   whitespace
   q <- rational
   whitespace
-  void $ comma
+  void comma
   whitespace
   p <- rational
   whitespace
@@ -164,7 +151,7 @@ uniform1 = Imp.uniform1 <$> (reserved "uniform" *> parens rational)
 
 -- | Distribuciones discretas
 discrete :: Parser PAExp
-discrete = try ImpParser.dirac <|> try ImpParser.coin 
+discrete = try ImpParser.dirac <|> try ImpParser.coin
          <|> try ImpParser.uniform <|> try ImpParser.uniform1
 
 -- | Parser para expresiones aritméticas probabilistas
@@ -181,16 +168,16 @@ program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
                         <*> braces program
                         <*> (reserved "else" *> braces program)
                  <|> it <$> try (reserved "it" *> parens bexp)
-                     <*> braces program       
+                     <*> braces program
                  <|> PIf <$> try (reserved "pif" *> parens pbexp)
                       <*> braces program
                       <*> (reserved "pelse" *> braces program)
                  <|> pit <$> try (reserved "pit" *> parens pbexp)
-                        <*> braces program   
+                        <*> braces program
                  <|> flipw While <$> try (reserved "while" *> parens bexp)
                           <*> braces (reserved "inv" *> reserved "=" *> runtime)
-                          <*> braces program   
-                 <|> flipw PWhile <$> try (reserved "pwhile" *> parens pbexp) 
+                          <*> braces program
+                 <|> flipw PWhile <$> try (reserved "pwhile" *> parens pbexp)
                           <*> braces (reserved "pinv" *> reserved "=" *> runtime)
                           <*> braces program
                  <|> Set  <$> try (identifier <* reservedOp ":=") <*> aexp
@@ -219,7 +206,7 @@ parsePAExp :: SourceName -> String -> Either ParseError PAExp
 parsePAExp = parseStruct paexp
 
 parseProgram :: SourceName -> String -> Either ParseError Program
-parseProgram str = parse (program <* eof) str
+parseProgram = parse (program <* eof)
 
 parseProgram' ::  SourceName -> String -> Either ParseError Program
 parseProgram' = parseStruct program

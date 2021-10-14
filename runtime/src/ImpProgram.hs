@@ -71,7 +71,7 @@ run' :: String -> IO ()
 run' input = case parseProgram "<interactive>" input of
   Left err  -> print err
   Right program -> let runt = fst $ vcGenerator0 $ deepSimplifyProgram program in
-                   print $ (show runt) ++ " ===> " ++ (show (deepSimplifyRunTime runt))
+                   print $ show runt ++ " ===> " ++ show (deepSimplifyRunTime runt)
 
 run :: String -> IO ()
 run input = case parseProgram "<interactive>" input of
@@ -81,7 +81,7 @@ run input = case parseProgram "<interactive>" input of
 run'' :: String -> IO ()
 run'' input = case parseProgram "<interactive>" input of
   Left err  -> print err
-  Right program -> print (deepSimplifyProgram program) 
+  Right program -> print (deepSimplifyProgram program)
 
 
 fp :: String -> String -> String -> String -> Int ->IO ()

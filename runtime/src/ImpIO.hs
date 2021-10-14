@@ -27,21 +27,21 @@ newLine = "\n"
 space :: String
 space = "  "
 index :: Int -> String
-index n = "[" ++ (show n) ++ "]"
+index n = "[" ++ show n ++ "]"
 
 index2 :: Int -> Int -> String
-index2 n m = "[" ++ (show n) ++ ", " ++ (show m) ++ "]"
+index2 n m = "[" ++ show n ++ ", " ++ show m ++ "]"
 
 showRestriction :: RRunTime -> Int -> IO Bool -> IO ()
 showRestriction x n b = do
                           b' <- b
-                          putStrLn $ (index n) ++ space ++ (show x) ++ ", " ++ (if b' then "Es satisfacible" else "No es satisfacible")
+                          putStrLn $ index n ++ space ++ show x ++ ", " ++ (if b' then "Es satisfacible" else "No es satisfacible")
 
 showModel :: IO SatResult -> [String] -> IO ()
 showModel solution xs = do
                           solution' <- solution
-                          let showValue  x =  case (flip getModelValue solution' x :: Maybe Rational) of 
-                                Just q ->  putStrLn $ x ++  " = " ++ (showLit q) ++ " Racional"
+                          let showValue  x =  case (getModelValue x solution' :: Maybe Rational) of
+                                Just q ->  putStrLn $ x ++  " = " ++ showLit q ++ " Racional"
                                 Nothing ->  error "A ocurrido un error, por favor revise este caso"
                           mapM_ showValue xs
 
@@ -54,15 +54,15 @@ showSolverInput b model (contexto, rest, vars) n m = do
             then do  putStr newLine
                      putStrLn $ concat (replicate 100 "-")
                      putStr newLine
-                     putStrLn $ "Sub-problema " ++ (index2 n m)
-                     putStr newLine 
-                     putStrLn $ (show contexto) ++ " ----> " ++ show rest
+                     putStrLn $ "Sub-problema " ++ index2 n m
+                     putStr newLine
+                     putStrLn $ show contexto ++ " ----> " ++ show rest
                      putStr newLine
                      putStrLn "El problema no es satisfacible"
-                     if (len > 0 )
+                     if len > 0
                            then do putStrLn "Un contraejemplo encontrado es:"
                                    showModel model vars
-                           else putStr newLine        
+                           else putStr newLine
                      putStrLn $ concat (replicate 100 "-")
             else  putStr ""
 
@@ -75,28 +75,28 @@ showSolverInputs b bs runtr models inputs n = do
                                                          putStrLn $ concat (replicate 100 "*")
                                                          putStr newLine
                                                          putStrLn $ "Para la obligación de prueba " ++ index n
-                                                         putStrLn $ (show runtr)
-                                                         putStr newLine 
-                                                         putStrLn $ "Hay un total de " ++ show m ++ " sub-problemas diferentes." 
+                                                         print runtr
+                                                         putStr newLine
+                                                         putStrLn $ "Hay un total de " ++ show m ++ " sub-problemas diferentes."
                                                          mapM_ (uncurry5 showSolverInput ) $ zip5 bs models inputs (repeat n) [1..m]
-                                                else putStr ""                                                     
+                                                else putStr ""
 
 -- | Muestra la transformada calculada y las restricciones que se generaron
 
 showRestrictions :: [RRunTime] -> [[SolverInput]] -> [[IO SatResult]] -> [[IO Bool]] -> [IO Bool] -> Bool -> Int -> IO ()
-showRestrictions restrictions modelss inputss bss bs b n = do 
-                                                        if (n > 0)
+showRestrictions restrictions modelss inputss bss bs b n = do
+                                                        if n > 0
                                                             then do putStrLn "Obligaciones de prueba asociadas:"
                                                                     mapM_ (uncurry3 showRestriction) $ zip3 restrictions [1..n] bs
                                                                     putStr newLine
                                                                     if b
-                                                                        then do (putStrLn "Las obligaciones de prueba son satisfacibles")
-                                                                        else  (mapM_ (uncurry6 showSolverInputs) $ zip6 bs bss restrictions  inputss modelss [1..n])
+                                                                        then do putStrLn "Las obligaciones de prueba son satisfacibles"
+                                                                        else  mapM_ (uncurry6 showSolverInputs) $ zip6 bs bss restrictions  inputss modelss [1..n]
                                                             else putStrLn "No hay obligaciones de prueba asociadas"
 
 
 completeRoutine :: Program -> String -> RunTime -> IO()
-completeRoutine program str runt = do let (ert, rest, modelss, inputss, bss, bs, b) = routineInput program runt 
+completeRoutine program str runt = do let (ert, rest, modelss, inputss, bss, bs, b) = routineInput program runt
                                       let len = length rest
                                       b' <- b
                                       putStr newLine
@@ -104,10 +104,10 @@ completeRoutine program str runt = do let (ert, rest, modelss, inputss, bss, bs,
                                       putStrLn str
                                       putStr newLine
                                       putStrLn "Se calcula la transformada con respecto a"
-                                      putStrLn $ show runt
+                                      print runt
                                       putStr newLine
                                       putStrLn "Tiempo de ejecución calculado:"
-                                      putStrLn $ show ert
+                                      print ert
                                       putStr newLine
                                       showRestrictions rest inputss modelss bss bs b' len
                                       putStr newLine

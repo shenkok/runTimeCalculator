@@ -130,6 +130,9 @@ tutorial parser
     
     https://jakewheat.github.io/intro_to_parsing/#an-issue-with-token-parsers
 
+plantilla 
+ https://github.com/dccuchile/memoria-tesis-latex 
+
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Sobre la distribución de archivos

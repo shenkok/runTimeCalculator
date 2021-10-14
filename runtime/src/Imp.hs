@@ -6,11 +6,9 @@ import Data.Ratio
 {-
   MODULO QUE SE ENCARGA SE REPRESENTAR EXPRESIONES ARITMÉTICAS, BOOLEANAS, RUNTIMES Y PROGRAMAS
 -}
--- <@Fede: Name se utilizará para el nombre de qué cosas?; agregar comentario>
--- @Luis: Hecho
-type Name = String -- Nombre de las variables
+type Name     = String -- Nombre de las variables
 
-type Names = [Name]
+type Names    = [Name]
 
 type Constant = Rational --  Constantes Númericas
 
@@ -33,9 +31,9 @@ bools n = map (False :) r ++ map (True :) r
     r = bools (n -1)
 
 showLit :: Rational -> String
-showLit q 
+showLit q
   | denominator q == 1 = show $ numerator q
-  | otherwise        = show (numerator q) ++ "/" ++ show (denominator q)
+  | otherwise          = show (numerator q) ++ "/" ++ show (denominator q)
 
 ---------------------------------------- { EXPRESIONES ARITMÉTICAS }--------------------------------
 
@@ -64,7 +62,7 @@ data AExp
 
 -----------------------------------------{ AZÚCAR SINTÁCTICA}------------------------------------------------
 (-:) :: AExp -> AExp -> AExp
-arit_1 -: arit_2 = arit_1 :+: ((-1) :*: arit_2) 
+arit_1 -: arit_2 = arit_1 :+: ((-1) :*: arit_2)
 
 ---------------------------------------- { FUNCIONES EXPRESIONES ARITMÉTICAS }--------------------------------
 -- | Definición del método show para AExp
@@ -73,7 +71,7 @@ instance Show AExp where
   show (Var x)           = show x
   show (e_1 :+: e_2)     = show e_1  ++ " + " ++ show e_2
   show (k :*: Lit n)     = showLit k ++  "*"  ++ showLit n
-  show (k :*: Var x)     = showLit k ++  "*"  ++ show x 
+  show (k :*: Var x)     = showLit k ++  "*"  ++ show x
   show (k :*: e_2)       = showLit k ++  "*(" ++ show e_2 ++")"
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
@@ -99,7 +97,7 @@ weightVar (Lit n) var
   | var == "" = n
   | otherwise = 0
 weightVar (Var x) var
-  | var == x = 1
+  | var == x  = 1
   | otherwise = 0
 weightVar (e_1 :+: e_2) var = weightVar e_1 var + weightVar e_2 var
 weightVar (k :*: e) var     = k * weightVar e var
@@ -121,7 +119,7 @@ normArit arit = foldr (:+:) (Lit 0) wvars -- 5
     g (k, x) = k :*: Var x -- 3
     wvars = zipWith (curry g) weights vars -- 4
 
--- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1. @Fede: y suma literales
+-- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1.
 simplifyArit :: AExp -> AExp
 simplifyArit (Lit 0 :+: arit)    = simplifyArit arit
 simplifyArit (arit  :+: Lit 0)   = simplifyArit arit
@@ -198,9 +196,9 @@ freeVarsBExp (Not b)              = freeVarsBExp b
 -- | Reglas de un sólo paso para simplificar un BExp
 simplifyBExp :: BExp -> BExp
 simplifyBExp (Lit q :<=: Lit p) = toBExp (q <= p)
-simplifyBExp (e_b1 :<=: e_b2)   = if (e_b1 == e_b2) then True' else (e_b1 :<=: e_b2)
+simplifyBExp (e_b1 :<=: e_b2)   = if e_b1 == e_b2 then True' else e_b1 :<=: e_b2
 simplifyBExp (Lit q :==: Lit p) = toBExp (q == p)
-simplifyBExp (e_b1 :==: e_b2)   = if (e_b1 == e_b2) then True' else (e_b1 :==: e_b2)
+simplifyBExp (e_b1 :==: e_b2)   = if e_b1 == e_b2 then True' else e_b1 :==: e_b2
 simplifyBExp (True' :|: _)      = True'
 simplifyBExp (_ :|: True')      = True'
 simplifyBExp (e_b :|: False')   = e_b
@@ -210,8 +208,8 @@ simplifyBExp (_ :&: False')     = False'
 simplifyBExp (True' :&: e_b)    = e_b
 simplifyBExp (e_b :&: True')    = e_b
 simplifyBExp (Not (Not e_b))    = e_b
-simplifyBExp (Not (True'))      = False'
-simplifyBExp (Not(False'))      = True'
+simplifyBExp (Not True')        = False'
+simplifyBExp (Not False')       = True'
 simplifyBExp otherwise          = otherwise
 
 -- | Reglas recursivas para simplificar un BExp
@@ -252,7 +250,7 @@ rtLit k = RunTimeArit (Lit k)
 
 -- | Azúcar sintáctica para un var runtime
 rtVar :: Name -> RunTime
-rtVar x = RunTimeArit (Var x) 
+rtVar x = RunTimeArit (Var x)
 
 -- |Azúcar sintpactica para Función Indicatriz 
 toIndicator :: BExp -> RunTime
@@ -260,11 +258,11 @@ toIndicator e_b = e_b :<>: rtOne
 
 -- | Azúcar sintáctica para operar una función indicatriz con expresión aritmética
 (<>:) :: RunTime -> AExp -> RunTime
-(e_b :<>: (RunTimeArit (Lit 1))) <>: arit = e_b :<>: (RunTimeArit arit) 
+(e_b :<>: (RunTimeArit (Lit 1))) <>: arit = e_b :<>: RunTimeArit arit
 otherwise <>: _                           = error $ "El runtime no tiene la forma de indicatriz " ++ show otherwise
  ----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
 
-instance Show RunTime where                                         
+instance Show RunTime where
   show (RunTimeArit arit)               = show arit
   show (e_b :<>: RunTimeArit (Lit 1))   = "[" ++ show e_b ++ "]"
   show (e_b :<>: RunTimeArit (Lit n))   = "[" ++ show e_b ++ "]<>" ++ showLit n
@@ -295,7 +293,7 @@ freeVarsRunTime (_ :**: e)         = freeVarsRunTime e
 -- | Reglas de un sólo paso para simplificar un RunTime
 simplifyRunTime :: RunTime -> RunTime
 simplifyRunTime (RunTimeArit arit_1 :++: RunTimeArit arit_2)               = RunTimeArit $ completeNormArit (arit_1 :+: arit_2)
-simplifyRunTime (RunTimeArit arit_1 :++: (RunTimeArit arit_2 :++: runt))   = (RunTimeArit $ completeNormArit $ arit_1 :+: arit_2) :++: runt
+simplifyRunTime (RunTimeArit arit_1 :++: (RunTimeArit arit_2 :++: runt))   = RunTimeArit (completeNormArit $ arit_1 :+: arit_2) :++: runt
 simplifyRunTime (e_b :<>: RunTimeArit (Lit 0))                             = rtZero
 simplifyRunTime (True' :<>: runt)                                          = runt
 simplifyRunTime (False' :<>: _)                                            = rtZero
@@ -339,8 +337,8 @@ type PAExp = Distribution AExp
 
 -- | Método para mostar un punto de la distribución 
 showPoint :: (PConstant, AExp) -> String
-showPoint (1, arit) = "<" ++ show arit ++ ">" 
-showPoint (q, arit) =  showLit q ++ "*<" ++ show arit ++ ">"   
+showPoint (1, arit) = "<" ++ show arit ++ ">"
+showPoint (q, arit) =  showLit q ++ "*<" ++ show arit ++ ">"
 
 showPAexp :: PAExp -> String
 showPAexp []       = ""
@@ -348,18 +346,18 @@ showPAexp (y:x:xs) = showPoint y ++ " + "
 showPAexp (x: xs)  = showPoint x
 
 newtype PBExp = Ber { p:: PConstant} deriving (Eq)
-  
+
 instance Show PBExp where
   show (Ber q) = "<" ++ showLit q ++ ">"
 
 -- | Masa de una distribución  a
 massDistribution :: Distribution a -> PConstant
-massDistribution p_x = foldr (+) 0 (fst.unzip $ p_x)
+massDistribution p_x = sum (map fst $ p_x)
 
 -- | Comprueba que la suma de masa de probabilidad sea igual 1
 isDistribution :: Distribution a -> Bool
-isDistribution p_x = (massDistribution p_x == 1) && foldr (&&) True ps where
-  predicate x = (0 <= x) && (x <= 1)
+isDistribution p_x = massDistribution p_x == 1 && and ps where
+  predicate x = 0 <= x && x <= 1
   ps          = map (predicate . fst) p_x
 
 ----------------------------------------{AZÚCAR SINTÁCTICA PARA DISTRIBUCIONES CONOCIDAS}------------------------------
@@ -375,20 +373,18 @@ coin p = [(p, Lit 0), (1-p, Lit 1)]
 uniform :: Constant -> Constant -> Distribution AExp
 uniform a b = zip (repeat $ 1%len) values  where
   values = map Lit [a..b]
-  len = toInteger $ length values
+  len    = toInteger $ length values
 
 -- Variable aleatoria con 1 como inicio o fin
 uniform1 :: Constant -> Distribution AExp
-uniform1 q  | q <= 1 = uniform q 1
+uniform1 q  | q <= 1    = uniform q 1
             | otherwise = uniform 1 q
-
-
 ----------------------------------------{AZÚCAR SINTÁCTICA PARA DISTRIBUCIONES CONOCIDAS}------------------------------
 
 -- | Calculo de esperanza. toma una distribución, una función de transformacion para un a
 --, una función * que retorna un c, una función + que retorna un d, un caso base para el fold y retorna un tipo d
 expectation :: Distribution a -> (a -> b) -> (PConstant -> b -> c)-> (c -> d -> d) -> d -> d
-expectation p_x h prod sum base =  foldr sum base (map f p_x) where
+expectation p_x h prod sum base =  foldr (sum . f) base p_x where
   f (k, e) = prod k (h  e)
 
 -- | esperanza para dsitribuciones sobre expresiones aritméticas
@@ -454,4 +450,4 @@ pit ber program = PIf ber program Empty
 for :: Program -> Integer -> Program
 for _       0 = Empty
 for program 1 = program
-for program n = Seq program (for program (n -1 )) 
+for program n = Seq program (for program (n -1 ))
