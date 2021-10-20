@@ -35,7 +35,7 @@ index2 n m = "[" ++ show n ++ ", " ++ show m ++ "]"
 showRestriction :: RRunTime -> Int -> IO Bool -> IO ()
 showRestriction x n b = do
                           b' <- b
-                          putStrLn $ index n ++ space ++ show x ++ ", " ++ (if b' then "Es satisfacible" else "No es satisfacible")
+                          putStrLn $ index n ++ space ++ show x ++ ", " ++ (if b' then "Es Válida" else "No es Válida")
 
 showModel :: IO SatResult -> [String] -> IO ()
 showModel solution xs = do
@@ -54,7 +54,7 @@ showSolverInput b model (contexto, rest, vars) n m = do
             then do  putStr newLine
                      putStrLn $ concat (replicate 100 "-")
                      putStr newLine
-                     putStrLn $ "Sub-problema " ++ index2 n m
+                     putStrLn $ "problema lineal" ++ index2 n m
                      putStr newLine
                      putStrLn $ show contexto ++ " ----> " ++ show rest
                      putStr newLine
@@ -77,7 +77,7 @@ showSolverInputs b bs runtr models inputs n = do
                                                          putStrLn $ "Para la obligación de prueba " ++ index n
                                                          print runtr
                                                          putStr newLine
-                                                         putStrLn $ "Hay un total de " ++ show m ++ " sub-problemas diferentes."
+                                                         putStrLn $ "Hay un total de " ++ show m ++ " problemas lineales diferentes."
                                                          mapM_ (uncurry5 showSolverInput ) $ zip5 bs models inputs (repeat n) [1..m]
                                                 else putStr ""
 
@@ -90,7 +90,7 @@ showRestrictions restrictions modelss inputss bss bs b n = do
                                                                     mapM_ (uncurry3 showRestriction) $ zip3 restrictions [1..n] bs
                                                                     putStr newLine
                                                                     if b
-                                                                        then do putStrLn "Las obligaciones de prueba son satisfacibles"
+                                                                        then do putStrLn "Las obligaciones de prueba son válidas"
                                                                         else  mapM_ (uncurry6 showSolverInputs) $ zip6 bs bss restrictions  inputss modelss [1..n]
                                                             else putStrLn "No hay obligaciones de prueba asociadas"
 

@@ -111,7 +111,7 @@ weightVar (k :*: e) var     = k * weightVar e var
 -- 5. Correr un fold, con caso base (Lit 0) y usando la suma de polinomios como función
 -- La expresión final no considera el 0 y el 1 como neutros de de la adicción y multiplicación.
 normArit :: AExp -> AExp
-normArit arit = foldr (:+:) (Lit 0) wvars -- 5
+normArit arit = foldl (:+:) (Lit 0) wvars -- 5
   where
     vars = freeVars arit -- 1
     weights = map (weightVar arit) vars -- 2
@@ -133,7 +133,19 @@ simplifyArit otherwise           = otherwise
 -- | Retorna una versión normalizada de un AExp.
 completeNormArit :: AExp -> AExp
 completeNormArit = simplifyArit . normArit
+-----------------------------------{ ALGUNAS EXPRESIONES ÚTILES}--------------------------------------
 
+x :: AExp
+x = Var "x"
+
+y :: AExp 
+y = Var "y"
+
+one :: AExp
+one = Lit 1
+
+zero :: AExp
+zero = Lit 0
 ---------------------------------- { EXPRESIONES BOOLEANAS} ------------------------------------------
 -- | Definición de expresiones Boolenas
 data BExp
@@ -383,13 +395,13 @@ uniform1 q  | q <= 1    = uniform q 1
 
 -- | Calculo de esperanza. toma una distribución, una función de transformacion para un a
 --, una función * que retorna un c, una función + que retorna un d, un caso base para el fold y retorna un tipo d
-expectation :: Distribution a -> (a -> b) -> (PConstant -> b -> c)-> (c -> d -> d) -> d -> d
-expectation p_x h prod sum base =  foldr (sum . f) base p_x where
+expectedValue :: Distribution a -> (a -> b) -> (PConstant -> b -> c)-> (c -> d -> d) -> d -> d
+expectedValue p_x h prod sum base =  foldr (sum . f) base p_x where
   f (k, e) = prod k (h  e)
 
 -- | esperanza para dsitribuciones sobre expresiones aritméticas
 aexpE :: Distribution AExp -> Name -> RunTime -> RunTime
-aexpE p_x x runt = deepSimplifyRunTime $ expectation p_x f (:**:) (:++:) rtZero where
+aexpE p_x x runt = deepSimplifyRunTime $ expectedValue p_x f (:**:) (:++:) rtZero where
   f arit = sustRunTime x arit runt
 
 
