@@ -364,7 +364,7 @@ instance Show PBExp where
 
 -- | Masa de una distribución  a
 massDistribution :: Distribution a -> PConstant
-massDistribution p_x = sum (map fst $ p_x)
+massDistribution p_x = sum (map fst p_x)
 
 -- | Comprueba que la suma de masa de probabilidad sea igual 1
 isDistribution :: Distribution a -> Bool
