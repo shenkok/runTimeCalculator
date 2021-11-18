@@ -123,4 +123,4 @@ completeRoutine program str runt = do let (ert, rest, modelss, inputss, bss, bs,
                                       putStr newLine
                                       showRestrictions rest inputss modelss bss bs b' len
                                       putStr newLine
-                                      putStrLn "Calculo Finalizado"
+                                      putStrLn "Cálculo Finalizado"
