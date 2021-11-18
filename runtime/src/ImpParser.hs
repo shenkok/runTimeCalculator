@@ -11,9 +11,15 @@ import qualified Text.Parsec.Token    as Token
 import           Imp
 import Control.Exception (bracket_)
 
--- pretending Haskell has a good module system…
+
+{-
+  MÓDULO QUE SE ENCARGA DE DEFINIR LOS PARSERS PARA LAS DIFERENTES ESTRUCTURAS
+-}
+
+-------------------------------{DEFINICIONES ÚTILES}-------------------------------------------------------------------------------------------
 Token.TokenParser {..} = Token.makeTokenParser javaStyle
 
+-- | Define la asociación por la izquierda
 binary name fun = Infix (fun <$ reservedOp name) AssocLeft
 
 whitespace :: Parser ()
@@ -26,11 +32,6 @@ regularParse p = parse p ""
 parens01 :: Parser a -> Parser a
 parens01 parser = try parser <|> parens parser
 
--- AExp singular o monomio
--- monomio = n | x | n*x
-
--- AExp en Forma Normal Débil aefnd
--- aefnd = monomio | monomio + aefnd
 
 -- | Parser para escribir a los racionales como enteros
 rationalInteger :: Parser Rational
@@ -60,10 +61,18 @@ varAExp :: Parser AExp
 varAExp = Var <$> identifier
 
 -- | Parser para los casos base de AExp
+--     aexpBase -> string
+--              | q/p
+--              | n   
 aexpBase :: Parser AExp
 aexpBase = try litAExp <|> varAExp
 
 -- | Parser para AExp
+--  aexp -> aexpBase 
+--        | rational * aexpBase
+--        | rational * (aexp)
+--        | aexp + aexp
+--        | aexp - aexp azúcar sintáctica
 aexp :: Parser AExp
 aexp = buildExpressionParser table term
  where term = try ((:*:) <$> (rational <* reservedOp "*") <*> aexpBase)
@@ -74,6 +83,17 @@ aexp = buildExpressionParser table term
 
 
 -- | Parser para BExp
+-- bexp -> true, false
+--       | aexp <= aexp
+--       | aexp == aexp
+--       | aexp >= aexp azúcar sintáctica 
+--       | aexp >  aexp azúcar sintáctica
+--       | aexp <  aexp azúcar sintáctica
+--       | aexp != aexp azúcar sintáctica
+--       | ! bexp
+--       | bexp && bexp
+--       | bexp || bexp
+
 bexp :: Parser BExp
 bexp = buildExpressionParser table term
   where term =  True' <$ reserved "true"
@@ -93,8 +113,7 @@ bexp = buildExpressionParser table term
 -- RunTime singular o rts
 -- rts = monomio | q*[bool]<>x | [bool]<>x | q*[bool]
 
--- RunTime en Forma Normal Débil o rtfnd
--- rtfnd = rts| rts ++ rtfnd
+
 
 -- | Parser para RunTimes Aritméticos
 aritRunTime :: Parser RunTime
@@ -104,11 +123,25 @@ aritRunTime = RunTimeArit <$> aexp
 indicator :: Parser RunTime
 indicator = toIndicator <$> brackets bexp
 
+-- | Parser para una indicatriz por una expresión aritmética
 indArit :: Parser RunTime
 indArit = (<>:) <$> (indicator <* reservedOp "<>") <*> parens01 aexp
 
+-- | Parser para runtimes bases
+--  runtimeBase -> [bexp]
+--               | aexp
+--               | [bexp] <> aexp      
 runtimeBase :: Parser RunTime
 runtimeBase = try indArit <|> indicator <|> aritRunTime
+
+-- | Parser para runtimes
+-- runtime -> runtimeBase
+--          | rational ** runtimeBase
+--          | rational ** (runtime)
+--          | rational <> runtimeBase 
+--          | rational <> (runtime)
+--          | runtime ++ runtime
+--          | runtime -- runtime
 
 runtime :: Parser RunTime
 runtime = buildExpressionParser table term
@@ -120,17 +153,20 @@ runtime = buildExpressionParser table term
            <|> try (parens runtime)
        table = [ [ binary "++" (:++:), binary "--" (--:) ]]
 
--- | Parser para expresiones booleanas probabilistas 
+-- | Parser para expresiones booleanas probabilistas, distruciones bernoulli sobre true false
 pbexp :: Parser PBExp
 pbexp = Ber <$> angles rational
 
 ---------------------------------------------------{DISTRIBUCIONES CONOCIDAS} ------------------------------
+-- | Parser para una distribución de dirac
 dirac :: Parser PAExp
 dirac = Imp.dirac <$> angles aexp
 
+-- | Parser para una distribución bernoulli sobre 0 1
 coin :: Parser PAExp
 coin = Imp.coin <$> (reserved "coin_flip" *> parens rational)
 
+-- | Parser para distribucipon uniforme sobre los enteros
 uniform :: Parser PAExp
 uniform = do
   void $ string "uniform"
@@ -146,21 +182,45 @@ uniform = do
   void $ char ')'
   return $ Imp.uniform q p
 
+-- | Parser para distribución uniforme sobre los enteros desde el 1
 uniform1 :: Parser PAExp
 uniform1 = Imp.uniform1 <$> (reserved "uniform" *> parens rational)
 
--- | Distribuciones discretas
+-- | Parser para Distribuciones discretas 
+-- discrete -> <arit> 
+--           | coin_flip(rational)
+--           | uniform(rational, rational)
+--           | uniform(rational)
+
 discrete :: Parser PAExp
 discrete = try ImpParser.dirac <|> try ImpParser.coin
          <|> try ImpParser.uniform <|> try ImpParser.uniform1
 
 -- | Parser para expresiones aritméticas probabilistas
+-- paexp -> discrete
+--        | rational * <aexp>
+--        | paexp + paexp
 paexp :: Parser PAExp
 paexp = buildExpressionParser table term
  where term =  try ((*~:) <$> (rational <* reservedOp "*") <*> angles aexp)
           <|> try discrete
           <|> try (parens paexp)
        table = [[ binary "+" (++) ]]
+
+-- | Parser para programas
+-- program -> skip
+--          | empty
+--          | indentifier := aexp
+--          | indentifier :~ paexp
+--          | program ; program
+--          | if (bexp) {program} else {program}
+--          | pif (<rational>) {program} pelse {program}
+--          | it (bexp) {program}         Azúcar sintáctica
+--          | pit (<rational>) {program}  Azúcar sintáctica
+--          | while (bexp) {inv = runtime}{program}
+--          | pwhile (<rational>) {pinv = runtime}{program}
+--          | for (integer) {program}     Azúcar sintáctica
+--
 
 program :: Parser Program
 program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
@@ -186,7 +246,7 @@ program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
                  <|> Skip <$ reserved "skip"
                  <|> Imp.Empty <$ reserved "empty"
 
-------------------------------------------------{ PARSERS PARA LAS DIFERENTES ESTRUCTURAS}--------------------------
+------------------------------------------------{MÉTODOS PARA USAR LOS PARSER ANTERIORES}--------------------------
 parseStruct :: Parser a -> SourceName -> String -> Either ParseError a
 parseStruct p = parse (p <* eof)
 
@@ -210,3 +270,4 @@ parseProgram = parse (program <* eof)
 
 parseProgram' ::  SourceName -> String -> Either ParseError Program
 parseProgram' = parseStruct program
+

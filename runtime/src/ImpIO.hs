@@ -7,7 +7,9 @@ import ImpVCGen
 import Data.List (zip4, zip5, zip6)
 
 -- Estraído de https://hackage.haskell.org/package/hxt-9.3.1.22/docs/src/Text.XML.HXT.DOM.Util.html#uncurry4
+{- MÓDULO QUE SE ENCARGA DE IMPRIMIR LOS RESULTADOS EN LA SALIDA ESTANDAR -}
 
+--------------------------{ MÉTODOS UNCURRY }------------------------------------------------------------------------
 
 uncurry3                        :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f ~(a, b, c)           = f a b c
@@ -21,22 +23,33 @@ uncurry5 f ~(a, b, c, d, e)     = f a b c d e
 uncurry6                         :: (a -> b -> c -> d -> e -> f -> g) -> (a, b, c, d, e, f) -> g
 uncurry6 fun ~(a, b, c, d, e, f) = fun a b c d e f
 
+-------------------------------{ MÉTODOS ÚTILES} ---------------------------------------------------------------------
+
+-- | String nueva línea
 newLine :: String
 newLine = "\n"
 
+-- | String espacio en blanco 
 space :: String
 space = "  "
+
+-- | imprime el indice de una obligación de prueba
 index :: Int -> String
 index n = "[" ++ show n ++ "]"
 
+-- | Imprime el indice de un problema lineal
 index2 :: Int -> Int -> String
 index2 n m = "[" ++ show n ++ ", " ++ show m ++ "]"
 
+------------------------------{ MÉTODOS PARA IMPRIMIR LOS RESULTADOS Y MODELOS}----------------------------------------
+
+-- | Imprime si una obligación de prueba es válida o no.
 showRestriction :: RRunTime -> Int -> IO Bool -> IO ()
 showRestriction x n b = do
                           b' <- b
                           putStrLn $ index n ++ space ++ show x ++ ", " ++ (if b' then "Es Válida" else "No es Válida")
 
+-- | Imprime un modelo o imprime si no existe uno
 showModel :: IO SatResult -> [String] -> IO ()
 showModel solution xs = do
                           solution' <- solution
@@ -45,7 +58,7 @@ showModel solution xs = do
                                 Nothing ->  error "A ocurrido un error, por favor revise este caso"
                           mapM_ showValue xs
 
-
+-- | Dado un problema lineal, imprime el modelo o imprime si no es satisfacible
 showSolverInput :: IO Bool -> IO SatResult -> SolverInput -> Int -> Int ->IO()
 showSolverInput b model (contexto, rest, vars) n m = do
       let len = length vars
@@ -66,7 +79,7 @@ showSolverInput b model (contexto, rest, vars) n m = do
                      putStrLn $ concat (replicate 100 "-")
             else  putStr ""
 
-
+-- | Imprime los datos asociados a una oblicación de prueba
 showSolverInputs :: IO Bool -> [IO Bool] -> RRunTime -> [IO SatResult] -> [SolverInput] -> Int -> IO()
 showSolverInputs b bs runtr models inputs n = do
                                             b' <- b
@@ -81,8 +94,7 @@ showSolverInputs b bs runtr models inputs n = do
                                                          mapM_ (uncurry5 showSolverInput ) $ zip5 bs models inputs (repeat n) [1..m]
                                                 else putStr ""
 
--- | Muestra la transformada calculada y las restricciones que se generaron
-
+-- | Muestra la transformada calculada y las obligaciones de pruba que se generaron
 showRestrictions :: [RRunTime] -> [[SolverInput]] -> [[IO SatResult]] -> [[IO Bool]] -> [IO Bool] -> Bool -> Int -> IO ()
 showRestrictions restrictions modelss inputss bss bs b n = do
                                                         if n > 0
@@ -94,7 +106,7 @@ showRestrictions restrictions modelss inputss bss bs b n = do
                                                                         else  mapM_ (uncurry6 showSolverInputs) $ zip6 bs bss restrictions  inputss modelss [1..n]
                                                             else putStrLn "No hay obligaciones de prueba asociadas"
 
-
+-- | Imprime todos los resultados asociados a un programa
 completeRoutine :: Program -> String -> RunTime -> IO()
 completeRoutine program str runt = do let (ert, rest, modelss, inputss, bss, bs, b) = routineInput program runt
                                       let len = length rest

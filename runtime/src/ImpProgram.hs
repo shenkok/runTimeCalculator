@@ -3,8 +3,11 @@ import ImpParser
 import Imp
 import ImpVCGen (bottom, vcGenerator0, fpPWhile, fpWhile)
 import ImpIO (completeRoutine)
-import Text.Parsec
-import Data.Either (fromRight)
+
+
+{-
+  MODULO QUE SE ENCARGA DE ALMACENAR EXPRESIONES Y PROGRAMAS DE PRUEBA
+-}
 -- EJEMPLOS DE EPRESIONES PARSEADAS aexp 
 arit_1 = regularParse aexp "(9 + 10 + 11)"
 arit_2 = regularParse aexp "9*p0 + 10/6 - 11"
@@ -51,6 +54,7 @@ p2_3 = "while(y >= 10){inv = 1 ++ 3**([y>=10]<>(y--10 ++ 1))}{y:=y-1;x:=x+1}"
 ---------------------------{PROGRAMAS PROBABILÍSTICOS SIN BUCLES}------------------------------------
 p3_1 = "succ:~ 1/2* <3*x+ 1> + 1/2* <2*y>"
 p3_2 = "pif(<1/2>){succ:~ 5/100* <0> + 95/100* <1>} pelse {pif(<1/2>) {succ:~  5/100* <0> + 95/100* <1>} pelse{succ:~ 95/100* <0> + 5/100* <1>}}"
+cTrunc = "pif(<1/2>){succ:= 1} pelse {pif(<1/2>) {succ:= 1} pelse{succ:= 0}}"
 p3_3 = "pit(<9/10>){ if(x > 10){skip} else{ x:= x-1}}"
 ----------------------------{PROGRAMAS PROBABILÍSTICOS CON BUCLES}------------------------------------
 p4_1  = "pwhile(<1/2>){pinv = 3}{skip}"
@@ -68,33 +72,3 @@ p5_3 = "euler:~ uniform(-4, 7)"
 p5_4 = "pi:~ uniform(10)"
 p5_5 = "v:~ uniform(1)"
 p5_6 = "v:~ uniform(-1, -4)"
-------------------------------{MÉTODOS PARA UNIR LOS PROCESOS}-----------------------------------------------------------------
-
-run' :: String -> IO ()
-run' input = case parseProgram "<interactive>" input of
-  Left err  -> print err
-  Right program -> let runt = fst $ vcGenerator0 $ deepSimplifyProgram program in
-                   print $ show runt ++ " ===> " ++ show (deepSimplifyRunTime runt)
-
-run :: String -> IO ()
-run input = case parseProgram "<interactive>" input of
-  Left err  -> print err
-  Right program -> completeRoutine (deepSimplifyProgram program) input rtZero
-
-run'' :: String -> IO ()
-run'' input = case parseProgram "<interactive>" input of
-  Left err  -> print err
-  Right program -> print (deepSimplifyProgram program)
-
-
-fp :: String -> String -> String -> String -> Int ->IO ()
-fp x b p runt n = case (parseRunTime "<interactive>" x, parseBExp "<interactive>" b, parseProgram "<interactive>" p, parseRunTime "<interactive>" runt) of
-  (Right x', Right b',Right p',Right runt') -> print $ deepSimplifyRunTime $ fpWhile x' b' p' runt' n
-  (_, _,  _, _) -> error "Ha ocurrido un error"
-
-
-
-fpp :: String -> String -> String -> String -> Int ->IO ()
-fpp x pb p runt n = case (parseRunTime "<interactive>" x, parsePBExp "<interactive>" pb, parseProgram "<interactive>" p, parseRunTime "<interactive>" runt) of
-  (Right x', Right pb',Right p',Right runt') ->  print $ deepSimplifyRunTime $ fpPWhile x' pb' p' runt' n
-  (_, _,  _, _) -> error "Ha ocurrido un error"

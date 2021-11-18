@@ -9,22 +9,30 @@ link del curso :
 
 Nota: Para la realización de esta memoria por el momento sólo se trabaja con la sintaxis del lenguaje.
 
-Expresiones aritméticas :
+Expresiones aritméticas deterministas :
 
       Arit := n  constante real
             | x  variable
             | n * Arit
-            | Arit + Arit 
+            | Arit + Arit
 
+Expresiones aritméticas Probabilistas :
+
+      PArit := Σ p_i * Arit   con p_i en [0, 1]  Distribución sobre expresiones aritméticas
+
+            
 Expresiones booleanas deterministicas :
         
-      dξ  :=  true 
-           |  false 
-           |  Arit = Arit 
-           |  Arit <= Arit 
-           |  ㄱ dξ
-           |  dξ ^ dξ
+      dξ  :=  true, false   constantes booleanas
+           |  Arit = Arit   igualdad de expresiones aritméticas
+           |  Arit <= Arit  menor igual de expresiones aritméticas
+           |  ㄱ dξ         negación
+           |  dξ ^ dξ       and lógico
+           |  dξ v dξ       or lógico
 
+Expresiones booleanas Probabilistas :
+
+      pξ  :=  ber(p) con p en [0, 1] Muestra de distribución bernoulli 
 
 Tiempos de Ejecución (Runtime) :
 
@@ -37,21 +45,25 @@ Programas :
       C := empty
          | skip
          | x := Arit
+         | x :~ PArit
          | C ; C 
          | if (dξ) {C} else {C}
+         | pif (pξ) {C} else {C}
+         | pwhile (pξ) {C} [RunTime]
          | while (dξ) {C} [RunTime]
 
 Definición de transformada ert[C](f):: Program -> RunTime -> RunTime 
-
       ert[C](f) = 
                 match C
-                empty -> f                
-                skip -> 1 + f
-                x := μ -> 1 + f[x -> μ]
-                C_1 ; C_2 -> ert[C_1](ert[C_2](f))
-                if (dξ) {C_1} else {C_2} -> 1 + [dξ]*ert[C_1](f) + [~dξ]*ert[C_2](f)
-                while (dξ) {C'} [I] -> lfp X. 1 + [~dξ]*f + [dξ]*ert[C'](X) <= I  
-
+                empty                          -> f                
+                skip                           -> 1 + f
+                x := arit                      -> 1 + f[x -> arit]
+                x :~ Σ p_i * arit_i            -> 1 + Σ p_i*f[x -> arit_i]
+                C_1 ; C_2                      -> ert[C_1](ert[C_2](f))
+                if (dξ) {C_1} else {C_2}       -> 1 + [dξ]*ert(C_1)(f) + [~dξ]*ert[C_2](f)
+                pif (ber(p)) {C_1} else {C_2}  -> 1 + p*ert[C_1](f) + (1 - p)*ert[C_2](f)
+                while  (dξ) {C'} [I]           -> I
+                pwhile (pξ) {C'} [I]           -> I
 Restricción para verificar :
 
       VerR := RunTime <= RunTime
@@ -61,12 +73,15 @@ Definición de función generadora de restricciones  VC(C)(f):: Program -> RunTi
 
       VC[C](f) = 
                match C
-               empty -> {}
-               skip -> {}
-               x := μ -> {}
-               C_1 ; C_2 -> VC[C_1](ert[C_2](f)) Union VC[C_2](f)
-               if (dξ) {C_1} else {C_2} -> VC[C_1](f) Union VC[C_2](f)
-               while (dξ) {C'} [I] -> { 1 + [dξ]*ert[C'](I) + [~dξ]*f <= I } Union VC[C'](f)
+               empty                         -> {}
+               skip                          -> {}
+               x := arit                     -> {}
+               x :~ Σ p_i * arit_i           -> {}
+               C_1 ; C_2                     -> VC[C_1](ert[C_2](f)) Union VC[C_2](f)
+               if (dξ) {C_1} else {C_2}      -> VC[C_1](f) Union VC[C_2](f)
+               pif (ber(p)) {C_1} else {C_2} -> VC[C_1](f) Union VC[C_2](f)
+               while (dξ) {C'} [I]           -> { 1 + [dξ]*ert[C'](I) + [~dξ]*f <= I } Union VC[C'](f)
+               pwhile (pξ) {C'} [I]          -> { 1 + p*ert[C'](I) + (1-p)*f <= I } Union VC[C'](f)
 
 
 
@@ -105,7 +120,7 @@ Ejemplo tutorial:
 
      https://sat-smt.codes/
 
-Otro ejemplo :       
+Otro ejemplo :
 
       https://www.lri.fr/~conchon/TER/2013/2/SMTLIB2.pdf
 

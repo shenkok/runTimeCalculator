@@ -63,10 +63,11 @@ makeSBVModel sinput = do
                     let env = M.fromList (zip names xs)
                     constrain (sAnd (map (sBExp env) context))
 
+-- Versiṕn monádica IO del and lógico
 ioAnd :: IO Bool -> IO Bool -> IO Bool
 ioAnd b_1 b_2 = (&&) <$> b_1 <*> b_2
 
-
+-- Dado un programa y un runtime entrega el input necesario para poder imprimir los resultados
 routineInput :: Program -> RunTime -> (RunTime, [RRunTime],[[IO SatResult]], [[SolverInput]], [[IO Bool]], [IO Bool], IO Bool)
 routineInput program runt = (sert, rests, modelss, inputss, bss, bs, b) where
     (ert, rest)    = vcGenerator program runt

@@ -12,9 +12,6 @@ type Names    = [Name]
 
 type Constant = Rational --  Constantes Númericas
 
--- TODO: Parser para escribir los lenguajes de forma cómoda
--- TODO: Averigüar como bajar el número de parentesis
-
 ---------------------------------------- { FUNCIONES ÚTILES }---------------------------------------
 
 -- | Elimina los elementos repetidos en una lista
@@ -22,7 +19,7 @@ rmdups :: (Eq a) => [a] -> [a]
 rmdups []       = []
 rmdups (x : xs) = x : rmdups (filter (/= x) xs)
 
--- | bools retorna una matriz con todas las posibles combinaciones False/True
+-- | Retorna una matriz con todas las posibles combinaciones False/True
 -- de tamaño n.
 bools :: Int -> [[Bool]]
 bools 0 = [[]]
@@ -30,6 +27,7 @@ bools n = map (False :) r ++ map (True :) r
   where
     r = bools (n -1)
 
+-- | Método para imprimir literales
 showLit :: Rational -> String
 showLit q
   | denominator q == 1 = show $ numerator q
@@ -61,10 +59,13 @@ data AExp
   deriving (Eq)  -- Ponderación por una constante
 
 -----------------------------------------{ AZÚCAR SINTÁCTICA}------------------------------------------------
+
+-- | Azúcar sintáctica para la resta de expresiones aritméticas 
 (-:) :: AExp -> AExp -> AExp
-arit_1 -: arit_2 = arit_1 :+: ((-1) :*: arit_2)
+(-:) arit_1 arit_2 = arit_1 :+: ((-1) :*: arit_2)
 
 ---------------------------------------- { FUNCIONES EXPRESIONES ARITMÉTICAS }--------------------------------
+
 -- | Definición del método show para AExp
 instance Show AExp where
   show (Lit n)           = showLit n
@@ -73,6 +74,7 @@ instance Show AExp where
   show (k :*: Lit n)     = showLit k ++  "*"  ++ showLit n
   show (k :*: Var x)     = showLit k ++  "*"  ++ show x
   show (k :*: e_2)       = showLit k ++  "*(" ++ show e_2 ++")"
+
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
 sustAExp _ _ (Lit n)             = Lit n
@@ -110,6 +112,7 @@ weightVar (k :*: e) var     = k * weightVar e var
 -- 4. Entregar un arreglo con los monomios respectivos.
 -- 5. Correr un fold, con caso base (Lit 0) y usando la suma de polinomios como función
 -- La expresión final no considera el 0 y el 1 como neutros de de la adicción y multiplicación.
+
 normArit :: AExp -> AExp
 normArit arit = foldl (:+:) (Lit 0) wvars -- 5
   where
@@ -133,6 +136,7 @@ simplifyArit otherwise           = otherwise
 -- | Retorna una versión normalizada de un AExp.
 completeNormArit :: AExp -> AExp
 completeNormArit = simplifyArit . normArit
+
 -----------------------------------{ ALGUNAS EXPRESIONES ÚTILES}--------------------------------------
 
 x :: AExp
@@ -146,7 +150,9 @@ one = Lit 1
 
 zero :: AExp
 zero = Lit 0
+
 ---------------------------------- { EXPRESIONES BOOLEANAS} ------------------------------------------
+
 -- | Definición de expresiones Boolenas
 data BExp
   = True' -- Constante True
@@ -180,6 +186,7 @@ data BExp
 toBExp :: Bool -> BExp
 toBExp True  = True'
 toBExp False = False'
+
 ---------------------------------- { FUNCIONES EXPRESIONES BOOLEANAS } ------------------------------------------
 
 -- | Función de sustitución toma una variable "x", un AExp aritFor y una expresión booleana AritIn
@@ -270,8 +277,8 @@ toIndicator e_b = e_b :<>: rtOne
 
 -- | Azúcar sintáctica para operar una función indicatriz con expresión aritmética
 (<>:) :: RunTime -> AExp -> RunTime
-(e_b :<>: (RunTimeArit (Lit 1))) <>: arit = e_b :<>: RunTimeArit arit
-otherwise <>: _                           = error $ "El runtime no tiene la forma de indicatriz " ++ show otherwise
+(<>:) (e_b :<>: (RunTimeArit (Lit 1))) arit = e_b :<>: RunTimeArit arit
+(<>:) otherwise  _                          = error $ "El runtime no tiene la forma de indicatriz " ++ show otherwise
  ----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
 
 instance Show RunTime where
@@ -329,7 +336,7 @@ deepSimplifyRunTime (k :**: runt)      = simplifyRunTime (k :**: deepSimplifyRun
 -- | Constante de dsitribuciones probabilisticas
 type PConstant        = Constant
 
--- | Definición de una expresión porbabilista singletón
+-- | Definición de una expresión probabilista singletón
 type PBase a = (PConstant, a)
 
 -- | Definición de una distribución de tipo a
@@ -344,19 +351,22 @@ type PAExp = Distribution AExp
 (*~:) :: PConstant -> a -> Distribution a
 (*~:) q a = [(q, a)]
 
+-- | Azúcar sintáctica para la suma de expresiones aritméticas probabilistas 
 (+~:) :: PAExp -> PAExp -> PAExp
 (+~:) = (++)
 
--- | Método para mostar un punto de la distribución 
+-- | Método para imprimir un punto de la distribución 
 showPoint :: (PConstant, AExp) -> String
 showPoint (1, arit) = "<" ++ show arit ++ ">"
 showPoint (q, arit) =  showLit q ++ "*<" ++ show arit ++ ">"
 
+-- | Método para imprimir Expresiones aritméticas
 showPAexp :: PAExp -> String
 showPAexp []       = ""
 showPAexp (y:x:xs) = showPoint y ++ " + "
 showPAexp (x: xs)  = showPoint x
 
+-- | Expresiones Booleanas probabilistas // Muestras de distribuciones Bernoulli
 newtype PBExp = Ber { p:: PConstant} deriving (Eq)
 
 instance Show PBExp where
@@ -418,25 +428,30 @@ aexpE p_x x runt = deepSimplifyRunTime $ expectedValue p_x f (:**:) (:++:) rtZer
 -- del tipo Seq Program Program para luego usar la transformada sobre él.
 
 data Program
-  = Skip -- programa vacío que toma una unidad de tiempo
-  | Empty -- programacio vacío sin costo de tiempo
-  | Set Name AExp -- Asignación
-  | PSet Name PAExp -- Asignación probabilista
-  | Seq Program Program -- Composición secuencial de programas
-  | If BExp Program Program -- guarda condicional
-  | PIf PBExp Program Program -- guarda condicional probabilista
-  | While BExp Program RunTime -- ciclo while probabilista
-  | PWhile PBExp Program RunTime
-  deriving (Eq, Show) -- ciclo while
+  = Skip                        -- programa vacío que toma una unidad de tiempo
+  | Empty                       -- programa vacío sin costo de tiempo
+  | Set Name AExp               -- Asignación
+  | PSet Name PAExp             -- Asignación probabilista
+  | Seq Program Program         -- Composición secuencial de programas
+  | If BExp Program Program     -- guarda condicional
+  | PIf PBExp Program Program   -- guarda condicional probabilista
+  | While BExp Program RunTime  -- ciclo while
+  | PWhile PBExp Program RunTime -- ciclo while probabilista
+  deriving (Eq, Show) 
 -------------------------------------------{ FUNCIONES AUXILIARES }----------------------------------------------------------
+
 -- | Función flip para usar en el while
 flipw :: (a -> b -> c -> d) -> a -> c -> b -> d
 flipw f b p runt = f b runt p
--------------------------------------------{ SIMPLIFICADOR PORGRAMAS } ------------------------------------------------------
+
+-------------------------------------------{ SIMPLIFICADOR PRoGRAMAS } ------------------------------------------------------
+
+-- | Simplifica programas en 1 paso
 simplifyProgram :: Program -> Program
 simplifyProgram (Seq Empty program) = program
 simplifyProgram otherwise           = otherwise
 
+-- | Simplificación recursiva de programas
 deepSimplifyProgram :: Program -> Program
 deepSimplifyProgram Skip                           = Skip
 deepSimplifyProgram Empty                          = Empty
