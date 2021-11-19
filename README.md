@@ -53,6 +53,7 @@ Programas :
          | while (dξ) {C} [RunTime]
 
 Definición de transformada ert[C](f):: Program -> RunTime -> RunTime 
+
       ert[C](f) = 
                 match C
                 empty                          -> f                
@@ -64,10 +65,11 @@ Definición de transformada ert[C](f):: Program -> RunTime -> RunTime
                 pif (ber(p)) {C_1} else {C_2}  -> 1 + p*ert[C_1](f) + (1 - p)*ert[C_2](f)
                 while  (dξ) {C'} [I]           -> I
                 pwhile (pξ) {C'} [I]           -> I
-Restricción para verificar :
 
-      VerR := RunTime <= RunTime
-              RunTime == RunTime
+Obligaciones de prueba :
+
+      Obligation := RunTime <= RunTime
+                    RunTime == RunTime
 
 Definición de función generadora de restricciones  VC(C)(f):: Program -> RunTime -> {VerR}
 
