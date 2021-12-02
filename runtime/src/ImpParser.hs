@@ -61,7 +61,7 @@ varAExp :: Parser AExp
 varAExp = Var <$> identifier
 
 -- | Parser para los casos base de AExp
---     aexpBase -> string
+--     aexpBase -> identifier
 --              | q/p
 --              | n   
 aexpBase :: Parser AExp
@@ -110,10 +110,6 @@ bexp = buildExpressionParser table term
                 ]
 
 ----------------------------------- { PARSER PARA RUNTIME} -------------------
--- RunTime singular o rts
--- rts = monomio | q*[bool]<>x | [bool]<>x | q*[bool]
-
-
 
 -- | Parser para RunTimes Aritméticos
 aritRunTime :: Parser RunTime

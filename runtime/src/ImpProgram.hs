@@ -43,17 +43,18 @@ pbexp0 = regularParse pbexp "<1/2>"
 p1_1 = "x:=10; y:=3"
 p1_2 = "x:=10; y:=3; it(x>=y){skip; skip}"
 p1_3 = "x:=10; y:=3; if(x>=y){skip; skip} else{empty}"
-p1_4 = "x:=10; y:=3; if(x>=y){skip; skip} else{if(true){z:=3/5; w:=3}else{skip; empty}}"
-p1_5 = "if(x>=y){skip; skip} else{if(true){z:=3/5; w:=3} else{skip; empty}}"
-p1_6 = "x:=x-1; if(x>=y){skip; y:= 2*x} else{if(w>=8){w:= 3; x:=w+x} else{y:=5}}"
+test_d1 = "x:=10; y:=3; if(x>=y){skip; skip} else{if(true){z:=3/5; w:=3}else{skip; empty}}"
+p1_4 = "if(x>=y){skip; skip} else{if(true){z:=3/5; w:=3} else{skip; empty}}"
+test_d2 = "x:=x-1; if(x>=y){skip; y:= 2*x} else{if(w>=8){w:= 3; x:=w+x} else{y:=5}}"
 --------------------------{PROGRAMAS DETERMINISTICOS CON BUBLES} ------------------------------------
 p2_1 = "while(x > 0){inv = 1 ++ 2**[x>0]<>x }{x:= x-1}"
-p2_2 = "x:= 10; while(x > 0){inv = 1 ++ 2**[x>0]<>x }{x:= x-1}"
-p2_3 = "while(y >= 10){inv = 1 ++ 3**([y>=10]<>(y--10 ++ 1))}{y:=y-1;x:=x+1}"
+test_d3  = "x:= 10; while(x > 0){inv = 1 ++ 2**[x>0]<>x }{x:= x-1}"       -- invariante incorrecto
+test_d3' = "x:= 10; while(x > 0){inv = 1 ++ 2**[x>0]<>(x + 1) }{x:= x-1}" -- invariante correcto
+p2_3 = "while(y >= 10){inv = 1 ++ 3**([y>=10]<>(y--10 ++ 1))}{y:=y-1;x:=x+1}" -- invariante correcto
 
 ---------------------------{PROGRAMAS PROBABILÍSTICOS SIN BUCLES}------------------------------------
 p3_1 = "succ:~ 1/2* <3*x+ 1> + 1/2* <2*y>"
-p3_2 = "pif(<1/2>){succ:~ 5/100* <0> + 95/100* <1>} pelse {pif(<1/2>) {succ:~  5/100* <0> + 95/100* <1>} pelse{succ:~ 95/100* <0> + 5/100* <1>}}"
+test_p1 = "pif(<1/2>){succ:~ 5/100* <0> + 95/100* <1>} pelse {pif(<1/2>) {succ:~  5/100* <0> + 95/100* <1>} pelse{succ:~ 95/100* <0> + 5/100* <1>}}"
 cTrunc = "pif(<1/2>){succ:= 1} pelse {pif(<1/2>) {succ:= 1} pelse{succ:= 0}}"
 p3_3 = "pit(<9/10>){ if(x > 10){skip} else{ x:= x-1}}"
 ----------------------------{PROGRAMAS PROBABILÍSTICOS CON BUCLES}------------------------------------
@@ -64,7 +65,7 @@ p4_3' = "pwhile(<9/10>) {pinv = 10 ++ 9**[c!=1] ++ 189**[c==1]}{while(c == 1){in
 p4_3'' = "pwhile(<9/10>) {pinv = 19/10 ++ 9/10**[c!=1] ++ 189/10**[c==1]}{while(c == 1){inv = 1 ++ [c!=1] ++ 21**[c==1]} {c:~ 1/2* <0> + 1/2* <1>}}"
 p4_4  = "for(3){pwhile(<1/2>){pinv = 3}{skip}}"
 p4_5  = "pwhile(<1/2>){pinv = 9}{skip};pwhile(<1/2>){pinv = 6}{skip};pwhile(<1/2>){pinv = 3}{skip}"
-p4_6  = "while(c == 1){inv = 1 ++ 4**[c == 1]}{ c :~ coin_flip(1/2)}"
+p4_6  = "while(c == 1){inv = 1 ++ 4**[c == 1]}{ c :~ 1/2* <0> + 1/2* <1>}"
 -----------------------------{DISTRIBUCIONES PROBABILÍSTICAS}------------------------------------------------------------------
 p5_1 = "y :~ <12> "
 p5_2 = "coin :~ coin_flip(2/4)"

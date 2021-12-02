@@ -52,7 +52,7 @@ Programas :
          | pwhile (pξ) {C} [RunTime]
          | while (dξ) {C} [RunTime]
 
-Definición de transformada ert[C](f):: Program -> RunTime -> RunTime 
+Definición de transformada ert:: Program -> RunTime -> RunTime 
 
       ert[C](f) = 
                 match C

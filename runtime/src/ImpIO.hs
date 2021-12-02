@@ -6,6 +6,7 @@ import Imp
 import ImpVCGen
 import Data.List (zip4, zip5, zip6)
 
+
 -- Estraído de https://hackage.haskell.org/package/hxt-9.3.1.22/docs/src/Text.XML.HXT.DOM.Util.html#uncurry4
 {- MÓDULO QUE SE ENCARGA DE IMPRIMIR LOS RESULTADOS EN LA SALIDA ESTANDAR -}
 
@@ -47,7 +48,7 @@ index2 n m = "[" ++ show n ++ ", " ++ show m ++ "]"
 showRestriction :: RRunTime -> Int -> IO Bool -> IO ()
 showRestriction x n b = do
                           b' <- b
-                          putStrLn $ index n ++ space ++ show x ++ ", " ++ (if b' then "Es Válida" else "No es Válida")
+                          putStrLn $ index n ++ space ++ show x ++ ", " ++ (if b' then "Es válida" else "No es válida")
 
 -- | Imprime un modelo o imprime si no existe uno
 showModel :: IO SatResult -> [String] -> IO ()
@@ -67,11 +68,11 @@ showSolverInput b model (contexto, rest, vars) n m = do
             then do  putStr newLine
                      putStrLn $ concat (replicate 100 "-")
                      putStr newLine
-                     putStrLn $ "problema lineal" ++ index2 n m
+                     putStrLn $ "Problema lineal " ++ index2 n m
+                     putStrLn $ show contexto ++ "   |-  " ++ show rest
                      putStr newLine
-                     putStrLn $ show contexto ++ " ----> " ++ show rest
+                     putStrLn "El problema no es satisfacible."
                      putStr newLine
-                     putStrLn "El problema no es satisfacible"
                      if len > 0
                            then do putStrLn "Un contraejemplo encontrado es:"
                                    showModel model vars
@@ -87,14 +88,15 @@ showSolverInputs b bs runtr models inputs n = do
                                                 then do  let m = length inputs
                                                          putStrLn $ concat (replicate 100 "*")
                                                          putStr newLine
-                                                         putStrLn $ "Para la obligación de prueba " ++ index n
+                                                         putStrLn $ "Obligación de prueba " ++ index n
                                                          print runtr
                                                          putStr newLine
-                                                         putStrLn $ "Hay un total de " ++ show m ++ " problemas lineales diferentes."
+                                                         putStrLn $ "La obligación de prueba tiene asociada " ++ show m ++ " problemas lineales diferentes."
                                                          mapM_ (uncurry5 showSolverInput ) $ zip5 bs models inputs (repeat n) [1..m]
                                                 else putStr ""
 
--- | Muestra la transformada calculada y las obligaciones de pruba que se generaron
+
+
 showRestrictions :: [RRunTime] -> [[SolverInput]] -> [[IO SatResult]] -> [[IO Bool]] -> [IO Bool] -> Bool -> Int -> IO ()
 showRestrictions restrictions modelss inputss bss bs b n = do
                                                         if n > 0
@@ -102,9 +104,11 @@ showRestrictions restrictions modelss inputss bss bs b n = do
                                                                     mapM_ (uncurry3 showRestriction) $ zip3 restrictions [1..n] bs
                                                                     putStr newLine
                                                                     if b
-                                                                        then do putStrLn "Las obligaciones de prueba son válidas"
-                                                                        else  mapM_ (uncurry6 showSolverInputs) $ zip6 bs bss restrictions  inputss modelss [1..n]
-                                                            else putStrLn "No hay obligaciones de prueba asociadas"
+                                                                        then do putStrLn "El tiempo de ejecución calculado es válido porque las obligaciones de prueba son válidas. "
+                                                                        else do mapM_ (uncurry6 showSolverInputs) $ zip6 bs bss restrictions  inputss modelss [1..n]
+                                                                                putStrLn "El tiempo de ejecución calculado no es válido porque alguna de las obligaciones de prueba generadas no es válida."
+                                                                                putStrLn "Ajuste las invariantes de bucle y vuelva a realizar el análisis. "
+                                                            else do putStrLn "El tiempo de ejecución calculado es válido porque no hay obligaciones de prueba asociadas."
 
 -- | Imprime todos los resultados asociados a un programa
 completeRoutine :: Program -> String -> RunTime -> IO()
@@ -115,7 +119,7 @@ completeRoutine program str runt = do let (ert, rest, modelss, inputss, bss, bs,
                                       putStrLn "Programa Analizado:"
                                       putStrLn str
                                       putStr newLine
-                                      putStrLn "Se calcula la transformada con respecto a"
+                                      putStrLn "Se calcula la transformada con respecto a:"
                                       print runt
                                       putStr newLine
                                       putStrLn "Tiempo de ejecución calculado:"
@@ -123,4 +127,7 @@ completeRoutine program str runt = do let (ert, rest, modelss, inputss, bss, bs,
                                       putStr newLine
                                       showRestrictions rest inputss modelss bss bs b' len
                                       putStr newLine
-                                      putStrLn "Cálculo Finalizado"
+                                      putStrLn "Análisis Finalizado."
+
+
+                                      
