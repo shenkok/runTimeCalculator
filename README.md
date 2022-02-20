@@ -185,9 +185,7 @@ Sobre la carpeta `runtime`: El proyecto es hecho en stack versión 2.7.3
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Como compilar:
-
-Hay pasos que averiguaré en breve.
-- Instalar stack  con curl -sSL https://get.haskellstack.org/ | sh
+- Instalar  `stack` (Version 2.7.3) ejecutar  ` curl -sSL https://get.haskellstack.org/ | sh`
 - Para instalar el trabajo ejecutar  `stack build ` en la carpeta  `runtime.
 - Para cargar un módulo en consola (con todas sus varaibles), ir a la carpeta y usar  `stack ghci Modulo.hs `.
 - Por ejemplo para cargar el módulo  `Main.hs` ir a la carpeta  `runtime\app` y ejecutar  `stack ghci Main.hs `
