@@ -48,6 +48,7 @@ rationalFractional = do
     return $ toRational num/ toRational den
 
 
+
 -- | Parser para ecribir racionales
 rational :: Parser Rational
 rational = try rationalFractional <|> rationalInteger

@@ -6,6 +6,7 @@ import ImpIO
 import ImpVCGen
 import ImpParser
 import ImpProgram
+import Data.SBV
 
 ------------------------------{MÉTODO PARA UNIR LOS PROCESOS}-----------------------------------------------------------------
 
@@ -25,5 +26,12 @@ fpp :: String -> String -> String -> String -> Int ->IO ()
 fpp x pb p runt n = case (parseRunTime "<interactive>" x, parsePBExp "<interactive>" pb, parseProgram "<interactive>" p, parseRunTime "<interactive>" runt) of
   (Right x', Right pb',Right p',Right runt') ->  print $ deepSimplifyRunTime $ fpPWhile x' pb' p' runt' n
   (_, _,  _, _) -> error "Ha ocurrido un error"
+
+
+sol = sat $ do 
+  x <- sRational "x"
+  z <- sRational "z"
+  constrain $ x  .> z + literal 0.75
+  constrain $ x .<= 0
 
 main =  run cTrunc

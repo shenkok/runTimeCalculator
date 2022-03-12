@@ -106,8 +106,8 @@ showRestrictions restrictions modelss inputss bss bs b n = do
                                                                     if b
                                                                         then do putStrLn "El tiempo de ejecución calculado es válido porque las obligaciones de prueba son válidas. "
                                                                         else do mapM_ (uncurry6 showSolverInputs) $ zip6 bs bss restrictions  inputss modelss [1..n]
-                                                                                putStrLn "El tiempo de ejecución calculado no es válido porque alguna de las obligaciones de prueba generadas no es válida."
-                                                                                putStrLn "Ajuste las invariantes de bucle y vuelva a realizar el análisis. "
+                                                                                putStrLn "El tiempo de ejecución calculado no es válido porque alguna obligación de prueba no es válida."
+                                                                                putStrLn "Ajuste las invariantes de ciclo y vuelva a realizar el análisis. "
                                                             else do putStrLn "El tiempo de ejecución calculado es válido porque no hay obligaciones de prueba asociadas."
 
 -- | Imprime todos los resultados asociados a un programa

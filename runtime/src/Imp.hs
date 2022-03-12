@@ -2,6 +2,7 @@ module Imp where
 
 import Data.List
 import Data.Ratio
+import GHC.Real (infinity)
 
 {-
   MODULO QUE SE ENCARGA SE REPRESENTAR EXPRESIONES ARITMÉTICAS, BOOLEANAS, RUNTIMES Y PROGRAMAS
@@ -64,7 +65,14 @@ data AExp
 (-:) :: AExp -> AExp -> AExp
 (-:) arit_1 arit_2 = arit_1 :+: ((-1) :*: arit_2)
 
+
 ---------------------------------------- { FUNCIONES EXPRESIONES ARITMÉTICAS }--------------------------------
+-- | Función suma que simplifica el zero
+(+:) :: AExp -> AExp -> AExp
+(+:) (Lit 0) arit_1 = arit_1
+(+:)  arit_1 (Lit 0) = arit_1
+(+:) arit_1 arit_2 = arit_1 :+: arit_2
+
 
 -- | Definición del método show para AExp
 instance Show AExp where
@@ -111,10 +119,11 @@ weightVar (k :*: e) var     = k * weightVar e var
 -- 3. Definir una función auxiliar que un par (peso, variable) y retorma un monomio peso:*:variable
 -- 4. Entregar un arreglo con los monomios respectivos.
 -- 5. Correr un fold, con caso base (Lit 0) y usando la suma de polinomios como función
+-- 
 -- La expresión final no considera el 0 y el 1 como neutros de de la adicción y multiplicación.
 
 normArit :: AExp -> AExp
-normArit arit = foldl (:+:) (Lit 0) wvars -- 5
+normArit arit = foldl (+:) (Lit 0) wvars -- 5
   where
     vars = freeVars arit -- 1
     weights = map (weightVar arit) vars -- 2
@@ -124,8 +133,6 @@ normArit arit = foldl (:+:) (Lit 0) wvars -- 5
 
 -- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1.
 simplifyArit :: AExp -> AExp
-simplifyArit (Lit 0 :+: arit)    = simplifyArit arit
-simplifyArit (arit  :+: Lit 0)   = simplifyArit arit
 simplifyArit (arit_1 :+: arit_2) = simplifyArit arit_1 :+: simplifyArit arit_2
 simplifyArit (1 :*: arit)        = simplifyArit arit
 simplifyArit (0 :*: _)           = Lit 0
@@ -150,6 +157,10 @@ one = Lit 1
 
 zero :: AExp
 zero = Lit 0
+
+infRational :: Rational 
+infRational = infinity
+
 
 ---------------------------------- { EXPRESIONES BOOLEANAS} ------------------------------------------
 
