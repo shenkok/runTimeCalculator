@@ -67,6 +67,9 @@ makeSBVModel sinput = do
 ioAnd :: IO Bool -> IO Bool -> IO Bool
 ioAnd b_1 b_2 = (&&) <$> b_1 <*> b_2
 
+-- Versiṕn monádica IO del and lógico
+ioOr :: IO Bool -> IO Bool -> IO Bool
+ioOr b_1 b_2 = (||) <$> b_1 <*> b_2
 -- Dado un programa y un runtime entrega el input necesario para poder imprimir los resultados
 routineInput :: Program -> RunTime -> (RunTime, [RRunTime],[[IO SatResult]], [[SolverInput]], [[IO Bool]], [IO Bool], IO Bool)
 routineInput program runt = (sert, rests, modelss, inputss, bss, bs, b) where
@@ -76,6 +79,6 @@ routineInput program runt = (sert, rests, modelss, inputss, bss, bs, b) where
     inputss        = map restrictionsToSolver rests
     problemss      = map (map makeSBVModel) inputss
     modelss        = map (map sat) problemss
-    bss            = map (map isVacuous) problemss
-    bs             = map (foldr ioAnd (pure True)) bss
-    b              = foldr ioAnd (pure True) bs
+    bss            = map (map isSatisfiable) problemss
+    bs             = map (foldr ioOr (pure False)) bss
+    b              = foldr ioOr (pure False) bs

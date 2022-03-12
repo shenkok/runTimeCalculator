@@ -48,7 +48,7 @@ index2 n m = "[" ++ show n ++ ", " ++ show m ++ "]"
 showRestriction :: RRunTime -> Int -> IO Bool -> IO ()
 showRestriction x n b = do
                           b' <- b
-                          putStrLn $ index n ++ space ++ show x ++ ", " ++ (if b' then "Es válida" else "No es válida")
+                          putStrLn $ index n ++ space ++ show x ++ ", " ++ (if b' then  "No es válida"   else  "Es válida")
 
 -- | Imprime un modelo o imprime si no existe uno
 showModel :: IO SatResult -> [String] -> IO ()
@@ -64,7 +64,7 @@ showSolverInput :: IO Bool -> IO SatResult -> SolverInput -> Int -> Int ->IO()
 showSolverInput b model (contexto, rest, vars) n m = do
       let len = length vars
       b' <- b
-      if not b'
+      if b'
             then do  putStr newLine
                      putStrLn $ concat (replicate 100 "-")
                      putStr newLine
@@ -84,7 +84,7 @@ showSolverInput b model (contexto, rest, vars) n m = do
 showSolverInputs :: IO Bool -> [IO Bool] -> RRunTime -> [IO SatResult] -> [SolverInput] -> Int -> IO()
 showSolverInputs b bs runtr models inputs n = do
                                             b' <- b
-                                            if not b'
+                                            if  b'
                                                 then do  let m = length inputs
                                                          putStrLn $ concat (replicate 100 "*")
                                                          putStr newLine
@@ -104,17 +104,18 @@ showRestrictions restrictions modelss inputss bss bs b n = do
                                                                     mapM_ (uncurry3 showRestriction) $ zip3 restrictions [1..n] bs
                                                                     putStr newLine
                                                                     if b
-                                                                        then do putStrLn "El tiempo de ejecución calculado es válido porque las obligaciones de prueba son válidas. "
-                                                                        else do mapM_ (uncurry6 showSolverInputs) $ zip6 bs bss restrictions  inputss modelss [1..n]
+                                                                        then do mapM_ (uncurry6 showSolverInputs) $ zip6 bs bss restrictions  inputss modelss [1..n]
                                                                                 putStrLn "El tiempo de ejecución calculado no es válido porque alguna obligación de prueba no es válida."
-                                                                                putStrLn "Ajuste las invariantes de ciclo y vuelva a realizar el análisis. "
+                                                                                putStrLn "Ajuste los invariantes de ciclo y vuelva a realizar el análisis. "
+                                                                        else do putStrLn "El tiempo de ejecución calculado es válido porque las obligaciones de prueba son válidas. "
+
                                                             else do putStrLn "El tiempo de ejecución calculado es válido porque no hay obligaciones de prueba asociadas."
 
 -- | Imprime todos los resultados asociados a un programa
 completeRoutine :: Program -> String -> RunTime -> IO()
 completeRoutine program str runt = do let (ert, rest, modelss, inputss, bss, bs, b) = routineInput program runt
                                       let len = length rest
-                                      b' <- b
+                                      b' <- bstack
                                       putStr newLine
                                       putStrLn "Programa Analizado:"
                                       putStrLn str
