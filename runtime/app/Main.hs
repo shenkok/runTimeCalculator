@@ -29,9 +29,13 @@ fpp x pb p runt n = case (parseRunTime "<interactive>" x, parsePBExp "<interacti
 
 
 sol = sat $ do 
-  x <- sRational "x"
-  z <- sRational "z"
-  constrain $ x  .> z + literal 0.75
-  constrain $ x .<= 0
+
+  x <- sRational "a"
+  y <- sRational "b"
+  z <- sRational "c"
+  constrain $ x .> 0
+  constrain $ y .> 0
+  constrain $ z .> 0
+  constrain $ x + y .== z
 
 main =  run cTrunc

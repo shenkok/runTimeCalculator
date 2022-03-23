@@ -119,15 +119,15 @@ type Contexts = [Context]
 type SolverInput = (Context, RArit, Names)
 
 -- | Retorna todas las instancias de BExp dentro un RunTime sin repeticiones
-findConditionRunTime :: RunTime -> Context
-findConditionRunTime runt = rmdups conds
+getBExp :: RunTime -> Context
+getBExp runt = rmdups conds
   where
     conds = f runt
     f (RunTimeArit _)        = []
-    f ((Not bexp) :<>: runt) = bexp : findConditionRunTime runt
-    f (bexp :<>: runt)       = bexp : findConditionRunTime runt
-    f (e_1 :++: e_2)         = findConditionRunTime e_1 ++ findConditionRunTime e_2
-    f (_ :**: runt)          = findConditionRunTime runt
+    f ((Not bexp) :<>: runt) = bexp : getBExp runt
+    f (bexp :<>: runt)       = bexp : getBExp runt
+    f (e_1 :++: e_2)         = getBExp e_1 ++ getBExp e_2
+    f (_ :**: runt)          = getBExp runt
 
 -- | Toma un RunTime runt y retorna todos los posibles context (matriz de BExp) que
 -- se pueden extraer a partir de los BExp que tiene el RunTime.
@@ -136,7 +136,7 @@ allContext runt = map (zipWith f conds) lbools
   where
     f bexp True = bexp
     f bexp _    = Not bexp
-    conds       = findConditionRunTime runt
+    conds       = getBExp runt
     lbools      = bools (length conds)
 
 -- | Toma un BExp bexp y un RunTime runt, evalua todas las instancias de bexp

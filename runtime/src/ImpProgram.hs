@@ -34,11 +34,6 @@ ind_9 = regularParse runtime "2**[f == 3*x + 5/2] <> x ++ w ++ 1"
 ind_10 = regularParse runtime "2**[f == 3*x + 5/2] <> (x + 1) ++ w ++ 1"
 ind_11 = regularParse runtime "1 ++ 3**[y>=10]<>(y--10++1)"
 
---------------------------{PAExp}--------------------------------------
-paexp0 = regularParse paexp "1/2*<3*x + 1> + 1/2*<2*y>"
-
---------------------------{PBExp} -------------------------------------
-pbexp0 = regularParse pbexp "<1/2>"
 --------------------------{PROGRAMAS DETERMINISTICOS SIN CICLOS } ----------------------------------
 p1_1 = "x:=10; y:=3"
 p1_2 = "x:=10; y:=3; it(x>=y){skip; skip}"
@@ -54,7 +49,7 @@ p2_2 = "while(y >= 10){inv = 1 ++ 3**([y>=10]<>(y--10 ++ 1))}{y:=y-1;x:=x+1}" --
 test_4 = "while(y <= x && x <= z){ inv = 1 ++ 2**[y<=x && x<=z]<>(2*(z - x + 1))}{x:= x+ 1/2}"
 
 ---------------------------{PROGRAMAS PROBABILÍSTICOS SIN CICLOS}------------------------------------
-p3_1 = "succ:~ 1/2* <3*x+ 1> + 1/2* <2*y>"
+p3_1 = "succ:~ 1/2 * <3*x+ 1> + 1/2 * <2*y>"
 test_5 = "pif(<1/2>){succ:~ 5/100* <0> + 95/100* <1>} pelse {pif(<1/2>) {succ:~  5/100* <0> + 95/100* <1>} pelse{succ:~ 95/100* <0> + 5/100* <1>}}"
 cTrunc = "pif(<1/2>){succ:= 1} pelse {pif(<1/2>) {succ:= 1} pelse{succ:= 0}}"
 test_6 = "pit(<9/10>){ if(x > 10){skip} else{ x:= x-1}}"
