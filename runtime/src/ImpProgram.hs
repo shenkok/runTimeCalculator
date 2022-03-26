@@ -38,30 +38,30 @@ ind_11 = regularParse runtime "1 ++ 3**[y>=10]<>(y--10++1)"
 p1_1 = "x:=10; y:=3"
 p1_2 = "x:=10; y:=3; it(x>=y){skip; skip}"
 p1_3 = "x:=10; y:=3; if(x>=y){skip; skip} else{empty}"
-test_1 = "x:=10; y:=3; if(x>=y){skip; skip} else{if(true){z:=3/5; w:=3}else{skip; empty}}"
+cdks = "x:=10; y:=3; if(x>=y){skip; skip} else{if(true||(x == 0)){z:=3/5; w:=3}else{skip; empty}}"
 p1_4 = "if(x>=y){skip; skip} else{if(true){z:=3/5; w:=3} else{skip; empty}}"
-test_2 = "x:=x-1; if(x>=y){skip; y:= 2*x} else{if(w>=8){w:= 3; x:=w+x} else{y:=5}}"
+cdvs= "x:=x-1; if(x>=y){skip; y:= 2*x} else{if(w>=8){w:= 3; x:=w+x} else{y:=5}}"
 --------------------------{PROGRAMAS DETERMINISTICOS CON CICLOS} ------------------------------------
-p2_1 = "while(x > 0){inv = 1 ++ 2**[x>0]<>x }{x:= x-1}"
-test_3  = "x:=3 ;while(x > 0){inv = 1 ++ 2**[x>0]<>x }{x:= x-1}"       -- invariante incorrecto
-test_3' = "x:=3 ;while(x > 0){inv = 1 ++ 2**[x>0]<>(x + 1) }{x:= x-1}" -- invariante correcto
-p2_2 = "while(y >= 10){inv = 1 ++ 3**([y>=10]<>(y--10 ++ 1))}{y:=y-1;x:=x+1}" -- invariante correcto
-test_4 = "while(y <= x && x <= z){ inv = 1 ++ 2**[y<=x && x<=z]<>(2*(z - x + 1))}{x:= x+ 1/2}"
 
+p2_1 = "while(x > 0){inv = 1 ++ 2**[x>0]<>x }{x:= x-1}"
+cdkcMenos  = "x:=3 ;while(x > 0){inv = 1 ++ 2**[x>0]<>x }{x:= x-1}"       
+cdkcMas = "x:=3 ;while(x > 0){inv = 1 ++ 2**[x>0]<>(x + 1) }{x:= x-1}" 
+p2_2 = "while(y >= 10){inv = 1 ++ 3**([y>=10]<>(y--10 ++ 1))}{y:=y-1;x:=x+1}"
+cdvcMas = "while(y <= x && x <= z){ inv = 1 ++ 2**[y<=x && x<=z]<>(2*(z - x + 1))}{x:= x+ 1/2}"
+cdvcMenos = "while(false){inv = [x >= 0]<>x}{skip}"
 ---------------------------{PROGRAMAS PROBABILÍSTICOS SIN CICLOS}------------------------------------
 p3_1 = "succ:~ 1/2 * <3*x+ 1> + 1/2 * <2*y>"
-test_5 = "pif(<1/2>){succ:~ 5/100* <0> + 95/100* <1>} pelse {pif(<1/2>) {succ:~  5/100* <0> + 95/100* <1>} pelse{succ:~ 95/100* <0> + 5/100* <1>}}"
+cpks = "pif(<1/2>){succ:~ 5/100* <0> + 95/100* <1>} pelse {pif(<1/2>) {succ:~  5/100* <0> + 95/100* <1>} pelse{succ:~ 95/100* <0> + 5/100* <1>}}"
 cTrunc = "pif(<1/2>){succ:= 1} pelse {pif(<1/2>) {succ:= 1} pelse{succ:= 0}}"
-test_6 = "pit(<9/10>){ if(x > 10){skip} else{ x:= x-1}}"
+cpvs = "pit(<9/10>){ if(x > 10){skip} else{ x:= x-1}}"
 ----------------------------{PROGRAMAS PROBABILÍSTICOS CON CICLOS}------------------------------------
 p4_1  = "pwhile(<1/2>){pinv = 3}{skip}"
-test_7  = "pwhile(<1/2>){pinv = 9}{skip};pwhile(<1/2>){pinv = 6}{skip};pwhile(<1/2>){pinv = 3}{skip}"
+cpkcMas  = "pwhile(<1/2>){pinv = 9}{skip};pwhile(<1/2>){pinv = 6}{skip};pwhile(<1/2>){pinv = 3}{skip}"
+cpkcMenos  = "for(3){pwhile(<1/2>){pinv = 3}{skip}}"
 p4_2  = "while(c == 1){inv = 1 ++ 4**[c == 1]}{c:~ 1/2* <0> + 1/2* <1>}"
 p4_3  = "pwhile(<9/10>) {pinv = 1 ++ 10**(1 ++ 4**[c == 1])}{while(c == 1){inv = 1 ++ 4**[c == 1]} {c:~ 1/2* <0> + 1/2* <1>}}"
-test_8 = "pwhile(<9/10>) {pinv = 10 ++ 9**[c!=1] ++ 207**[c==1]}{while(c == 1){inv = 10 ++ 10**[c!=1] ++ 230**[c==1]} {c:~ 1/2* <0> + 1/2* <1>}}"
-test_8'= "pwhile(<9/10>) {pinv = 19/10 ++ 9/10**[c!=1] ++ 207/10**[c==1]}{while(c == 1){inv = 1 ++ [c!=1] ++ 23**[c==1]} {c:~ 1/2* <0> + 1/2* <1>}}"
-p4_4  = "for(3){pwhile(<1/2>){pinv = 3}{skip}}"
-
+cpvcMas = "pwhile(<9/10>) {pinv = 10 ++ 9**[c!=1] ++ 207**[c==1]}{while(c == 1){inv = 10 ++ 10**[c!=1] ++ 230**[c==1]} {c:~ 1/2* <0> + 1/2* <1>}}"
+cpvcMenos= "pwhile(<9/10>) {pinv = 19/10 ++ 9/10**[c!=1] ++ 207/10**[c==1]}{while(c == 1){inv = 1 ++ [c!=1] ++ 23**[c==1]} {c:~ 1/2* <0> + 1/2* <1>}}"
 p4_6  = "while(c == 1){inv = 1 ++ 4**[c == 1]}{ c :~ 1/2* <0> + 1/2* <1>}"
 -----------------------------{DISTRIBUCIONES PROBABILÍSTICAS}------------------------------------------------------------------
 p5_1 = "y :~ <12> "

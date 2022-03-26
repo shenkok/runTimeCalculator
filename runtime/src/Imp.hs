@@ -37,20 +37,6 @@ showLit q
 ---------------------------------------- { EXPRESIONES ARITMÉTICAS }--------------------------------
 
 -- | Definición de Expresiones Aritméticas
--- NOTA      : Para que el solver pueda manejar varibles Reales, Enteras o mixtas
---             se podría agregar como input el tipo a Var.
---             data = Var Name Tipo
--- NOTA       : He pensado bastante el usar sólo expresiones lineales y si se podría generalizar un poco más.
---            En la página oficial de SBV link: https://hackage.haskell.org/package/sbv-8.16/docs/Data-SBV.html#g:12
---            mencionan que
---            SBV can deal with real numbers just fine, since the theory of reals is decidable.
---            (See http://smtlib.cs.uiowa.edu/theories-Reals.shtml.)
---            In addition, by leveraging backend solver capabilities,
---            SBV can also represent and solve non-linear equations involving real-variables.
---           (For instance, the Z3 SMT solver, supports polynomial constraints on reals starting with v4.0.)
---           Seguramente deba investigar en mayor profundidad los límites de Z3, pensando en usar polinomios de mayor grado
-
--- <@Fede: sería bueno mencionar esta linea en la parte de trabajo futuro>
 
 data AExp
   = Lit Constant -- Números
@@ -77,11 +63,11 @@ data AExp
 -- | Definición del método show para AExp
 instance Show AExp where
   show (Lit n)           = showLit n
-  show (Var x)           = show x
+  show (Var x)           =  x
   show (e_1 :+: e_2)     = show e_1  ++ " + " ++ show e_2
   show (k :*: Lit n)     = showLit k ++  "*"  ++ showLit n
-  show (k :*: Var x)     = showLit k ++  "*"  ++ show x
-  show (k :*: e_2)       = showLit k ++  "*(" ++ show e_2 ++")"
+  show (k :*: Var x)     = showLit k ++  "*"  ++ x
+  show (k :*: e)       = showLit k ++  "*(" ++ show e ++")"
 
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
@@ -173,8 +159,17 @@ data BExp
   | BExp :|: BExp -- Or lógico
   | BExp :&: BExp -- And Lógico
   | Not BExp
-  deriving (Show, Eq) -- Negación expresión booleana
+  deriving (Eq) -- Negación expresión booleana
 
+-- | Definición del método show para expresiones BExp.
+instance Show BExp where
+  show True'             = "true"
+  show False'            = "false" 
+  show ( e_1  :<=: e_2)  = show e_1 ++ " <= " ++ show e_2
+  show ( e_1  :==: e_2)  = show e_1 ++ " == " ++ show e_2
+  show ( e_1 :|: e_2)    = show e_1 ++ " || " ++ show e_2
+  show (e_1 :&: e_2)     = show e_1 ++ " && " ++ show e_2
+  show ( Not e)          = "!(" ++ show e ++ ")"
 ---------------------------------- { AZÚCAR SINTÁCTICA BOOLEANAS} ----------------------------------------------
 
 -- | Azúcar sintáctica para >=
@@ -296,12 +291,12 @@ instance Show RunTime where
   show (RunTimeArit arit)               = show arit
   show (e_b :<>: RunTimeArit (Lit 1))   = "[" ++ show e_b ++ "]"
   show (e_b :<>: RunTimeArit (Lit n))   = "[" ++ show e_b ++ "]<>" ++ showLit n
-  show (e_b :<>: RunTimeArit (Var x))   = "[" ++ show e_b ++ "]<>" ++ show x
+  show (e_b :<>: RunTimeArit (Var x))   = "[" ++ show e_b ++ "]<>" ++ x
   show (e_b :<>: runt)                  = "[" ++ show e_b ++ "]<>" ++ "(" ++ show runt ++ ")"
   show (e_1 :++: e_2)                   = show e_1 ++ " ++ " ++ show e_2
   show (k :**: RunTimeArit (Lit n))     = showLit k ++ "**" ++ showLit n
-  show (k :**: RunTimeArit (Var x))     = showLit k ++ "**" ++ show k
-  show (k :**: e_2)                     = showLit k ++ "**(" ++ show e_2 ++ ")"
+  show (k :**: RunTimeArit (Var x))     = showLit k ++ "**" ++ x
+  show (k :**: e)                     = showLit k ++ "**(" ++ show e ++ ")"
 
 -- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
 -- reemplaza todas las indicendias de "x" en la expresión runtIn por la expresión aritFor.

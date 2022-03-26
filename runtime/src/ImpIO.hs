@@ -109,7 +109,7 @@ showRestrictions restrictions modelss inputss bss bs b n = do
                                                                                 putStrLn "Ajuste los invariantes de ciclo y vuelva a realizar el análisis. "
                                                                         else do putStrLn "El tiempo de ejecución calculado es válido porque las obligaciones de prueba son válidas. "
 
-                                                            else do putStrLn "El tiempo de ejecución calculado es válido porque no hay obligaciones de prueba asociadas, ya que el programa no contiene ciclos"
+                                                            else do putStrLn "El tiempo de ejecución calculado es válido porque no hay obligaciones de prueba asociadas, ya que el programa no contiene ciclos."
 
 -- | Imprime todos los resultados asociados a un programa
 completeRoutine :: Program -> String -> RunTime -> IO()

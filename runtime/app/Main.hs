@@ -28,14 +28,6 @@ fpp x pb p runt n = case (parseRunTime "<interactive>" x, parsePBExp "<interacti
   (_, _,  _, _) -> error "Ha ocurrido un error"
 
 
-sol = sat $ do 
 
-  x <- sRational "a"
-  y <- sRational "b"
-  z <- sRational "c"
-  constrain $ x .> 0
-  constrain $ y .> 0
-  constrain $ z .> 0
-  constrain $ x + y .== z
 
 main =  run cTrunc

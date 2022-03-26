@@ -11,7 +11,7 @@ Nota: Para la realización de esta memoria por el momento sólo se trabaja con l
 
 Expresiones aritméticas deterministas :
 
-      Arit := n  constante real
+      Arit := n  constante racional
             | x  variable
             | n * Arit
             | Arit + Arit
@@ -69,7 +69,6 @@ Definición de transformada ert:: Program -> RunTime -> RunTime
 Obligaciones de prueba :
 
       Obligation := RunTime <= RunTime
-                    RunTime == RunTime
 
 Definición de función generadora de restricciones  VC(C)(f):: Program -> RunTime -> {VerR}
 
@@ -87,17 +86,6 @@ Definición de función generadora de restricciones  VC(C)(f):: Program -> RunTi
 
 
 
-Primer ciclo while de prueba:
-      C_geo :
-
-      while (c = 1)
-            {c := 1/2 *< 0 > + 1/2 * < 1 >}
-
-Invariante asociado al ciclo C_{geo}:
-
-      C <= 1 + 4*[c = 1]
-
-
 Introducción a SMT-SOLVER:
 
       http://homepage.divms.uiowa.edu/~ajreynol/pres-iowa2017-part1.pdf
@@ -106,34 +94,14 @@ Andrew Reynols :
 
       http://homepage.cs.uiowa.edu/~ajreynol/
 
-Cómo escribir de manera correcta :
-    
-      https://www.youtube.com/watch?v=XpgJ31GKPWI&list=PLyrlk8Xaylp5tLThZKObBuALYANlYzItz&index=2 
 
-Link del informe 
-
-      https://www.overleaf.com/2383766224twjygcsswxzw
-
-Documentación
-
-      http://smtlib.cs.uiowa.edu/papers/smt-lib-reference-v2.6-r2017-07-18.pdf
-
-Ejemplo tutorial:
-
-     https://sat-smt.codes/
-
-Otro ejemplo :
-
-      https://www.lri.fr/~conchon/TER/2013/2/SMTLIB2.pdf
-
-rise4fun ;
+rise4fun (tutorial z3) 
 
       https://rise4fun.com/Z3/tutorial/guide
 
-link reu;
-
-      https://uchile.zoom.us/j/88041295290?pwd=RC9PNzYrOVhOTjdmRkIraXVNbDlVQT09
-
+Trabajo guía de Tikhon Jelvis
+      
+      https://jelv.is/talks/compose-2016/
 
 tutorial sbv
 
@@ -147,13 +115,8 @@ tutorial parser
     
     https://jakewheat.github.io/intro_to_parsing/#an-issue-with-token-parsers
 
-plantilla 
 
-      https://github.com/dccuchile/memoria-tesis-latex 
 
-Informe final
-       
-       https://www.overleaf.com/6765162212hhkgndhpbbtm
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -171,25 +134,33 @@ Con respecto a las otras carpetas:
 
 - `otros`: ejemplos y ensayos de programas, usados para introducirse a las herramientas durante todo el proceso.
 
-Sobre la carpeta `runtime`: El proyecto es hecho en stack versión 2.7.3
+Sobre la carpeta `runtime`: El proyecto es hecho en stack versión 2.7.3 y ocupa el smt-solver Z3 version 4.8.7 - 64 bit. Es posible usar la herramienta sin Z3, pero sólo para los programas sin ciclos. 
 
 - `app`: Contiene el archivo `Main.hs`, que es el archivo a ejecutar en el proyecto.
 
 - `src`: Contiene los diferentes módulos usados en el proyecto.
-    - `src\Imp.hs` Módulo con la implemetación del lenguaje imperativo (por el momento determinista)
-    - `src\ImpToSBV` Módulo  las funciones necesarias para generar los sub-problemas lineales a partir de las estructuras de `Imp.hs`
-    - `src\ImpIO` Módulo con las funciones necesarias para producir un output entendible de los procedimientos
+    - `src\Imp.hs` Módulo con la implemetación del lenguaje imperativo.
+    - `src\ImpSBV` Módulo para generar las variables de SBV.
+    - `src\ImpIO` Módulo con las funciones necesarias para producir un output entendible de los procedimientos.
+    - `src\ImpParser` Módulo con la implementación del parser. 
+    - `src\ImpProgram` Módulo con programas escritos en sintáxis concreta.
+    - `src\ImpVCGen` Módulo con las funciones asociadas a las funciones VCGen.
 
 - `package.yaml`: Contiene las librerías necesarias para compilar el proyecto
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Como compilar:
+- Instalar `Z3` (Version 4.8.7) `sudo apt-get install z3`
 - Instalar  `stack` (Version 2.7.3) ejecutar  ` curl -sSL https://get.haskellstack.org/ | sh`
-- Para instalar el trabajo ejecutar  `stack build ` en la carpeta  `runtime.
-- Para cargar un módulo en consola (con todas sus varaibles), ir a la carpeta y usar  `stack ghci Modulo.hs `.
-- Por ejemplo para cargar el módulo  `Main.hs` ir a la carpeta  `runtime\app` y ejecutar  `stack ghci Main.hs `
-- Para ver en consola sólo el output de  `Main.hs` (en este caso el cálculo hecho sobre el programa4), ejecutar  `stack exec runtime-exe`.
+- Para instalar el trabajo ejecutar  `stack build ` en la carpeta  `runtime`.
+- Para cargar un módulo en consola (con todas sus variables), ir a la carpeta y usar  `stack ghci Modulo.hs `.
+- Para ver en consola sólo el output de  `Main.hs` (en este caso el cálculo hecho sobre el `CTrunc`), ejecutar  `stack exec runtime-exe`.
 - **Importante** Cada vez que se edita algún archivo usar  `stack build`
 
-
+Ejemplo interactivo:
+- Ir a la carpeta  `runtime\app` y ejecutar  `stack ghci Main.hs `
+- Ejecutar `run "tu_programa"`
+- Un ejemplo es `run "while(c == 1){inv = 1 ++ 4**[c == 1]}{ c :~ 1/2* <0> + 1/2* <1>}"`
+- Los programas usados como  test se encuentran definidos en  `src\ImpProgram`.
+- Es posible ejecutarlos con el desde el módulo `Main.hs`, un ejemplo es `run cpvcMenos`.
