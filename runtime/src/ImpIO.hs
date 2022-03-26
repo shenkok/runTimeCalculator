@@ -38,7 +38,7 @@ space = "  "
 index :: Int -> String
 index n = "[" ++ show n ++ "]"
 
--- | Imprime el indice de un problema lineal
+-- | Imprime el indice de una restricción derivada
 index2 :: Int -> Int -> String
 index2 n m = "[" ++ show n ++ ", " ++ show m ++ "]"
 
@@ -59,7 +59,7 @@ showModel solution xs = do
                                 Nothing ->  error "A ocurrido un error, por favor revise este caso"
                           mapM_ showValue xs
 
--- | Dado un problema lineal, imprime el modelo o imprime si no es satisfacible
+-- | Dado una restrcción derivada, imprime el contraejempĺo o si no es válida
 showSolverInput :: IO Bool -> IO SatResult -> SolverInput -> Int -> Int ->IO()
 showSolverInput b model (contexto, rest, vars) n m = do
       let len = length vars
@@ -68,10 +68,10 @@ showSolverInput b model (contexto, rest, vars) n m = do
             then do  putStr newLine
                      putStrLn $ concat (replicate 100 "-")
                      putStr newLine
-                     putStrLn $ "Problema lineal " ++ index2 n m
+                     putStrLn $ "Restricción derivada " ++ index2 n m
                      putStrLn $ show contexto ++ "   |-  " ++ show rest
                      putStr newLine
-                     putStrLn "El problema no es satisfacible."
+                     putStrLn "La restricción no es válida."
                      putStr newLine
                      if len > 0
                            then do putStrLn "Un contraejemplo encontrado es:"
@@ -91,7 +91,7 @@ showSolverInputs b bs runtr models inputs n = do
                                                          putStrLn $ "Obligación de prueba " ++ index n
                                                          print runtr
                                                          putStr newLine
-                                                         putStrLn $ "La obligación de prueba tiene asociada " ++ show m ++ " problemas lineales diferentes."
+                                                         putStrLn $ "La obligación de prueba tiene asociada " ++ show m ++ " restricciones derivadas diferentes."
                                                          mapM_ (uncurry5 showSolverInput ) $ zip5 bs models inputs (repeat n) [1..m]
                                                 else putStr ""
 
