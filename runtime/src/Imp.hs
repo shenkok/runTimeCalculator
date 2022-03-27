@@ -296,7 +296,7 @@ instance Show RunTime where
   show (e_1 :++: e_2)                   = show e_1 ++ " ++ " ++ show e_2
   show (k :**: RunTimeArit (Lit n))     = showLit k ++ "**" ++ showLit n
   show (k :**: RunTimeArit (Var x))     = showLit k ++ "**" ++ x
-  show (k :**: e)                     = showLit k ++ "**(" ++ show e ++ ")"
+  show (k :**: e)                       = showLit k ++ "**(" ++ show e ++ ")"
 
 -- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
 -- reemplaza todas las indicendias de "x" en la expresión runtIn por la expresión aritFor.

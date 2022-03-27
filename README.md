@@ -95,9 +95,6 @@ Andrew Reynols :
       http://homepage.cs.uiowa.edu/~ajreynol/
 
 
-rise4fun (tutorial z3) 
-
-      https://rise4fun.com/Z3/tutorial/guide
 
 Trabajo guía de Tikhon Jelvis
       
@@ -124,15 +121,11 @@ Sobre la distribución de archivos
 
 El trabajo principal se encuentra en la carpeta `runtime`
 
-Con respecto a las otras carpetas: 
+Con respecto a la otra carpeta: 
 
-- `findCanonic` : Contiene ejemplos de simplificación de expresiones aritméticas.
 
 - `material2020`: Contiene el material usado y generado en la propuesta de memoria (2020).
 
-- `material2021`: Contiene los manuscritos generados durante el 2021.
-
-- `otros`: ejemplos y ensayos de programas, usados para introducirse a las herramientas durante todo el proceso.
 
 Sobre la carpeta `runtime`: El proyecto es hecho en stack versión 2.7.3 y ocupa el smt-solver Z3 version 4.8.7 - 64 bit. Es posible usar la herramienta sin Z3, pero sólo para los programas sin ciclos. 
 
