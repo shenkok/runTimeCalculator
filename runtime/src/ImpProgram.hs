@@ -53,7 +53,7 @@ cdvcMenos = "while(false){inv = [x >= 0]<>x}{skip}"
 p3_1 = "succ:~ 1/2 * <3*x+ 1> + 1/2 * <2*y>"
 cpks = "pif(<1/2>){succ:~ 5/100* <0> + 95/100* <1>} pelse {pif(<1/2>) {succ:~  5/100* <0> + 95/100* <1>} pelse{succ:~ 95/100* <0> + 5/100* <1>}}"
 cTrunc = "pif(<1/2>){succ:= 1} pelse {pif(<1/2>) {succ:= 1} pelse{succ:= 0}}"
-cpvs = "pit(<9/10>){ if(x > 10){skip} else{ x:= x-1}}"
+cpvs = "pit(<9/10>){ if(x > 10){skip} else{y:= y+1; x:= x-1}}"
 ----------------------------{PROGRAMAS PROBABILÍSTICOS CON CICLOS}------------------------------------
 p4_1  = "pwhile(<1/2>){pinv = 3}{skip}"
 cpkcMas  = "pwhile(<1/2>){pinv = 9}{skip};pwhile(<1/2>){pinv = 6}{skip};pwhile(<1/2>){pinv = 3}{skip}"
