@@ -42,8 +42,8 @@ data AExp
   = Lit Constant -- Números
   | Var Name -- Variables x, y, z
   | AExp :+: AExp -- Suma de expresiones aritméticas
-  | Constant :*: AExp
-  deriving (Eq)  -- Ponderación por una constante
+  | Constant :*: AExp  -- Ponderación por una constante
+  deriving (Eq)       
 
 -----------------------------------------{ AZÚCAR SINTÁCTICA}------------------------------------------------
 
@@ -154,13 +154,12 @@ infRational = infinity
 data BExp
   = True' -- Constante True
   | False' -- Constante False
-  | AExp :<=: AExp -- mayor igual entre expresiones aritméticas
+  | AExp :<=: AExp -- menor igual entre expresiones aritméticas
   | AExp :==: AExp -- igualdad expresiones aritméticas
   | BExp :|: BExp -- Or lógico
   | BExp :&: BExp -- And Lógico
-  | Not BExp
-  deriving (Eq) -- Negación expresión booleana
-
+  | Not BExp -- Negación expresión booleana
+  deriving (Eq) 
 -- | Definición del método show para expresiones BExp.
 instance Show BExp where
   show True'             = "true"
@@ -252,8 +251,8 @@ data RunTime
   = RunTimeArit AExp -- RunTime hecho a partir de una expresión aritmética
   | BExp :<>: RunTime -- multiplicación por una condición
   | RunTime :++: RunTime -- suma de RunTime
-  | Constant :**: RunTime
-  deriving (Eq) -- ponderación por constante
+  | Constant :**: RunTime -- ponderación por constante
+  deriving (Eq) 
 
 ----------------------------------{ AZÚCAR SINTÁCTICA } -----------------------------------------------------
 
