@@ -154,8 +154,8 @@ infRational = infinity
 data BExp
   = True' -- Constante True
   | False' -- Constante False
-  | AExp :<=: AExp -- menor igual entre expresiones aritméticas
-  | AExp :==: AExp -- igualdad expresiones aritméticas
+  | AExp :<=: AExp -- Menor igual entre expresiones aritméticas
+  | AExp :==: AExp -- Igualdad expresiones aritméticas
   | BExp :|: BExp -- Or lógico
   | BExp :&: BExp -- And Lógico
   | Not BExp -- Negación expresión booleana
@@ -249,9 +249,9 @@ deepSimplifyBExp (Not e_b)      = simplifyBExp (Not $ deepSimplifyBExp e_b)
 -- | Definición de RunTimes
 data RunTime
   = RunTimeArit AExp -- RunTime hecho a partir de una expresión aritmética
-  | BExp :<>: RunTime -- multiplicación por una condición
-  | RunTime :++: RunTime -- suma de RunTime
-  | Constant :**: RunTime -- ponderación por constante
+  | BExp :<>: RunTime -- Multiplicación por una condición
+  | RunTime :++: RunTime -- Suma de RunTime
+  | Constant :**: RunTime -- Ponderación por constante
   deriving (Eq) 
 
 ----------------------------------{ AZÚCAR SINTÁCTICA } -----------------------------------------------------
@@ -433,15 +433,15 @@ aexpE p_x x runt = deepSimplifyRunTime $ expectedValue p_x f (:**:) (:++:) rtZer
 -- del tipo Seq Program Program para luego usar la transformada sobre él.
 
 data Program
-  = Skip                        -- programa vacío que toma una unidad de tiempo
-  | Empty                       -- programa vacío sin costo de tiempo
+  = Skip                        -- Programa vacío que toma una unidad de tiempo
+  | Empty                       -- rograma vacío sin costo de tiempo
   | Set Name AExp               -- Asignación
   | PSet Name PAExp             -- Asignación probabilista
   | Seq Program Program         -- Composición secuencial de programas
-  | If BExp Program Program     -- guarda condicional
-  | PIf PBExp Program Program   -- guarda condicional probabilista
-  | While BExp Program RunTime  -- ciclo while
-  | PWhile PBExp Program RunTime -- ciclo while probabilista
+  | If BExp Program Program     -- Guarda condicional
+  | PIf PBExp Program Program   -- Guarda condicional probabilista
+  | While BExp Program RunTime  -- Ciclo while
+  | PWhile PBExp Program RunTime -- Ciclo while probabilista
   deriving (Eq, Show) 
 -------------------------------------------{ FUNCIONES AUXILIARES }----------------------------------------------------------
 
