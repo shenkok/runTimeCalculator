@@ -22,9 +22,12 @@ fp x b p runt n = case (parseRunTime "<interactive>" x, parseBExp "<interactive>
   (Right x', Right b',Right p',Right runt') -> print $ deepSimplifyRunTime $ fpWhile x' b' p' runt' n
   (_, _,  _, _) -> error "Ha ocurrido un error"
 
--- Ejemplo iteración número 3, para el programa while(x==0){x:x-1}, con respecto al tiempo de ejcución 0 y empezando desde 0
+-- Ejemplo iteración número 3, para el programa while(x==0){x:x-1}, con respecto al tiempo de ejecución 0 y empezando desde 0
 exampleFp :: IO ()
 exampleFp = fp "0" "x==0" "x:=x-1" "0" 3
+examplePresentacion = fp "0" "c==1" "c :~ 1/2* <0> + 1/2* <1>" "0"
+
+p5S_6  = "while(c == 1){inv = 1 ++ 4**[c == 1]}{ c :~ 1/2* <0> + 1/2* <1>}"
 
 -- | Calcula la iteración de punto fijo de orden n de una transformada de un while probabilista
 fpp :: String -> String -> String -> String -> Int ->IO ()
@@ -32,9 +35,7 @@ fpp x pb p runt n = case (parseRunTime "<interactive>" x, parsePBExp "<interacti
   (Right x', Right pb',Right p',Right runt') ->  print $ deepSimplifyRunTime $ fpPWhile x' pb' p' runt' n
   (_, _,  _, _) -> error "Ha ocurrido un error"
 
--- Ejemplo ieteración número 5, para el programa pwhile (<1/2>) {skip} con respecto al tiempo de ejecución 3 y empezando desde 0
+-- Ejemplo iteración número 5, para el programa pwhile (<1/2>) {skip} con respecto al tiempo de ejecución 3 y empezando desde 0
 
-exampleFpp :: IO ()
-exampleFpp = fpp "0" "<1/2>" "skip" "3" 5
-
-main =  run cTrunc
+main :: IO ()
+main = fpp "0" "<1/2>" "skip" "3" 5

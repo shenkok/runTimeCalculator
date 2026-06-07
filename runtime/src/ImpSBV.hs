@@ -36,9 +36,9 @@ sBExp env (Not e)        = sNot (sBExp env e)
 
 
 -- | Función que permite reorganizar el input
--- Es útil, ya que los restictions a!:<=:b no son booleanos, pero se deben tratar como tal
--- por eso la funcion "f"
--- Además la restricción de debe ir negada, ya que se procede por contradicción
+-- Es útil, ya que las restricciones a!:<=:b no son booleanos, pero se deben tratar como tal
+-- por eso la función "f"
+-- Además la restricción debe ir negada, ya que se procede por contradicción
 
 reOrganiceInput :: SolverInput -> (Names, Context)
 reOrganiceInput (context, rarit, names) = (names, new_context) where
@@ -63,11 +63,11 @@ makeSBVModel sinput = do
                     let env = M.fromList (zip names xs)
                     constrain (sAnd (map (sBExp env) context))
 
--- Versiṕn monádica IO del and lógico
+-- Versión monádica IO del and lógico
 ioAnd :: IO Bool -> IO Bool -> IO Bool
 ioAnd b_1 b_2 = (&&) <$> b_1 <*> b_2
 
--- Versiṕn monádica IO del and lógico
+-- Versión monádica IO del or lógico
 ioOr :: IO Bool -> IO Bool -> IO Bool
 ioOr b_1 b_2 = (||) <$> b_1 <*> b_2
 -- Dado un programa y un runtime entrega el input necesario para poder imprimir los resultados

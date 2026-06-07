@@ -7,8 +7,8 @@ import ImpVCGen
 import Data.List (zip4, zip5, zip6)
 
 
--- Estraído de https://hackage.haskell.org/package/hxt-9.3.1.22/docs/src/Text.XML.HXT.DOM.Util.html#uncurry4
-{- MÓDULO QUE SE ENCARGA DE IMPRIMIR LOS RESULTADOS EN LA SALIDA ESTANDAR -}
+-- Extraído de https://hackage.haskell.org/package/hxt-9.3.1.22/docs/src/Text.XML.HXT.DOM.Util.html#uncurry4
+{- MÓDULO QUE SE ENCARGA DE IMPRIMIR LOS RESULTADOS EN LA SALIDA ESTÁNDAR -}
 
 --------------------------{ MÉTODOS UNCURRY }------------------------------------------------------------------------
 

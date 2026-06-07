@@ -21,7 +21,7 @@ Expresiones aritméticas Probabilistas :
       PArit := Σ p_i * Arit   con p_i en [0, 1]  Distribución sobre expresiones aritméticas
 
             
-Expresiones booleanas deterministicas :
+Expresiones booleanas deterministas :
         
       dξ  :=  true, false   constantes booleanas
            |  Arit = Arit   igualdad de expresiones aritméticas
@@ -132,11 +132,11 @@ Sobre la carpeta `runtime`: El proyecto es hecho en stack versión 2.7.3 y ocupa
 - `app`: Contiene el archivo `Main.hs`, que es el archivo a ejecutar en el proyecto.
 
 - `src`: Contiene los diferentes módulos usados en el proyecto.
-    - `src\Imp.hs` Módulo con la implemetación del lenguaje imperativo.
+    - `src\Imp.hs` Módulo con la implementación del lenguaje imperativo.
     - `src\ImpSBV` Módulo para generar las variables de SBV.
     - `src\ImpIO` Módulo con las funciones necesarias para producir un output entendible de los procedimientos.
     - `src\ImpParser` Módulo con la implementación del parser. 
-    - `src\ImpProgram` Módulo con programas escritos en sintáxis concreta.
+    - `src\ImpProgram` Módulo con programas escritos en sintaxis concreta.
     - `src\ImpVCGen` Módulo con las funciones asociadas a las funciones VCGen.
 
 - `package.yaml`: Contiene las librerías necesarias para compilar el proyecto

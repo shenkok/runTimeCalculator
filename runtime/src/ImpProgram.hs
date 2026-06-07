@@ -6,9 +6,9 @@ import ImpIO (completeRoutine)
 
 
 {-
-  MODULO QUE SE ENCARGA DE ALMACENAR EXPRESIONES Y PROGRAMAS DE PRUEBA
+  MÓDULO QUE SE ENCARGA DE ALMACENAR EXPRESIONES Y PROGRAMAS DE PRUEBA
 -}
--- EJEMPLOS DE EPRESIONES PARSEADAS aexp 
+-- EJEMPLOS DE EXPRESIONES PARSEADAS aexp 
 arit_1 = regularParse aexp "(9 + 10 + 11)"
 arit_2 = regularParse aexp "9*p0 + 10/6 - 11"
 arit_3 = regularParse aexp "9*p - 10/6*x - 11"
@@ -63,6 +63,18 @@ p4_3  = "pwhile(<9/10>) {pinv = 1 ++ 10**(1 ++ 4**[c == 1])}{while(c == 1){inv =
 cpvcMas = "pwhile(<9/10>) {pinv = 10 ++ 9**[c!=1] ++ 207**[c==1]}{while(c == 1){inv = 10 ++ 10**[c!=1] ++ 230**[c==1]} {c:~ 1/2* <0> + 1/2* <1>}}"
 cpvcMenos= "pwhile(<9/10>) {pinv = 19/10 ++ 9/10**[c!=1] ++ 207/10**[c==1]}{while(c == 1){inv = 1 ++ [c!=1] ++ 23**[c==1]} {c:~ 1/2* <0> + 1/2* <1>}}"
 p4_6  = "while(c == 1){inv = 1 ++ 4**[c == 1]}{ c :~ 1/2* <0> + 1/2* <1>}"
+p4_7  = "while(c == 1){inv = 1 ++ [c == 1]<>A}{ c :~ 1/2* <0> + 1/2* <1>}"
+p4_8  = "while(c == 1){inv = 1 ++ 3**[c == 1]}{ c :~ 1/2* <0> + 1/2* <1>}"
+p4_9  = "while(c == 1){inv = 1 ++ 5**[c == 1]}{ c :~ 1/2* <0> + 1/2* <1>}"
+
+p4_10 = "x:=3 ;while(x > 0){inv = 2 ++ 2**[x>0]<>(x + 2) }{x:= x-1}" 
+p4_11 = "x:=3 ;while(x > 0){inv = 1238/1237 ++ 2**[x>0]<>(x + 2439/2438) }{x:= x-1}" 
+p4_13 =  "x:=3 ;while(x > 0){inv = 1 ++ 2**[x>0]<>(x + 7721/7720) }{x:= x-1}" 
+p4_14 =  "x:=3 ;while(x > 0){inv = 2 ++ 2**[x>0]<>(x + 1) }{x:= x-1}" 
+p4_15 =  "x:=3 ;while(x > 0){inv = 2 ++ 4**[x>0]<>(x + 7721/7720) }{x:= x-1}" 
+
+cpvc= "pwhile(<9/10>) {pinv = 365/2 ++ 363**[c!=1] -- 177**[c==1]}{while(c == 1){inv = 366 ++ 233**[c!=1] -- 361**[c==1]} {c:~ 1/2* <0> + 1/2* <1>}}"
+
 -----------------------------{DISTRIBUCIONES PROBABILÍSTICAS}------------------------------------------------------------------
 p5_1 = "y :~ <12> "
 p5_2 = "coin :~ coin_flip(2/4)"

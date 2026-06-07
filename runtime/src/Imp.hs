@@ -5,13 +5,13 @@ import Data.Ratio
 import GHC.Real (infinity)
 
 {-
-  MODULO QUE SE ENCARGA SE REPRESENTAR EXPRESIONES ARITMÉTICAS, BOOLEANAS, RUNTIMES Y PROGRAMAS
+  MÓDULO QUE SE ENCARGA DE REPRESENTAR EXPRESIONES ARITMÉTICAS, BOOLEANAS, RUNTIMES Y PROGRAMAS
 -}
 type Name     = String -- Nombre de las variables
 
 type Names    = [Name]
 
-type Constant = Rational --  Constantes Númericas
+type Constant = Rational --  Constantes Numéricas
 
 ---------------------------------------- { FUNCIONES ÚTILES }---------------------------------------
 
@@ -76,18 +76,16 @@ sustAExp x aritFor (Var y)       = if x == y then aritFor else Var y
 sustAExp x aritFor (e_1 :+: e_2) = sustAExp x aritFor e_1 :+: sustAExp x aritFor e_2
 sustAExp x aritFor (k :*: e)     = k :*: sustAExp x aritFor e
 
--- | Toma un AExp arit y retorna una lista de todas las variables libres
--- considerando que un número está asociado a la variable vacía "".
+-- | Toma un AExp arit y retorna una lista de todas las variables libres.
 freeVars :: AExp -> Names
 freeVars arit = sort (rmdups (fvar arit))
   where
-    fvar (Lit _)       = [""]
+    fvar (Lit _)       = []
     fvar (Var x)       = [x]
     fvar (e_1 :+: e_2) = fvar e_1 ++ fvar e_2
     fvar (_ :*: e)     = fvar e
 
--- | WeightVar toma un Aexp arit y una variable var, retorna el peso suma de todas las instancias de esa variable var
--- en el AExp arit, se considera n:*:"" como equivalente a (Lit n) .
+-- | WeightVar toma un Aexp arit y una variable var, retorna el peso suma de todas las instancias de esa variable var.
 weightVar :: AExp -> Name -> Constant
 weightVar (Lit n) var
   | var == "" = n
@@ -98,24 +96,24 @@ weightVar (Var x) var
 weightVar (e_1 :+: e_2) var = weightVar e_1 var + weightVar e_2 var
 weightVar (k :*: e) var     = k * weightVar e var
 
----------------------------------- { SIMPLIFICAR Y MORMALIZAR EXPRESIONES ARITMÉTICAS } -----------------------
+---------------------------------- { SIMPLIFICAR Y NORMALIZAR EXPRESIONES ARITMÉTICAS } -----------------------
 -- | Descripción del algoritmo
 -- 1. Extraer las variables libres de la expresión
 -- 2. Calcular el peso asociado a cada una de las variables
--- 3. Definir una función auxiliar que un par (peso, variable) y retorma un monomio peso:*:variable
+-- 3. Definir una función auxiliar que un par (peso, variable) y retorna un monomio peso:*:variable
 -- 4. Entregar un arreglo con los monomios respectivos.
 -- 5. Correr un fold, con caso base (Lit 0) y usando la suma de polinomios como función
 -- 
--- La expresión final no considera el 0 y el 1 como neutros de de la adicción y multiplicación.
+-- La expresión final no considera el 0 y el 1 como neutros de la adición y multiplicación.
 
 normArit :: AExp -> AExp
 normArit arit = foldl (+:) (Lit 0) wvars -- 5
   where
     vars = freeVars arit -- 1
     weights = map (weightVar arit) vars -- 2
-    g (k, "") = Lit k -- 3
+    constWeight = weightVar arit ""
     g (k, x) = k :*: Var x -- 3
-    wvars = zipWith (curry g) weights vars -- 4
+    wvars = [Lit constWeight | constWeight /= 0] ++ zipWith (curry g) weights vars -- 4
 
 -- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1.
 simplifyArit :: AExp -> AExp
@@ -150,7 +148,7 @@ infRational = infinity
 
 ---------------------------------- { EXPRESIONES BOOLEANAS} ------------------------------------------
 
--- | Definición de expresiones Boolenas
+-- | Definición de expresiones Booleanas
 data BExp
   = True' -- Constante True
   | False' -- Constante False
@@ -187,7 +185,7 @@ instance Show BExp where
 (/=:) :: AExp -> AExp -> BExp
 (/=:) arit_1 arit_2 = Not $ arit_1 :==: arit_2
 
--- | Convierte boolealos en BExp
+-- | Convierte booleanos en BExp
 toBExp :: Bool -> BExp
 toBExp True  = True'
 toBExp False = False'
@@ -298,7 +296,7 @@ instance Show RunTime where
   show (k :**: e)                       = showLit k ++ "**(" ++ show e ++ ")"
 
 -- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
--- reemplaza todas las indicendias de "x" en la expresión runtIn por la expresión aritFor.
+-- reemplaza todas las incidencias de "x" en la expresión runtIn por la expresión aritFor.
 sustRunTime :: Name -> AExp -> RunTime -> RunTime
 sustRunTime x aritFor (RunTimeArit aritIn) = RunTimeArit (sustAExp x aritFor aritIn)
 sustRunTime x aritFor (e_b :<>: e_r)       = sustBExp x aritFor e_b :<>: sustRunTime x aritFor e_r
@@ -338,7 +336,7 @@ deepSimplifyRunTime (k :**: runt)      = simplifyRunTime (k :**: deepSimplifyRun
 
 
 ----------------------------------{ CONSTRUCCIONES PROBABILISTAS} ----------------------------------
--- | Constante de dsitribuciones probabilisticas
+-- | Constante de distribuciones probabilísticas
 type PConstant        = Constant
 
 -- | Definición de una expresión probabilista singletón
@@ -352,7 +350,7 @@ type PAExp = Distribution AExp
 
 ----------------------------------{ AZÚCAR SINTÁCTICA}----------------------------------------------
 -- | Azúcar sintáctica para generar una expresión aritmética
---  probalilista singular
+--  probabilista singular
 (*~:) :: PConstant -> a -> Distribution a
 (*~:) q a = [(q, a)]
 
@@ -365,10 +363,11 @@ showPoint :: (PConstant, AExp) -> String
 showPoint (1, arit) = "<" ++ show arit ++ ">"
 showPoint (q, arit) =  showLit q ++ "*<" ++ show arit ++ ">"
 
--- | Método para imprimir Expresiones aritméticas
+
+-- | Método para imprimir una distribución probabilista de expresiones aritméticas.
 showPAexp :: PAExp -> String
 showPAexp []       = ""
-showPAexp (y:x:xs) = showPoint y ++ " + "
+showPAexp (y:x:xs) = showPoint y ++ " + " ++ showPAexp (x:xs)
 showPAexp (x: xs)  = showPoint x
 
 -- | Expresiones Booleanas probabilistas // Muestras de distribuciones Bernoulli
@@ -388,7 +387,7 @@ isDistribution p_x = massDistribution p_x == 1 && and ps where
   ps          = map (predicate . fst) p_x
 
 ----------------------------------------{AZÚCAR SINTÁCTICA PARA DISTRIBUCIONES CONOCIDAS}------------------------------
--- Muestra de dsitribución de Dirac
+-- Muestra de distribución de Dirac
 dirac :: AExp -> PAExp
 dirac arit = [(1, arit)]
 
@@ -408,13 +407,15 @@ uniform1 q  | q <= 1    = uniform q 1
             | otherwise = uniform 1 q
 ----------------------------------------{AZÚCAR SINTÁCTICA PARA DISTRIBUCIONES CONOCIDAS}------------------------------
 
--- | Calculo de esperanza. toma una distribución, una función de transformacion para un a
---, una función * que retorna un c, una función + que retorna un d, un caso base para el fold y retorna un tipo d
-expectedValue :: Distribution a -> (a -> b) -> (PConstant -> b -> c)-> (c -> d -> d) -> d -> d
-expectedValue p_x h prod sum base =  foldr (sum . f) base p_x where
-  f (k, e) = prod k (h  e)
+-- | Cálculo de esperanza.
+-- Toma una distribución, una función de transformación de cada elemento,
+-- una función de escala por probabilidad, una función de acumulación,
+-- y un valor base para el fold.
+expectedValue :: Distribution a -> (a -> b) -> (PConstant -> b -> c) -> (c -> d -> d) -> d -> d
+expectedValue p_x transform scale combine base = foldr (combine . f) base p_x where
+  f (k, e) = scale k (transform e)
 
--- | esperanza para dsitribuciones sobre expresiones aritméticas
+-- | esperanza para distribuciones sobre expresiones aritméticas
 aexpE :: Distribution AExp -> Name -> RunTime -> RunTime
 aexpE p_x x runt = deepSimplifyRunTime $ expectedValue p_x f (:**:) (:++:) rtZero where
   f arit = sustRunTime x arit runt
@@ -454,6 +455,7 @@ flipw f b p runt = f b runt p
 -- | Simplifica programas en 1 paso
 simplifyProgram :: Program -> Program
 simplifyProgram (Seq Empty program) = program
+simplifyProgram (Seq program Empty) = program
 simplifyProgram otherwise           = otherwise
 
 -- | Simplificación recursiva de programas

@@ -27,7 +27,6 @@ dependencies:
 - sbv
 - text
 - parsec
-- ilist
 library:
   source-dirs: src
 

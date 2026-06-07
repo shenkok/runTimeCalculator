@@ -49,7 +49,7 @@ rationalFractional = do
 
 
 
--- | Parser para ecribir racionales
+-- | Parser para escribir racionales
 rational :: Parser Rational
 rational = try rationalFractional <|> rationalInteger
 
@@ -57,7 +57,7 @@ rational = try rationalFractional <|> rationalInteger
 litAExp :: Parser AExp
 litAExp = Lit <$> rational
 
--- | Parser para escibir las variables de AExp
+-- | Parser para escribir las variables de AExp
 varAExp :: Parser AExp
 varAExp = Var <$> identifier
 
@@ -150,7 +150,7 @@ runtime = buildExpressionParser table term
            <|> try (parens runtime)
        table = [ [ binary "++" (:++:), binary "--" (--:) ]]
 
--- | Parser para expresiones booleanas probabilistas, distruciones bernoulli sobre true false
+-- | Parser para expresiones booleanas probabilistas, distribuciones bernoulli sobre true false
 pbexp :: Parser PBExp
 pbexp = Ber <$> angles rational
 
@@ -163,7 +163,7 @@ dirac = Imp.dirac <$> angles aexp
 coin :: Parser PAExp
 coin = Imp.coin <$> (reserved "coin_flip" *> parens rational)
 
--- | Parser para distribucipon uniforme sobre los enteros
+-- | Parser para distribución uniforme sobre los enteros
 uniform :: Parser PAExp
 uniform = do
   void $ string "uniform"

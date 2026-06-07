@@ -3,7 +3,7 @@ module ImpVCGen where
 import Imp
 
 {-
-    MODULO QUE SE ENCARGA DE GENERAR EL IMPUT PARA SBV A PARTIR
+    MODULO QUE SE ENCARGA DE GENERAR EL INPUT PARA SBV A PARTIR
     DE LOS LENGUAJES IMPERATIVOS 
 -}
 -----------------------------------{RESTRICCIONES }-----------------------------------------------------
