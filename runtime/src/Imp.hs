@@ -193,7 +193,7 @@ toBExp False = False'
 ---------------------------------- { FUNCIONES EXPRESIONES BOOLEANAS } ------------------------------------------
 
 -- | Función de sustitución toma una variable "x", un AExp aritFor y una expresión booleana AritIn
--- reemplaza todas las incidendias de "x" en la expresión aritIn por la expresión aritFor.
+-- reemplaza todas las incidencias de "x" en la expresión aritIn por la expresión aritFor.
 sustBExp :: Name -> AExp -> BExp -> BExp
 sustBExp _ _ True'                = True'
 sustBExp _ _ False'               = False'
@@ -274,7 +274,7 @@ rtLit k = RunTimeArit (Lit k)
 rtVar :: Name -> RunTime
 rtVar x = RunTimeArit (Var x)
 
--- |Azúcar sintpactica para Función Indicatriz 
+-- |Azúcar sintáctica para Función Indicatriz
 toIndicator :: BExp -> RunTime
 toIndicator e_b = e_b :<>: rtOne
 
@@ -391,7 +391,7 @@ isDistribution p_x = massDistribution p_x == 1 && and ps where
 dirac :: AExp -> PAExp
 dirac arit = [(1, arit)]
 
--- Muestra bernoulli de expresiones Ariméticas
+-- Muestra bernoulli de expresiones Aritméticas
 coin :: PConstant -> PAExp
 coin p = [(p, Lit 0), (1-p, Lit 1)]
 
@@ -435,7 +435,7 @@ aexpE p_x x runt = deepSimplifyRunTime $ expectedValue p_x f (:**:) (:++:) rtZer
 
 data Program
   = Skip                        -- Programa vacío que toma una unidad de tiempo
-  | Empty                       -- rograma vacío sin costo de tiempo
+  | Empty                       -- Programa vacío sin costo de tiempo
   | Set Name AExp               -- Asignación
   | PSet Name PAExp             -- Asignación probabilista
   | Seq Program Program         -- Composición secuencial de programas

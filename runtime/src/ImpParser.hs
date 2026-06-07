@@ -28,7 +28,7 @@ whitespace = void $ many $ oneOf " \n\t"
 regularParse :: Parser a -> String -> Either ParseError a
 regularParse p = parse p ""
 --------------------------------------------------------------------------- {PARSER PARA EXPRESIONES ARITMÉTICAS}---------------------------------
--- | Parser que permite encerrar entre 0 o 1 parentesis una expresión
+-- | Parser que permite encerrar entre 0 o 1 paréntesis una expresión
 parens01 :: Parser a -> Parser a
 parens01 parser = try parser <|> parens parser
 
@@ -207,8 +207,8 @@ paexp = buildExpressionParser table term
 -- | Parser para programas
 -- program -> skip
 --          | empty
---          | indentifier := aexp
---          | indentifier :~ paexp
+--          | identifier := aexp
+--          | identifier :~ paexp
 --          | program ; program
 --          | if (bexp) {program} else {program}
 --          | pif (<rational>) {program} pelse {program}

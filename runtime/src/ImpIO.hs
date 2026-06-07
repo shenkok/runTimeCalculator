@@ -34,11 +34,11 @@ newLine = "\n"
 space :: String
 space = "  "
 
--- | imprime el indice de una obligación de prueba
+-- | Imprime el índice de una obligación de prueba
 index :: Int -> String
 index n = "[" ++ show n ++ "]"
 
--- | Imprime el indice de una restricción derivada
+-- | Imprime el índice de una restricción derivada
 index2 :: Int -> Int -> String
 index2 n m = "[" ++ show n ++ ", " ++ show m ++ "]"
 
@@ -56,10 +56,10 @@ showModel solution xs = do
                           solution' <- solution
                           let showValue  x =  case (getModelValue x solution' :: Maybe Rational) of
                                 Just q ->  putStrLn $ x ++  " = " ++ showLit q ++ " Racional"
-                                Nothing ->  error "A ocurrido un error, por favor revise este caso"
+                                Nothing ->  error "Ha ocurrido un error, por favor revise este caso"
                           mapM_ showValue xs
 
--- | Dado una restrcción derivada, imprime el contraejempĺo o si no es válida
+-- | Dado una restricción derivada, imprime el contraejemplo o si no es válida
 showSolverInput :: IO Bool -> IO SatResult -> SolverInput -> Int -> Int ->IO()
 showSolverInput b model (contexto, rest, vars) n m = do
       let len = length vars
@@ -80,7 +80,7 @@ showSolverInput b model (contexto, rest, vars) n m = do
                      putStrLn $ concat (replicate 100 "-")
             else  putStr ""
 
--- | Imprime los datos asociados a una oblicación de prueba
+-- | Imprime los datos asociados a una obligación de prueba
 showSolverInputs :: IO Bool -> [IO Bool] -> RRunTime -> [IO SatResult] -> [SolverInput] -> Int -> IO()
 showSolverInputs b bs runtr models inputs n = do
                                             b' <- b

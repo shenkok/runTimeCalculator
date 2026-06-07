@@ -6,17 +6,25 @@ import Data.Maybe
 import Imp
 import Data.SBV.Rational
 import ImpVCGen
+import Control.Applicative (liftA2)
 {-
     MODULO QUE SE ENCARGA DE HACER EL COMPILADOR ENTRE LOS LENGUAJES IMPERATIVOS Y LAS VARIABLES DE SBV
 -}
 type Env a = M.Map String (SBV a)
 type ConstantEnv = Env Constant
+
+-- | Lookup seguro de variable SBV en el entorno
+lookupEnv :: Name -> Env a -> Maybe (SBV a)
+lookupEnv = M.lookup
+
 -- | Método que retorna una variable SBV para ir construyendo las variables aritméticas
 envLookup :: Name -> Env a -> SBV a
-envLookup x env = fromMaybe (error $ "Var not found: " ++ show x)
-                            (M.lookup x env)
+envLookup x env =
+  fromMaybe
+    (error $ "ImpSBV.envLookup: variable no definida en el entorno: " ++ show x)
+    (lookupEnv x env)
 
--- Constructos de variables aritméticas de SBV
+-- Constructor de variables aritméticas de SBV
 sAExp :: ConstantEnv -> AExp -> SBV Constant
 sAExp  _ (Lit q)        = literal q
 sAExp env (Var x)       = envLookup x env
@@ -65,11 +73,11 @@ makeSBVModel sinput = do
 
 -- Versión monádica IO del and lógico
 ioAnd :: IO Bool -> IO Bool -> IO Bool
-ioAnd b_1 b_2 = (&&) <$> b_1 <*> b_2
+ioAnd = liftA2 (&&)
 
 -- Versión monádica IO del or lógico
 ioOr :: IO Bool -> IO Bool -> IO Bool
-ioOr b_1 b_2 = (||) <$> b_1 <*> b_2
+ioOr = liftA2 (||)
 -- Dado un programa y un runtime entrega el input necesario para poder imprimir los resultados
 routineInput :: Program -> RunTime -> (RunTime, [RRunTime],[[IO SatResult]], [[SolverInput]], [[IO Bool]], [IO Bool], IO Bool)
 routineInput program runt = (sert, rests, modelss, inputss, bss, bs, b) where

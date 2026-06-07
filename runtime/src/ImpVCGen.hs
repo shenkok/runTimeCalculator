@@ -8,7 +8,7 @@ import Imp
 -}
 -----------------------------------{RESTRICCIONES }-----------------------------------------------------
 
--- | Definición de restriccion
+-- | Definición de restricción
 data Restriction a
   = a :!==: a
   | a :!<=: a
@@ -32,7 +32,7 @@ instance Applicative Restriction where
   (f_1 :!<=: f_2) <*> (a_1 :!==: a_2) = f_1 a_1 :!==: f_2 a_2
 
 
--- | Definición de un función de fold para la estructura Restriction
+-- | Definición de una función de fold para la estructura Restriction
 foldRes :: (b -> b -> c) -> (a -> b) -> Restriction a -> c
 foldRes f g (e_1 :!==: e_2) = f (g e_1) (g e_2)
 foldRes f g (e_1 :!<=: e_2) = f (g e_1) (g e_2)
@@ -151,8 +151,7 @@ evalCondition bexp (e_1 :++: e_2)         = evalCondition bexp e_1 :++: evalCond
 evalCondition bexp (k :**: runt)          = k :**: evalCondition bexp runt
 
 -- | Toma un RunTime runt y retorna su versión AExp en el caso de que se pueda
--- NOTA: En un principio pensé en usar la mónada maybe para que el porgrama no se caiga
--- pero en los ejemplos que vi siempre tiraban el error, así que quise seguir esa línea
+
 runTimeToArit :: RunTime -> AExp
 runTimeToArit (RunTimeArit arit) = arit
 runTimeToArit (e_1 :++: e_2)     = runTimeToArit e_1 :+: runTimeToArit e_2
@@ -184,7 +183,7 @@ runTimeToArit' _ = Nothing
         constrain $ Not (a + b<= 10)
 -}
 -- Cada tupla es
--- 0.a. Context: Un arreglo de BExp, es la hiṕotesis del implica
+-- 0.a. Context: Un arreglo de BExp, es la hipótesis del implica
 -- 0.a. Ejemplo [a + 10.0 .< 19.0 + b,  a + b + c.<= 10 ]
 -- 0.b. Restricción: Restriction RArit, será la conclusión del Implica
 -- 0.b. Ejemplo a + b<= 10
@@ -193,14 +192,14 @@ runTimeToArit' _ = Nothing
 
 -- 1. Simplificar los dos runtimes de la restricción a:!<=:b -> a':!<=:b'
 -- 2. Extraer todos los contextos posibles de los dos runtime a' y b'
--- 3. Función currificada, para poder evaluar una condición y usarlar con los contexts
+-- 3. Función currificada, para poder evaluar una condición y usarla con los contexts
 -- 4. Evaluar todos los contextos y generar todas las posibles restricciones de runtimes [a'':!<=:b'' ]
--- 5. A partir de las restricciones de runtimes [a'':<=:b''], se extrae la expresión aritmetica subyacente
+-- 5. A partir de las restricciones de runtimes [a'':<=:b''], se extrae la expresión aritmética subyacente
 --    generando restricciones de AExp [a''' :!<=b'''].
--- 6. Funcion que toma un context [BExp] y extrae las variables libres y las concatena
--- 7. Arreglo cuyos elementos son arreglos con todas las varibles libres de cada posible contexto
+-- 6. Función que toma un context [BExp] y extrae las variables libres y las concatena
+-- 7. Arreglo cuyos elementos son arreglos con todas las variables libres de cada posible contexto
 -- 8. Variables libres de cada restricción de AExp [a''' :!<=b''']
--- 9. Uno las variables libre de cada context con las variables de su respectiva restricción
+-- 9. Uno las variables libres de cada context con las variables de su respectiva restricción
 -- 10. Elimino las variables libres que sean "", ya que en realidad son Literales (Lit n)
 restrictionsToSolver :: RRunTime -> [SolverInput]
 restrictionsToSolver rest = zip3 contexts eval_arit free_vars' -- 0
