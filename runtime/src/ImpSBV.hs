@@ -42,6 +42,17 @@ sBExp env (e_1 :|: e_2)  = sBExp env e_1 .|| sBExp env e_2
 sBExp env (e_1 :&: e_2)  = sBExp env e_1 .&&  sBExp env e_2
 sBExp env (Not e)        = sNot (sBExp env e)
 
+-- | Convierte una restricción aritmética en una expresión booleana.
+-- En el modelo SBV tratamos las restricciones como la negación de la fórmula
+-- porque se usa el método de resolución por contradicción.
+raritToBExp :: RArit -> BExp
+raritToBExp (a :!<=: b) = Not (a :<=: b)
+raritToBExp (a :!==: b) = Not (a :==: b)
+raritToBExp (a :<==: b) = a :<=: b
+raritToBExp (a :===: b) = a :==: b
+
+sImplication :: ConstantEnv -> Implication -> SBool
+sImplication env (Implication hyp concl) = sAnd (map (sBExp env) hyp) .=> sBExp env (raritToBExp concl)
 
 -- | Función que permite reorganizar el input
 -- Es útil, ya que las restricciones a!:<=:b no son booleanos, pero se deben tratar como tal
@@ -64,12 +75,30 @@ reOrganiceInput (context, rarit, names) = (names, new_context) where
         constrain $ a + b + c.<= 10 
 -}
 
+
 makeSBVModel :: SolverInput ->  SymbolicT IO ()
 makeSBVModel sinput = do
                     let (names, context) = reOrganiceInput sinput
                     xs <- sRationals names
                     let env = M.fromList (zip names xs)
                     constrain (sAnd (map (sBExp env) context))
+
+
+-- Nueva versión de la función anterior, con el nuevo formato de SolverInput'
+-- Si no tengo variables existenciales, procedo por contradicción.
+
+-- makeSBVModel' :: SolverInput' -> SymbolicT IO ()
+-- makeSBVModel' (SolverInput' solver_formulaes existentials for_all) = do
+--   if null existentials
+--     then do
+--       ys <- sRationals for_all
+--       let env = M.fromList (zip for_all ys)
+--       constrain $ sNot (sAnd (map (sImplication env) solver_formulaes))
+--     else do
+--       xs <- sRationals existentials
+--       ys <- mapM forAll for_all
+--       let env = M.fromList (zip existentials xs) `M.union` M.fromList (zip for_all ys)
+--       constrain $ sAnd (map (sImplication env) solver_formulaes)
 
 -- Versión monádica IO del and lógico
 ioAnd :: IO Bool -> IO Bool -> IO Bool
