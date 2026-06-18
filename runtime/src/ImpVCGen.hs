@@ -82,8 +82,8 @@ vcGenerator0 program = vcGenerator program rtZero
 bottom :: RunTime
 bottom = rtLit 0
 
-top :: RunTime
-top = rtLit $ toRational (1/0)
+-- top :: RunTime
+-- top = rtLit $ toRational (1/0)
 
 -- | Función característica de un while
 cfWhile :: BExp -> Program -> RunTime -> RunTime -> RunTime
