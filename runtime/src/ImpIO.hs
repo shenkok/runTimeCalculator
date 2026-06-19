@@ -54,8 +54,8 @@ showRestriction x n b = do
 showModel :: IO SatResult -> [String] -> IO ()
 showModel solution xs = do
                           solution' <- solution
-                          let showValue  x =  case (getModelValue x solution' :: Maybe Rational) of
-                                Just q ->  putStrLn $ x ++  " = " ++ showLit q ++ " Racional"
+                          let showValue  x =  case (getModelValue x solution' :: Maybe AlgReal) of
+                                Just q ->  putStrLn $ x ++  " = " ++ show q ++ " Real"
                                 Nothing ->  error "Ha ocurrido un error, por favor revise este caso"
                           mapM_ showValue xs
 
