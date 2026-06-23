@@ -9,9 +9,13 @@ import Imp
 -----------------------------------{RESTRICCIONES }-----------------------------------------------------
 
 -- | Definición de restricción
+-- | Ya uso el :==: y :<=: en AExp. Por lo mismo añado un igual (=) más.
+-- Por ejemplo, :===: en realidad quiero usar :==: pero habría problemas de ambigüedad, por eso se le añade un igual más.
 data Restriction a
   = a :!==: a
   | a :!<=: a
+  | a :===: a
+  | a :<==: a
   deriving (Eq, Show)
 
 -- | Extender a Functor
@@ -19,17 +23,8 @@ instance Functor Restriction where
   -- fmap :: (a -> b) -> Restriction a -> Restriction b
   fmap f (a_1 :!==: a_2) = f a_1 :!==: f a_2
   fmap f (a_1 :!<=: a_2) = f a_1 :!<=: f a_2
-
--- | Extender a Functor Aplicativo
-instance Applicative Restriction where
-  -- pure :: a -> Restriction a
-  pure a = a :!==: a
-
-  -- (<*>) :: Restriction (a->b) -> Restriction a -> Restriction b
-  (f_1 :!==: f_2) <*> (a_1 :!<=: a_2) = f_1 a_1 :!<=: f_2 a_2
-  (f_1 :!==: f_2) <*> (a_1 :!==: a_2) = f_1 a_1 :!==: f_2 a_2
-  (f_1 :!<=: f_2) <*> (a_1 :!<=: a_2) = f_1 a_1 :!<=: f_2 a_2
-  (f_1 :!<=: f_2) <*> (a_1 :!==: a_2) = f_1 a_1 :!==: f_2 a_2
+  fmap f (a_1 :===: a_2) = f a_1 :===: f a_2
+  fmap f (a_1 :<==: a_2) = f a_1 :<==: f a_2
 
 
 -- | Definición de una función de fold para la estructura Restriction
@@ -87,8 +82,8 @@ vcGenerator0 program = vcGenerator program rtZero
 bottom :: RunTime
 bottom = rtLit 0
 
-top :: RunTime
-top = rtLit $ toRational (1/0)
+-- top :: RunTime
+-- top = rtLit $ toRational (1/0)
 
 -- | Función característica de un while
 cfWhile :: BExp -> Program -> RunTime -> RunTime -> RunTime
@@ -117,6 +112,28 @@ type Context = [BExp]
 type Contexts = [Context]
 
 type SolverInput = (Context, RArit, Names)
+
+
+
+
+-- Nueva versión de SolverInput
+-- Ahora modela problemas del tipo
+-- a <- sRational "a"
+-- b <- forall sRational "b"
+-- constraint $ (a + 10 .>0 .& b .==6 .=> a + b .<= 10) .& (a + 10 .>0 .& b .==6 .=> a + b .<= 10)
+-- Nótese que ahora no se hace el juego algebreico de tomar los implicar y reemplazarlos por un and lógicos.
+-- Se modela directamente como una conjunción de implicaciones.
+-- Por cada posible contexto se genera una implicación. Por eso solver_formulaes es un arreglo de implicaciones.
+
+data Implication = Implication{
+  hypothesis :: Context,
+  conclusion :: RArit } deriving (Eq, Show)
+
+data SolverInput' = SolverInput'
+  { solver_formulaes ::[Implication]
+  , existentials :: Names
+  , for_all      :: Names
+   } deriving (Eq, Show)
 
 -- | Retorna todas las instancias de BExp dentro un RunTime sin repeticiones
 getBExp :: RunTime -> Context
@@ -215,3 +232,7 @@ restrictionsToSolver rest = zip3 contexts eval_arit free_vars' -- 0
     free_vars = map rmdups (zipWith (++) free_vars_bool free_vars_rest) -- 9
     free_vars' = map (filter (/= "")) free_vars -- 10
 
+
+
+
+-- restrictionsToSolver' :: RRUnTime -> SolverInput'

@@ -10,7 +10,7 @@ import           Control.Monad (void, ap)
 import qualified Text.Parsec.Token    as Token
 import           Imp
 import Control.Exception (bracket_)
-
+import Data.SBV (AlgReal)
 
 {-
   MÓDULO QUE SE ENCARGA DE DEFINIR LOS PARSERS PARA LAS DIFERENTES ESTRUCTURAS
@@ -34,23 +34,23 @@ parens01 parser = try parser <|> parens parser
 
 
 -- | Parser para escribir a los racionales como enteros
-rationalInteger :: Parser Rational
-rationalInteger = toRational <$> integer
+rationalInteger :: Parser AlgReal
+rationalInteger = fromInteger <$> integer
 
 -- | Parser para escribir a los racionales de la forma Int/Int
-rationalFractional :: Parser Rational
+rationalFractional :: Parser AlgReal
 rationalFractional = do
     whitespace
     num <- integer
     void $ char '/'
     den <- integer
     whitespace
-    return $ toRational num/ toRational den
+    return $ fromRational (toRational num / toRational den)
 
 
 
 -- | Parser para escribir racionales
-rational :: Parser Rational
+rational :: Parser AlgReal
 rational = try rationalFractional <|> rationalInteger
 
 -- | Parser para escribir los literales de AExp
@@ -164,24 +164,24 @@ coin :: Parser PAExp
 coin = Imp.coin <$> (reserved "coin_flip" *> parens rational)
 
 -- | Parser para distribución uniforme sobre los enteros
-uniform :: Parser PAExp
-uniform = do
-  void $ string "uniform"
-  whitespace
-  void $ char '('
-  whitespace
-  q <- rational
-  whitespace
-  void comma
-  whitespace
-  p <- rational
-  whitespace
-  void $ char ')'
-  return $ Imp.uniform q p
+-- uniform :: Parser PAExp
+-- uniform = do
+--   void $ string "uniform"
+--   whitespace
+--   void $ char '('
+--   whitespace
+--   q <- rational
+--   whitespace
+--   void comma
+--   whitespace
+--   p <- rational
+--   whitespace
+--   void $ char ')'
+--   return $ Imp.uniform q p
 
 -- | Parser para distribución uniforme sobre los enteros desde el 1
-uniform1 :: Parser PAExp
-uniform1 = Imp.uniform1 <$> (reserved "uniform" *> parens rational)
+-- uniform1 :: Parser PAExp
+-- uniform1 = Imp.uniform1 <$> (reserved "uniform" *> parens rational)
 
 -- | Parser para Distribuciones discretas 
 -- discrete -> <arit> 
@@ -189,18 +189,19 @@ uniform1 = Imp.uniform1 <$> (reserved "uniform" *> parens rational)
 --           | uniform(rational, rational)
 --           | uniform(rational)
 
-discrete :: Parser PAExp
-discrete = try ImpParser.dirac <|> try ImpParser.coin
-         <|> try ImpParser.uniform <|> try ImpParser.uniform1
+-- discrete :: Parser PAExp
+-- discrete = try ImpParser.dirac <|> try ImpParser.coin
+--          <|> try ImpParser.uniform <|> try ImpParser.uniform1
 
 -- | Parser para expresiones aritméticas probabilistas
 -- paexp -> discrete
 --        | rational * <aexp>
 --        | paexp + paexp
+--           <|> try discrete
 paexp :: Parser PAExp
 paexp = buildExpressionParser table term
  where term =  try ((*~:) <$> (rational <* reservedOp "*") <*> angles aexp)
-          <|> try discrete
+
           <|> try (parens paexp)
        table = [[ binary "+" (++) ]]
 

@@ -3,6 +3,7 @@ module Imp where
 import Data.List
 import Data.Ratio
 import GHC.Real (infinity)
+import Data.SBV
 
 {-
   MÓDULO QUE SE ENCARGA DE REPRESENTAR EXPRESIONES ARITMÉTICAS, BOOLEANAS, RUNTIMES Y PROGRAMAS
@@ -11,7 +12,7 @@ type Name     = String -- Nombre de las variables
 
 type Names    = [Name]
 
-type Constant = Rational --  Constantes Numéricas
+type Constant = AlgReal --  Constantes Numéricas
 
 ---------------------------------------- { FUNCIONES ÚTILES }---------------------------------------
 
@@ -29,6 +30,7 @@ bools n = map (False :) r ++ map (True :) r
     r = bools (n -1)
 
 -- | Método para imprimir literales
+-- | TODO: cambiar
 showLit :: Rational -> String
 showLit q
   | denominator q == 1 = show $ numerator q
@@ -61,13 +63,14 @@ data AExp
 
 
 -- | Definición del método show para AExp
+-- | TODO: cambiar a showLit
 instance Show AExp where
-  show (Lit n)           = showLit n
+  show (Lit n)           = show n
   show (Var x)           =  x
   show (e_1 :+: e_2)     = show e_1  ++ " + " ++ show e_2
-  show (k :*: Lit n)     = showLit k ++  "*"  ++ showLit n
-  show (k :*: Var x)     = showLit k ++  "*"  ++ x
-  show (k :*: e)       = showLit k ++  "*(" ++ show e ++")"
+  show (k :*: Lit n)     = show k ++  "*"  ++ show n
+  show (k :*: Var x)     = show k ++  "*"  ++ x
+  show (k :*: e)       = show k ++  "*(" ++ show e ++")"
 
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
@@ -142,8 +145,8 @@ one = Lit 1
 zero :: AExp
 zero = Lit 0
 
-infRational :: Rational 
-infRational = infinity
+-- infRational :: Rational 
+-- infRational = infinity
 
 
 ---------------------------------- { EXPRESIONES BOOLEANAS} ------------------------------------------
@@ -287,13 +290,13 @@ toIndicator e_b = e_b :<>: rtOne
 instance Show RunTime where
   show (RunTimeArit arit)               = show arit
   show (e_b :<>: RunTimeArit (Lit 1))   = "[" ++ show e_b ++ "]"
-  show (e_b :<>: RunTimeArit (Lit n))   = "[" ++ show e_b ++ "]<>" ++ showLit n
+  show (e_b :<>: RunTimeArit (Lit n))   = "[" ++ show e_b ++ "]<>" ++ show n
   show (e_b :<>: RunTimeArit (Var x))   = "[" ++ show e_b ++ "]<>" ++ x
   show (e_b :<>: runt)                  = "[" ++ show e_b ++ "]<>" ++ "(" ++ show runt ++ ")"
   show (e_1 :++: e_2)                   = show e_1 ++ " ++ " ++ show e_2
-  show (k :**: RunTimeArit (Lit n))     = showLit k ++ "**" ++ showLit n
-  show (k :**: RunTimeArit (Var x))     = showLit k ++ "**" ++ x
-  show (k :**: e)                       = showLit k ++ "**(" ++ show e ++ ")"
+  show (k :**: RunTimeArit (Lit n))     = show k ++ "**" ++ show n
+  show (k :**: RunTimeArit (Var x))     = show k ++ "**" ++ x
+  show (k :**: e)                       = show k ++ "**(" ++ show e ++ ")"
 
 -- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
 -- reemplaza todas las incidencias de "x" en la expresión runtIn por la expresión aritFor.
@@ -361,7 +364,7 @@ type PAExp = Distribution AExp
 -- | Método para imprimir un punto de la distribución 
 showPoint :: (PConstant, AExp) -> String
 showPoint (1, arit) = "<" ++ show arit ++ ">"
-showPoint (q, arit) =  showLit q ++ "*<" ++ show arit ++ ">"
+showPoint (q, arit) =  show q ++ "*<" ++ show arit ++ ">"
 
 
 -- | Método para imprimir una distribución probabilista de expresiones aritméticas.
@@ -374,7 +377,7 @@ showPAexp (x: xs)  = showPoint x
 newtype PBExp = Ber { p:: PConstant} deriving (Eq)
 
 instance Show PBExp where
-  show (Ber q) = "<" ++ showLit q ++ ">"
+  show (Ber q) = "<" ++ show q ++ ">"
 
 -- | Masa de una distribución  a
 massDistribution :: Distribution a -> PConstant
@@ -396,15 +399,15 @@ coin :: PConstant -> PAExp
 coin p = [(p, Lit 0), (1-p, Lit 1)]
 
 -- Dado de N caras
-uniform :: Constant -> Constant -> Distribution AExp
-uniform a b = zip (repeat $ 1%len) values  where
-  values = map Lit [a..b]
-  len    = toInteger $ length values
+-- uniform :: Constant -> Constant -> Distribution AExp
+-- uniform a b = zip (repeat $ 1%len) values  where
+--   values = map Lit [a..b]
+--   len    = toInteger $ length values
 
 -- Variable aleatoria con 1 como inicio o fin
-uniform1 :: Constant -> Distribution AExp
-uniform1 q  | q <= 1    = uniform q 1
-            | otherwise = uniform 1 q
+-- uniform1 :: Constant -> Distribution AExp
+-- uniform1 q  | q <= 1    = uniform q 1
+--             | otherwise = uniform 1 q
 ----------------------------------------{AZÚCAR SINTÁCTICA PARA DISTRIBUCIONES CONOCIDAS}------------------------------
 
 -- | Cálculo de esperanza.

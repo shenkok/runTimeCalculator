@@ -1,5 +1,7 @@
 module ImpSBV where
-
+import Data.SBV.Dynamic     -- svMkSymVar, KReal, VarContext(..), Quantifier(..)
+import Data.SBV.Internals   -- symbolicEnv
+import Control.Monad.IO.Class (liftIO)
 import Data.SBV
 import qualified Data.Map as M
 import Data.Maybe
@@ -40,8 +42,19 @@ sBExp env (e_1 :<=: e_2) = sAExp env e_1 .<= sAExp env e_2
 sBExp env (e_1 :==: e_2) = sAExp env e_1 .== sAExp env e_2
 sBExp env (e_1 :|: e_2)  = sBExp env e_1 .|| sBExp env e_2
 sBExp env (e_1 :&: e_2)  = sBExp env e_1 .&&  sBExp env e_2
-sBExp env (Not e)        = sNot (sBExp env e)
+sBExp env (Imp.Not e)        = sNot (sBExp env e)
 
+-- | Convierte una restricción aritmética en una expresión booleana.
+-- En el modelo SBV tratamos las restricciones como la negación de la fórmula
+-- porque se usa el método de resolución por contradicción.
+raritToBExp :: RArit -> BExp
+raritToBExp (a :!<=: b) = Imp.Not (a :<=: b)
+raritToBExp (a :!==: b) = Imp.Not (a :==: b)
+raritToBExp (a :<==: b) = a :<=: b
+raritToBExp (a :===: b) = a :==: b
+
+sImplication :: ConstantEnv -> Implication -> SBool
+sImplication env (Implication hyp concl) = sAnd (map (sBExp env) hyp) .=> sBExp env (raritToBExp concl)
 
 -- | Función que permite reorganizar el input
 -- Es útil, ya que las restricciones a!:<=:b no son booleanos, pero se deben tratar como tal
@@ -50,8 +63,8 @@ sBExp env (Not e)        = sNot (sBExp env e)
 
 reOrganiceInput :: SolverInput -> (Names, Context)
 reOrganiceInput (context, rarit, names) = (names, new_context) where
-    f (a :!<=:b) = Not (a :<=: b)
-    f (a :!==:b) = Not (a :==: b)
+    f (a :!<=:b) = Imp.Not (a :<=: b)
+    f (a :!==:b) = Imp.Not (a :==: b)
     new_rarit    = f rarit
     new_context  = context ++ [new_rarit]
 
@@ -64,12 +77,48 @@ reOrganiceInput (context, rarit, names) = (names, new_context) where
         constrain $ a + b + c.<= 10 
 -}
 
+
 makeSBVModel :: SolverInput ->  SymbolicT IO ()
 makeSBVModel sinput = do
                     let (names, context) = reOrganiceInput sinput
-                    xs <- sRationals names
+                    xs <- sReals names
                     let env = M.fromList (zip names xs)
                     constrain (sAnd (map (sBExp env) context))
+
+
+-- Nueva versión de la función anterior, con el nuevo formato de SolverInput'
+-- Si no tengo variables existenciales, procedo por contradicción.
+
+-- makeSBVModel' :: SolverInput' -> SymbolicT IO ()
+-- makeSBVModel' (SolverInput' solver_formulaes existentials for_all) = do
+--   if null existentials
+--     then do
+--       ys <- mapM (\n -> forSome n :: Symbolic SReal) for_all
+--       let env = M.fromList (zip for_all ys)
+--       constrain $ sNot (sAnd (map (sImplication env) solver_formulaes))
+--     else do
+--       ys <- mapM (\n -> forAll n :: Symbolic SReal) for_all
+--       xs <- mapM (\n -> forSome n :: Symbolic SReal) existentials
+--       let env = M.fromList (zip existentials xs) `M.union` M.fromList (zip for_all ys)
+--       constrain $ sAnd (map (sImplication env) solver_formulaes)
+
+
+
+makeSBVModel' :: SolverInput' -> SymbolicT IO ()
+makeSBVModel' (SolverInput' solver_formulaes existentials for_all) = do
+    st <- symbolicEnv
+    -- ∀ : universales
+    ys <- liftIO $ mapM (\n -> SBV <$> svMkSymVar (NonQueryVar (Just ALL)) KReal (Just n) st) for_all
+    -- ∃ : existenciales
+    xs <- liftIO $ mapM (\n -> SBV <$> svMkSymVar (NonQueryVar (Just EX))  KReal (Just n) st) existentials
+    let env = M.fromList (zip for_all     (ys :: [SReal]))
+           `M.union`
+              M.fromList (zip existentials (xs :: [SReal]))
+    constrain $ sAnd (map (sImplication env) solver_formulaes)
+
+-- Runner: sat es suficiente porque los cuantificadores ya están en las variables
+runModel' :: SolverInput' -> IO SatResult
+runModel' = sat . makeSBVModel'
 
 -- Versión monádica IO del and lógico
 ioAnd :: IO Bool -> IO Bool -> IO Bool
