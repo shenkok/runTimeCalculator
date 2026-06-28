@@ -1,3 +1,7 @@
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE TypeAbstractions    #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module ImpSBV where
 import Data.SBV.Dynamic     -- svMkSymVar, KReal, VarContext(..), Quantifier(..)
 import Data.SBV.Internals   -- symbolicEnv
@@ -9,11 +13,28 @@ import Imp
 import Data.SBV.Rational
 import ImpVCGen
 import Control.Applicative (liftA2)
+
 {-
     MODULO QUE SE ENCARGA DE HACER EL COMPILADOR ENTRE LOS LENGUAJES IMPERATIVOS Y LAS VARIABLES DE SBV
 -}
+
+
 type Env a = M.Map String (SBV a)
 type ConstantEnv = Env Constant
+
+mkUniversales :: [String] 
+              -> (M.Map String SReal -> SBool) 
+              -> SBool
+mkUniversales names f = case length names of
+  0 -> f M.empty
+  1 -> quantifiedBool $ \(ForallN xs :: ForallN 1 "u" AlgReal) ->
+         f (M.fromList (zip names xs))
+  2 -> quantifiedBool $ \(ForallN xs :: ForallN 2 "u" AlgReal) ->
+         f (M.fromList (zip names xs))
+  3 -> quantifiedBool $ \(ForallN xs :: ForallN 3 "u" AlgReal) ->
+         f (M.fromList (zip names xs))
+  _ -> error "Máximo 3 variables universales soportadas"
+
 
 -- | Lookup seguro de variable SBV en el entorno
 lookupEnv :: Name -> Env a -> Maybe (SBV a)
@@ -54,7 +75,7 @@ raritToBExp (a :<==: b) = a :<=: b
 raritToBExp (a :===: b) = a :==: b
 
 sImplication :: ConstantEnv -> Implication -> SBool
-sImplication env (Implication hyp concl) = sAnd (map (sBExp env) hyp) .=> sBExp env (raritToBExp concl)
+sImplication env (Implication hyp concl) = sAnd (map (sBExp env) hyp) .=> sBExp env concl
 
 -- | Función que permite reorganizar el input
 -- Es útil, ya que las restricciones a!:<=:b no son booleanos, pero se deben tratar como tal
@@ -78,43 +99,28 @@ reOrganiceInput (context, rarit, names) = (names, new_context) where
 -}
 
 
-makeSBVModel :: SolverInput ->  SymbolicT IO ()
+makeSBVModel :: SolverInput -> SymbolicT IO ()
 makeSBVModel sinput = do
                     let (names, context) = reOrganiceInput sinput
                     xs <- sReals names
                     let env = M.fromList (zip names xs)
                     constrain (sAnd (map (sBExp env) context))
 
-
--- Nueva versión de la función anterior, con el nuevo formato de SolverInput'
--- Si no tengo variables existenciales, procedo por contradicción.
-
--- makeSBVModel' :: SolverInput' -> SymbolicT IO ()
--- makeSBVModel' (SolverInput' solver_formulaes existentials for_all) = do
---   if null existentials
---     then do
---       ys <- mapM (\n -> forSome n :: Symbolic SReal) for_all
---       let env = M.fromList (zip for_all ys)
---       constrain $ sNot (sAnd (map (sImplication env) solver_formulaes))
---     else do
---       ys <- mapM (\n -> forAll n :: Symbolic SReal) for_all
---       xs <- mapM (\n -> forSome n :: Symbolic SReal) existentials
---       let env = M.fromList (zip existentials xs) `M.union` M.fromList (zip for_all ys)
---       constrain $ sAnd (map (sImplication env) solver_formulaes)
-
-
-
 makeSBVModel' :: SolverInput' -> SymbolicT IO ()
-makeSBVModel' (SolverInput' solver_formulaes existentials for_all) = do
-    st <- symbolicEnv
-    -- ∀ : universales
-    ys <- liftIO $ mapM (\n -> SBV <$> svMkSymVar (NonQueryVar (Just ALL)) KReal (Just n) st) for_all
-    -- ∃ : existenciales
-    xs <- liftIO $ mapM (\n -> SBV <$> svMkSymVar (NonQueryVar (Just EX))  KReal (Just n) st) existentials
-    let env = M.fromList (zip for_all     (ys :: [SReal]))
-           `M.union`
-              M.fromList (zip existentials (xs :: [SReal]))
-    constrain $ sAnd (map (sImplication env) solver_formulaes)
+makeSBVModel' SolverInput'{ existential     = existNames
+                           , for_all          = universalNames
+                           , solver_formulaes = formulaes     } = do
+  if null existNames
+    then do
+      xs <- sReals universalNames
+      let env = M.fromList (zip universalNames xs)
+      constrain $ sNot $ sAnd $ map (sImplication env) formulaes
+    else do
+      xs <- sReals existNames
+      let existEnv = M.fromList (zip existNames xs)
+      constrain $ mkUniversales universalNames $ \univEnv ->
+        let env = existEnv <> univEnv
+        in sAnd $ map (sImplication env) formulaes
 
 -- Runner: sat es suficiente porque los cuantificadores ya están en las variables
 runModel' :: SolverInput' -> IO SatResult

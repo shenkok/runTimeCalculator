@@ -127,11 +127,11 @@ type SolverInput = (Context, RArit, Names)
 
 data Implication = Implication{
   hypothesis :: Context,
-  conclusion :: RArit } deriving (Eq, Show)
+  conclusion :: BExp } deriving (Eq, Show)
 
 data SolverInput' = SolverInput'
   { solver_formulaes ::[Implication]
-  , existentials :: Names
+  , existential :: Names
   , for_all      :: Names
    } deriving (Eq, Show)
 
