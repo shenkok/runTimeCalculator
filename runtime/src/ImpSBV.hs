@@ -65,23 +65,18 @@ sBExp env (e_1 :|: e_2)  = sBExp env e_1 .|| sBExp env e_2
 sBExp env (e_1 :&: e_2)  = sBExp env e_1 .&&  sBExp env e_2
 sBExp env (Imp.Not e)        = sNot (sBExp env e)
 
--- | Convierte una restricción aritmética en una expresión booleana.
--- En el modelo SBV tratamos las restricciones como la negación de la fórmula
--- porque se usa el método de resolución por contradicción.
-raritToBExp :: RArit -> BExp
-raritToBExp (a :!<=: b) = Imp.Not (a :<=: b)
-
+-- | Constructor de formulas implica para SBV
 sImplication :: ConstantEnv -> Implication -> SBool
 sImplication env (Implication hyp concl) = sAnd (map (sBExp env) hyp) .=> sBExp env concl
 
 -- | Función que permite reorganizar el input
--- Es útil, ya que las restricciones a!:<=:b no son booleanos, pero se deben tratar como tal
+-- Es útil, ya que las restricciones a:<==:b no son booleanos, pero se deben tratar como tal
 -- por eso la función "f"
--- Además la restricción debe ir negada, ya que se procede por contradicción
+-- Retorno la restriccion negada ya que procedo por contradicción
 
 reOrganiceInput :: SolverInput -> (Names, Context)
 reOrganiceInput (context, rarit, names) = (names, new_context) where
-    f (a :!<=:b) = Imp.Not (a :<=: b)
+    f (a :<==:b) = Imp.Not $ a :<=: b -- Procedo por contradicción
     new_rarit    = f rarit
     new_context  = context ++ [new_rarit]
 

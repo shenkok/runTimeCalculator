@@ -241,4 +241,4 @@ runtime2 = fromRight (error "parse error") (regularParse runtime " 2 ++ [u >= 2]
 -- {EJEMPLOS DE RRunTime} --
 
 restrictionA :: RRunTime
-restrictionA = runtime1 :!<=: rtOne
+restrictionA = runtime1 :<==: rtOne

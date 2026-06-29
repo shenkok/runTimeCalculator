@@ -11,18 +11,17 @@ import Imp
 -- | Definición de restricción
 -- | Ya uso el :==: y :<=: en AExp. Por lo mismo añado un igual (=) más.
 data Restriction a
-  = a :!<=: a
-  | a :!<==: a
+  = a :<==: a
   deriving (Eq, Show)
 
 -- | Extender a Functor
 instance Functor Restriction where
   -- fmap :: (a -> b) -> Restriction a -> Restriction b
-  fmap f (a_1 :!<=: a_2) = f a_1 :!<=: f a_2
+  fmap f (a_1 :<==: a_2) = f a_1 :<==: f a_2
 
 -- | Definición de una función de fold para la estructura Restriction
 foldRes :: (b -> b -> c) -> (a -> b) -> Restriction a -> c
-foldRes f g (e_1 :!<=: e_2) = f (g e_1) (g e_2)
+foldRes f g (e_1 :<==: e_2) = f (g e_1) (g e_2)
 
 ---------------------------- { SINÓNIMOS DE TIPOS ÚTILES } ---------------------------------------------
 
@@ -53,11 +52,11 @@ vcGenerator (Seq p_1 p_2) runt       = (fst vc_1, snd vc_1 ++ snd vc_2)
   where
     vc_2 = vcGenerator p_2 runt
     vc_1 = vcGenerator p_1 (fst vc_2)
-vcGenerator (While e_b p inv) runt   = (inv, (l_inv :!<=: inv) : snd vc_p)
+vcGenerator (While e_b p inv) runt   = (inv, (l_inv :<==: inv) : snd vc_p)
   where
     vc_p = vcGenerator p inv
     l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: fst vc_p))
-vcGenerator (PWhile pe_b c inv) runt = (inv, (l_inv :!<=: inv) : snd vc_p)
+vcGenerator (PWhile pe_b c inv) runt = (inv, (l_inv :<==: inv) : snd vc_p)
   where
     p_true = p pe_b
     p_false = 1 - p_true
@@ -233,8 +232,6 @@ restrictionsToSolver rest = zip3 contexts eval_arit free_vars' -- 0
     free_vars' = map (filter (/= "")) free_vars -- 10
 
 
-
-
 -- | A partir de una restricción de RunTime genero las formulas lógicas que tomará SBV
 -- TODO: Por ahora el manejo de las variables no lo decido acá, ya que no he decido un standar para
 -- reconocer una variable existencial de una universal.
@@ -252,7 +249,7 @@ restrictionsToSolver rest = zip3 contexts eval_arit free_vars' -- 0
 -- 4. Dado que ya puedo obtener la restricción_i a partir de cada contexto_i, aplico la función f a todos los contextos.
 -- 4a. El resultado final es un arreglo de implicaciones donde la hipotesis del implica_i es el contexto_i y la conclusión es la restricción_i.
 restrictionsToSolver' :: RRunTime -> [Implication]
-restrictionsToSolver' (runtimeA :!<=: runtimeB) = map (\x -> Implication { hypothesis = x, conclusion = f x }) contexts -- 4
+restrictionsToSolver' (runtimeA :<==: runtimeB) = map (\x -> Implication { hypothesis = x, conclusion = f x }) contexts -- 4
   where
     simplify_runtime = deepSimplifyRunTime runtimeA --: runtimeB  -- 1
     contexts = allContext simplify_runtime                        -- 2
