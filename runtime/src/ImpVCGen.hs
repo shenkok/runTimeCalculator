@@ -10,26 +10,18 @@ import Imp
 
 -- | Definición de restricción
 -- | Ya uso el :==: y :<=: en AExp. Por lo mismo añado un igual (=) más.
--- Por ejemplo, :===: en realidad quiero usar :==: pero habría problemas de ambigüedad, por eso se le añade un igual más.
 data Restriction a
-  = a :!==: a
-  | a :!<=: a
-  | a :===: a
-  | a :<==: a
+  = a :!<=: a
+  | a :!<==: a
   deriving (Eq, Show)
 
 -- | Extender a Functor
 instance Functor Restriction where
   -- fmap :: (a -> b) -> Restriction a -> Restriction b
-  fmap f (a_1 :!==: a_2) = f a_1 :!==: f a_2
   fmap f (a_1 :!<=: a_2) = f a_1 :!<=: f a_2
-  fmap f (a_1 :===: a_2) = f a_1 :===: f a_2
-  fmap f (a_1 :<==: a_2) = f a_1 :<==: f a_2
-
 
 -- | Definición de una función de fold para la estructura Restriction
 foldRes :: (b -> b -> c) -> (a -> b) -> Restriction a -> c
-foldRes f g (e_1 :!==: e_2) = f (g e_1) (g e_2)
 foldRes f g (e_1 :!<=: e_2) = f (g e_1) (g e_2)
 
 ---------------------------- { SINÓNIMOS DE TIPOS ÚTILES } ---------------------------------------------
@@ -148,6 +140,11 @@ getBExp runt = rmdups conds
 
 -- | Toma un RunTime runt y retorna todos los posibles context (matriz de BExp) que
 -- se pueden extraer a partir de los BExp que tiene el RunTime.
+-- Para el RunTime 1 ++ [x >= 0] ++ [w < 0] se extraen los contextos
+-- [[!(0.0 <= x),!(0.0 <= w)],
+-- [!(0.0 <= x),   0.0 <= w],
+-- [0.0 <= x,    !(0.0 <= w)],
+-- [0.0 <= x,      0.0 <= w]]
 allContext :: RunTime -> Contexts
 allContext runt = map (zipWith f conds) lbools
   where
@@ -208,7 +205,10 @@ runTimeToArit' _ = Nothing
 -- 0.c Ejemplo [a, b, c]
 
 -- 1. Simplificar los dos runtimes de la restricción a:!<=:b -> a':!<=:b'
--- 2. Extraer todos los contextos posibles de los dos runtime a' y b'
+-- 2. Extraer todos los contextos posibles de los dos runtime a' y b',
+-- sumo los runtime porque es una forma de tomar ambos contextos de una vez.
+--  TODO: Es algo artificial sumas ambos runtimes, mejor pasar las restricion a:<=:b to
+--  a-b:<=:0 y tomar los contextos de a-b.
 -- 3. Función currificada, para poder evaluar una condición y usarla con los contexts
 -- 4. Evaluar todos los contextos y generar todas las posibles restricciones de runtimes [a'':!<=:b'' ]
 -- 5. A partir de las restricciones de runtimes [a'':<=:b''], se extrae la expresión aritmética subyacente
@@ -235,4 +235,25 @@ restrictionsToSolver rest = zip3 contexts eval_arit free_vars' -- 0
 
 
 
--- restrictionsToSolver' :: RRUnTime -> SolverInput'
+-- | A partir de una restricción de RunTime genero las formulas lógicas que tomará SBV
+-- TODO: Por ahora el manejo de las variables no lo decido acá, ya que no he decido un standar para
+-- reconocer una variable existencial de una universal.
+-- Estas fórmulas tiene la forma de
+-- condición_1_1 /\ condición_1_2 /\ ... /\ condición_1_n => restricción_1
+-- condición_2_1 /\ condición_2_2 /\ ... /\ condición_2_n => restricción_2
+-- && ...
+-- condición_m_1 /\ condición_m_2 /\ ... /\ condición_m_n => restricción_m
+-- 1. Simplifico la restricción, para evitar pasos innecesarios paso primero de a:!<=:b -> a - b:!<=:0 -> c:!<=:0
+-- 2. Extraigo todos los posibles contextos del runtime c
+-- 3. Defino una función que retorne las restricción_i definas arriba, a partir de cada contexto_i
+-- 3a. El algoritmo que sigo es ir envaluando cada condición_i_j sobre el runtime c, y al final me queda un runtime c_i.
+-- 3b. Esta runtime c_i lo transformo a AExp y lo comparo 0, para que quede de la forma c_i:!<=:0 y este último término
+-- es la restricción_i que busco.
+-- 4. Dado que ya puedo obtener la restricción_i a partir de cada contexto_i, aplico la función f a todos los contextos.
+-- 4a. El resultado final es un arreglo de implicaciones donde la hipotesis del implica_i es el contexto_i y la conclusión es la restricción_i.
+restrictionsToSolver' :: RRunTime -> [Implication]
+restrictionsToSolver' (runtimeA :!<=: runtimeB) = map (\x -> Implication { hypothesis = x, conclusion = f x }) contexts -- 4
+  where
+    simplify_runtime = deepSimplifyRunTime runtimeA --: runtimeB  -- 1
+    contexts = allContext simplify_runtime                        -- 2
+    f = (:<=: zero). runTimeToArit . foldr evalCondition simplify_runtime -- 3

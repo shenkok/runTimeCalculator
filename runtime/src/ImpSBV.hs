@@ -70,9 +70,6 @@ sBExp env (Imp.Not e)        = sNot (sBExp env e)
 -- porque se usa el método de resolución por contradicción.
 raritToBExp :: RArit -> BExp
 raritToBExp (a :!<=: b) = Imp.Not (a :<=: b)
-raritToBExp (a :!==: b) = Imp.Not (a :==: b)
-raritToBExp (a :<==: b) = a :<=: b
-raritToBExp (a :===: b) = a :==: b
 
 sImplication :: ConstantEnv -> Implication -> SBool
 sImplication env (Implication hyp concl) = sAnd (map (sBExp env) hyp) .=> sBExp env concl
@@ -85,7 +82,6 @@ sImplication env (Implication hyp concl) = sAnd (map (sBExp env) hyp) .=> sBExp 
 reOrganiceInput :: SolverInput -> (Names, Context)
 reOrganiceInput (context, rarit, names) = (names, new_context) where
     f (a :!<=:b) = Imp.Not (a :<=: b)
-    f (a :!==:b) = Imp.Not (a :==: b)
     new_rarit    = f rarit
     new_context  = context ++ [new_rarit]
 

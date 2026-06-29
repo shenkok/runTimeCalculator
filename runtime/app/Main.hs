@@ -43,18 +43,20 @@ fpp x pb p runt n = case (parseRunTime "<interactive>" x, parsePBExp "<interacti
 -- Ejemplo iteración número 5, para el programa pwhile (<1/2>) {skip} con respecto al tiempo de ejecución 3 y empezando desde 0
 
 
-  --{ACÁ ANOTO EJEMPLOS POR AHORA}--
+ -- {EJEMPLOS DE PROGRAMAS Y SUS RESPECTIVAS ESTRUCTURAS} --
+
+programaPaper :: String
+programaPaper = "while(c == 1){inv = 1 ++ 4**[c == 1]}{c:~ 1/2* <0> + 1/2* <1>}"
+
 main :: IO ()
 main = do
   result <- sat $ do
-    a <- sRational "A"   -- existencial normal, aparece en el modelo
+    a <- sRational "a"   -- existencial normal, aparece en el modelo
     constrain $ quantifiedBool $
       \(Forall @"c" (c :: SRational)) ->
             ((c .== 1) .=> ((4 :: SRational) - a .<= 0))
         .&& ((c ./= 1) .=> sTrue)
-
   print result
-
 
 problem_c13_one_unknown :: IO ()
 problem_c13_one_unknown = do
@@ -77,7 +79,6 @@ problem_c13_one_unknown = do
   case getModelValue "a" result of
     Just v  -> putStrLn $ "a = " ++ show (v :: AlgReal)
     Nothing -> putStrLn "No encontrado"
-
 
 problem_7 :: IO ()
 problem_7 = do
@@ -229,3 +230,15 @@ c13Input = SolverInput'
   , for_all          = ["x", "y", "z"]
   , solver_formulaes = [impl_c13_pq, impl_c13_npq, impl_c13_pnq, impl_c13_npnq]
   }
+
+-- { EJEMPLOS DE  RunTime }--
+runtime1 :: RunTime
+runtime1 = fromRight (error "parse error") (regularParse runtime " 1 ++ [x >= 0] ++ [w < 0]")
+
+runtime2 :: RunTime
+runtime2 = fromRight (error "parse error") (regularParse runtime " 2 ++ [u >= 2] ++ [y < 0]")
+
+-- {EJEMPLOS DE RRunTime} --
+
+restrictionA :: RRunTime
+restrictionA = runtime1 :!<=: rtOne
