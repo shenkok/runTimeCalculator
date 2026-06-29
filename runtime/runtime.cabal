@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.39.1.
+-- This file has been generated from package.yaml by hpack version 0.39.6.
 --
 -- see: https://github.com/sol/hpack
 
@@ -67,6 +67,7 @@ test-suite runtime-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      ImpSpec
       Paths_runtime
   hs-source-dirs:
       test
@@ -74,6 +75,8 @@ test-suite runtime-test
   build-depends:
       base >=4.5 && <5
     , containers >=0.5
+    , hspec
+    , hspec-discover
     , parsec
     , runtime
     , sbv

@@ -105,8 +105,6 @@ type Contexts = [Context]
 type SolverInput = (Context, RArit, Names)
 
 
-
-
 -- Nueva versión de SolverInput
 -- Ahora modela problemas del tipo
 -- a <- sRational "a"
@@ -248,9 +246,12 @@ restrictionsToSolver rest = zip3 contexts eval_arit free_vars' -- 0
 -- es la restricción_i que busco.
 -- 4. Dado que ya puedo obtener la restricción_i a partir de cada contexto_i, aplico la función f a todos los contextos.
 -- 4a. El resultado final es un arreglo de implicaciones donde la hipotesis del implica_i es el contexto_i y la conclusión es la restricción_i.
-restrictionsToSolver' :: RRunTime -> [Implication]
-restrictionsToSolver' (runtimeA :<==: runtimeB) = map (\x -> Implication { hypothesis = x, conclusion = f x }) contexts -- 4
+
+restrictionsToImplications :: RRunTime -> [Implication]
+restrictionsToImplications (runtimeA :<==: runtimeB) = map (\x -> Implication { hypothesis = x, conclusion = f x }) contexts -- 4
   where
     simplify_runtime = deepSimplifyRunTime runtimeA --: runtimeB  -- 1
     contexts = allContext simplify_runtime                        -- 2
     f = (:<=: zero). runTimeToArit . foldr evalCondition simplify_runtime -- 3
+
+-- TODO: definir función que retorne las variables universales y existenciales.
