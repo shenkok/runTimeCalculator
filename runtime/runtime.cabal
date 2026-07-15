@@ -67,7 +67,9 @@ test-suite runtime-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      ImpParserSpec
       ImpSpec
+      ImpVCGenSpec
       Paths_runtime
   hs-source-dirs:
       test

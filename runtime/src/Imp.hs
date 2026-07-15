@@ -446,7 +446,7 @@ data Program
   | PIf PBExp Program Program   -- Guarda condicional probabilista
   | While BExp Program RunTime  -- Ciclo while
   | PWhile PBExp Program RunTime -- Ciclo while probabilista
-  deriving (Eq, Show) 
+  deriving (Eq, Show)
 -------------------------------------------{ FUNCIONES AUXILIARES }----------------------------------------------------------
 
 -- | Función flip para usar en el while

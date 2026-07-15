@@ -68,6 +68,81 @@ vcGenerator (PWhile pe_b c inv) runt = (inv, (l_inv :<==: inv) : snd vc_p)
 vcGenerator0 :: Program -> (RunTime, [RRunTime])
 vcGenerator0 program = vcGenerator program rtZero
 
+
+------------------------------------------{VCGENERATOR V 2.0}------------------------------------------------------------
+
+freeVarsProgram :: Program -> Names
+freeVarsProgram Skip                = []
+freeVarsProgram Empty               = []
+freeVarsProgram (Set x arit)        = x: freeVars arit
+freeVarsProgram (PSet x parit)      = [x]
+freeVarsProgram (If e_b e_t e_f)    = freeVarsBExp e_b ++ freeVarsProgram e_t ++ freeVarsProgram e_f
+freeVarsProgram (PIf _ e_t e_f)     = freeVarsProgram e_t ++ freeVarsProgram e_f
+freeVarsProgram (Seq p_1 p_2)       = freeVarsProgram p_1 ++ freeVarsProgram p_2
+freeVarsProgram (While e_b p _)   = freeVarsBExp e_b ++ freeVarsProgram p
+freeVarsProgram (PWhile _ c _)     = freeVarsProgram c
+
+
+
+-- Data para guardar lo información relevante de un programa y su respectivo VCGen
+-- runtime: Es el tiempo de ejecución calculado del programa
+-- restrictions: Son las restricciones que se generan a partir del programa
+-- programVariables: Son las variables que aparecen en el programa
+-- invariantVariables: Son las variables que aparecen en los invariantes del programa
+
+data RestrictionInformation = RestrictionInformation
+  {
+    restriction :: RRunTime,
+    templateVars:: Names,
+    programVars :: Names
+  } deriving (Eq, Show)
+
+
+data ProgramVCGenInformation = ProgramVCGenInformation
+  {
+    runtime :: RunTime,
+    restrictionsInformation :: [RestrictionInformation]
+  } deriving (Eq, Show)
+
+onlyInFirst :: Eq a => [a] -> [a] -> [a]
+onlyInFirst xs ys = rmdups (filter (`notElem` ys) xs)
+
+-- TODO: verificar si existen varailes libres e los parit 
+-- TODO: Testear
+vcGenerator' :: Program -> RunTime -> ProgramVCGenInformation
+vcGenerator' Skip runt                = ProgramVCGenInformation (rtOne :++: runt) []
+vcGenerator' Empty runt               = ProgramVCGenInformation runt [] 
+vcGenerator' (Set x arit) runt        = ProgramVCGenInformation (rtOne :++: sustRunTime x arit runt) []
+vcGenerator' (PSet x parit) runt      = ProgramVCGenInformation (rtOne :++: aexpE parit x runt) []
+vcGenerator' (If e_b e_t e_f) runt    = ProgramVCGenInformation (rtOne :++: ((e_b :<>: runtime vc_t) :++: (Not e_b :<>: runtime vc_f))) (restrictionsInformation vc_t ++ restrictionsInformation vc_f) 
+  where
+    vc_t = vcGenerator' e_t runt
+    vc_f = vcGenerator' e_f runt
+vcGenerator' (PIf pe_b e_t e_f) runt  = ProgramVCGenInformation (rtOne :++: ((p_true :**: runtime vc_t) :++: (p_false :**: runtime vc_f))) (restrictionsInformation vc_t ++ restrictionsInformation vc_f)
+  where
+    p_true = p pe_b
+    p_false = 1 - p_true
+    vc_t = vcGenerator' e_t runt
+    vc_f = vcGenerator' e_f runt
+vcGenerator' (Seq p_1 p_2) runt       = ProgramVCGenInformation (runtime vc_1) (restrictionsInformation vc_1 ++ restrictionsInformation vc_2)
+  where
+    vc_2 = vcGenerator' p_2 runt
+    vc_1 = vcGenerator' p_1 (runtime vc_2)
+vcGenerator' (While e_b p inv) runt   = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars): restrictionsInformation vc_p
+  where
+    vc_p = vcGenerator' p inv
+    l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: fst vc_p))
+    program_vars = freeVarsProgram p
+    template_vars = onlyInFirst (freeVarsRunTime inv ++ freeVarsRunTime l_inv) program_vars
+vcGenerator' (PWhile pe_b c inv) runt = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars): restrictionsInformation vc_p
+  where
+    p_true = p pe_b
+    p_false = 1 - p_true
+    vc_p = vcGenerator' c inv
+    l_inv = rtOne :++: ((p_false :**: runt) :++: (p_true :**: fst vc_p))
+    program_vars = freeVarsProgram c
+    template_vars = onlyInFirst (freeVarsRunTime inv ++ freeVarsRunTime l_inv) program_vars
+
 ----------------------------------{ OMEGA - CPO TÓPICOS}-------------------------------------------------
 
 bottom :: RunTime
@@ -255,3 +330,58 @@ restrictionsToImplications (runtimeA :<==: runtimeB) = map (\x -> Implication { 
     f = (:<=: zero). runTimeToArit . foldr evalCondition simplify_runtime -- 3
 
 -- TODO: definir función que retorne las variables universales y existenciales.
+-- TODO: Verificar si PAEXP tiene variables libres
+-- TODO: veri si existen varaibles lñibres e los pif
+
+onlyInFirst :: Eq a => [a] -> [a] -> [a]
+onlyInFirst xs ys = rmdups (filter (`notElem` ys) xs)
+
+-- data Program
+--   = Skip                        -- Programa vacío que toma una unidad de tiempo
+--   | Empty                       -- Programa vacío sin costo de tiempo
+--   | Set Name AExp               -- Asignación
+--   | PSet Name PAExp             -- Asignación probabilista
+--   | Seq Program Program         -- Composición secuencial de programas
+--   | If BExp Program Program     -- Guarda condicional
+--   | PIf PBExp Program Program   -- Guarda condicional probabilista
+--   | While BExp Program RunTime  -- Ciclo while
+--   | PWhile PBExp Program RunTime -- Ciclo while probabilista
+--   deriving (Eq, Show)
+-- ----------------------
+
+getExistencialAndUniversalVars :: Program -> (Names, Names)
+getExistencialAndUniversalVars program = (onlyInFirst exist_variables universal_variables, universal_variables)
+  where
+    get_variables :: Program -> (Names, Names)
+    get_variables Skip                = ([], [])
+    get_variables Empty               = ([], [])
+    get_variables (Set x arit)        = ([], x:freeVars arit)
+    get_variables (PSet x _)          = ([], [x])
+    get_variables (If e_b e_t e_f)    = (fst true_variables ++ fst false_variables, freeVarsBExp e_b ++ snd true_variables ++ snd false_variables)
+          where
+            true_variables  = get_variables e_t
+            false_variables = get_variables e_f
+    get_variables (PIf _ e_t e_f)  = (fst true_variables ++ fst false_variables, snd true_variables ++ snd false_variables)
+          where
+            true_variables  = get_variables e_t
+            false_variables = get_variables e_f
+    get_variables (Seq p_1 p_2)       = (fst true_variables ++ fst false_variables, snd true_variables ++ snd false_variables)
+          where
+            true_variables = get_variables p_1
+            false_variables = get_variables p_2
+    get_variables (While e_b p inv)   = (freeVarsRunTime inv ++ fst body_variables, freeVarsBExp e_b ++ snd body_variables)
+          where
+            body_variables = get_variables p
+    get_variables (PWhile _ c inv) =  (freeVarsRunTime inv ++ fst body_variables, snd body_variables)
+          where
+            body_variables = get_variables c
+    (exist_variables, universal_variables) = get_variables program
+
+
+programToSolverInput :: Program -> SolverInput'
+programToSolverInput program = SolverInput' { solver_formulaes = restrictionsToImplications rest
+                                             , existential = exist_vars
+                                             , for_all = universal_vars }
+  where
+    (exist_vars, universal_vars) = getExistencialAndUniversalVars program
+    (runt, rest) = vcGenerator0 program
