@@ -233,10 +233,10 @@ c13Input = SolverInput'
 
 -- { EJEMPLOS DE  RunTime }--
 runtime1 :: RunTime
-runtime1 = fromRight (error "parse error") (regularParse runtime " 1 ++ [x >= 0] ++ [w < 0]")
+runtime1 = fromRight (error "parse error") (regularParse ImpParser.runtime " 1 ++ [x >= 0] ++ [w < 0]")
 
 runtime2 :: RunTime
-runtime2 = fromRight (error "parse error") (regularParse runtime " 2 ++ [u >= 2] ++ [y < 0]")
+runtime2 = fromRight (error "parse error") (regularParse ImpParser.runtime " 2 ++ [u >= 2] ++ [y < 0]")
 
 -- {EJEMPLOS DE RRunTime} --
 

@@ -1,9 +1,11 @@
 module Imp where
 
-import Data.List
 import Data.Ratio
 import GHC.Real (infinity)
 import Data.SBV
+import qualified Data.Map as Map
+import Data.Map (Map)
+import Data.List (sortOn, sort)
 
 {-
   MÓDULO QUE SE ENCARGA DE REPRESENTAR EXPRESIONES ARITMÉTICAS, BOOLEANAS, RUNTIMES Y PROGRAMAS
@@ -43,16 +45,36 @@ showLit q
 data AExp
   = Lit Constant -- Números
   | Var Name -- Variables x, y, z
-  | AExp :+: AExp -- Suma de expresiones aritméticas
-  | Constant :*: AExp  -- Ponderación por una constante
-  deriving (Eq)       
+  | AExp :+: AExp --  Suma de expresiones aritméticas
+  | AExp :*: AExp  -- Multipliacion de expresiones aritméticas
+  deriving (Eq, Ord) -- Ord: sólo se usa como clave de orden determinístico
+                      -- (p.ej. para ordenar átomos de BExp en normBExp), no
+                      -- tiene significado aritmético.
+
+-- | Instancia Num para AExp: permite escribir literales enteros directamente
+-- como AExp (p.ej. `2 :*: Var "x"`, donde `2` se resuelve via fromInteger)
+-- y reusar (+)/(*)/negate en vez de tener que usar :+:/:*: a mano.
+instance Num AExp where
+  fromInteger n = Lit (fromInteger n)
+  (+)           = (:+:)
+  (*)           = (:*:)
+  negate arit   = Lit (-1) :*: arit
+  abs           = error "abs no está definido para AExp"
+  signum        = error "signum no está definido para AExp"
 
 -----------------------------------------{ AZÚCAR SINTÁCTICA}------------------------------------------------
 
 -- | Azúcar sintáctica para la resta de expresiones aritméticas 
 (-:) :: AExp -> AExp -> AExp
-(-:) arit_1 arit_2 = arit_1 :+: ((-1) :*: arit_2)
+(-:) arit_1 arit_2 = arit_1 :+: (Lit (-1) :*: arit_2)
 
+-------------------------------------------------------{DEFINICIÓN DE MONOMIOS Y POLINOMIOS}-------------------------------------------------
+
+-- Un monomio: multiset de variables (nombre -> exponente)
+type Monomial = Map Name Int
+
+-- Un polinomio: monomio -> coeficiente
+type Poly = Map Monomial Constant
 
 ---------------------------------------- { FUNCIONES EXPRESIONES ARITMÉTICAS }--------------------------------
 -- | Función suma que simplifica el zero
@@ -62,22 +84,29 @@ data AExp
 (+:) arit_1 arit_2 = arit_1 :+: arit_2
 
 
+-- | Muestra un operando de :*: entre paréntesis salvo que sea atómico
+-- (Lit/Var). Necesario porque :*: ya no está restringido a "constante * algo":
+-- ambos lados pueden ser expresiones compuestas (ej. (x + y) * z), y sin esto
+-- se pierde la asociación original al imprimir (mostraría "x + y*z").
+showFactor :: AExp -> String
+showFactor (Lit n) = show (Lit n)
+showFactor (Var x) = show (Var x)
+showFactor e        = "(" ++ show e ++ ")"
+
 -- | Definición del método show para AExp
--- | TODO: cambiar a showLit
+-- | TODO: Cambiar
 instance Show AExp where
-  show (Lit n)           = show n
-  show (Var x)           =  x
-  show (e_1 :+: e_2)     = show e_1  ++ " + " ++ show e_2
-  show (k :*: Lit n)     = show k ++  "*"  ++ show n
-  show (k :*: Var x)     = show k ++  "*"  ++ x
-  show (k :*: e)       = show k ++  "*(" ++ show e ++")"
+  show (Lit n)       = show n
+  show (Var x)       = x
+  show (e_1 :+: e_2) = show e_1 ++ " + " ++ show e_2
+  show (e_1 :*: e_2) = showFactor e_1 ++ "*" ++ showFactor e_2
 
 -- | Sustituye todas las instancias "x" en AritIn y por aritFor
 sustAExp :: Name -> AExp -> AExp -> AExp
 sustAExp _ _ (Lit n)             = Lit n
 sustAExp x aritFor (Var y)       = if x == y then aritFor else Var y
 sustAExp x aritFor (e_1 :+: e_2) = sustAExp x aritFor e_1 :+: sustAExp x aritFor e_2
-sustAExp x aritFor (k :*: e)     = k :*: sustAExp x aritFor e
+sustAExp x aritFor (e_1 :*: e_2) = sustAExp x aritFor e_1 :*: sustAExp x aritFor e_2
 
 -- | Toma un AExp arit y retorna una lista de todas las variables libres.
 freeVars :: AExp -> Names
@@ -86,46 +115,102 @@ freeVars arit = sort (rmdups (fvar arit))
     fvar (Lit _)       = []
     fvar (Var x)       = [x]
     fvar (e_1 :+: e_2) = fvar e_1 ++ fvar e_2
-    fvar (_ :*: e)     = fvar e
-
--- | WeightVar toma un Aexp arit y una variable var, retorna el peso suma de todas las instancias de esa variable var.
-weightVar :: AExp -> Name -> Constant
-weightVar (Lit n) var
-  | var == "" = n
-  | otherwise = 0
-weightVar (Var x) var
-  | var == x  = 1
-  | otherwise = 0
-weightVar (e_1 :+: e_2) var = weightVar e_1 var + weightVar e_2 var
-weightVar (k :*: e) var     = k * weightVar e var
+    fvar (e_1 :*: e_2) = fvar e_1 ++ fvar e_2
 
 ---------------------------------- { SIMPLIFICAR Y NORMALIZAR EXPRESIONES ARITMÉTICAS } -----------------------
--- | Descripción del algoritmo
--- 1. Extraer las variables libres de la expresión
--- 2. Calcular el peso asociado a cada una de las variables
--- 3. Definir una función auxiliar que un par (peso, variable) y retorna un monomio peso:*:variable
--- 4. Entregar un arreglo con los monomios respectivos.
--- 5. Correr un fold, con caso base (Lit 0) y usando la suma de polinomios como función
--- 
--- La expresión final no considera el 0 y el 1 como neutros de la adición y multiplicación.
+-- Ahora que :*: es un producto genuino (AExp :*: AExp) y no sólo una ponderación
+-- por constante, un peso lineal por variable (weightVar) ya no alcanza: no hay forma
+-- de asignarle un "peso" válido a un término como x*y sin perder información. En su
+-- lugar se normaliza expandiendo la expresión a un polinomio multivariado explícito
+-- (Monomial = exponente por variable, Poly = coeficiente por monomio), que sí sabe
+-- combinar términos semejantes también en el caso no lineal (x*y + y*x = 2*(x*y), x*x = x^2).
 
+-- | Monomio de una única variable, x -> x^1
+varMonomial :: Name -> Monomial
+varMonomial x = Map.singleton x 1
+
+-- | Monomio "vacío": representa el término constante (equivale a 1)
+unitMonomial :: Monomial
+unitMonomial = Map.empty
+
+-- | Grado total de un monomio (suma de exponentes)
+monomialDegree :: Monomial -> Int
+monomialDegree = sum . Map.elems
+
+-- | Producto de monomios: se suman los exponentes de cada variable
+mulMonomial :: Monomial -> Monomial -> Monomial
+mulMonomial = Map.unionWith (+)
+
+-- | Poly de una constante (Map.empty codifica el 0, manteniendo el invariante
+-- de que Poly nunca guarda coeficientes en 0)
+constPoly :: Constant -> Poly
+constPoly 0 = Map.empty
+constPoly k = Map.singleton unitMonomial k
+
+-- | Poly de una única variable
+varPoly :: Name -> Poly
+varPoly x = Map.singleton (varMonomial x) 1
+
+-- | Suma de polinomios: suma coeficientes por monomio y descarta los que quedan en 0
+addPoly :: Poly -> Poly -> Poly
+addPoly p q = Map.filter (/= 0) (Map.unionWith (+) p q)
+
+-- | Producto de polinomios: distribuye cada término de p sobre cada término de q
+mulPoly :: Poly -> Poly -> Poly
+mulPoly p q = Map.filter (/= 0) $ Map.fromListWith (+)
+  [ (mulMonomial m1 m2, c1 * c2) | (m1, c1) <- Map.toList p, (m2, c2) <- Map.toList q ]
+
+-- | Expande una expresión aritmética a su representación polinomial,
+-- distribuyendo sumas y productos.
+toPoly :: AExp -> Poly
+toPoly (Lit n)     = constPoly n
+toPoly (Var x)     = varPoly x
+toPoly (e1 :+: e2) = addPoly (toPoly e1) (toPoly e2)
+toPoly (e1 :*: e2) = mulPoly (toPoly e1) (toPoly e2)
+
+-- | Reconstruye un monomio (sin su coeficiente) como AExp: {x:2, y:1} -> x*x*y.
+-- No está definida para el monomio vacío, ese caso se maneja en termToAExp.
+monomialToAExp :: Monomial -> AExp
+monomialToAExp m = foldr1 (:*:) [ Var x | (x, e) <- Map.toAscList m, _ <- [1 .. e] ]
+
+-- | Reconstruye un término (monomio, coeficiente) como AExp, omitiendo el
+-- coeficiente cuando es 1 y el monomio no es el vacío.
+termToAExp :: (Monomial, Constant) -> AExp
+termToAExp (m, c)
+  | Map.null m = Lit c
+  | c == 1     = monomialToAExp m
+  | otherwise  = Lit c :*: monomialToAExp m
+
+-- | Orden canónico de términos: constante primero, luego por grado y,
+-- a igual grado, alfabéticamente por variables. Así dos polinomios
+-- iguales siempre se reconstruyen como el mismo AExp.
+termOrder :: (Monomial, Constant) -> (Int, [(Name, Int)])
+termOrder (m, _) = (monomialDegree m, Map.toAscList m)
+
+-- | Reconstruye un AExp normalizado a partir de un polinomio.
+fromPoly :: Poly -> AExp
+fromPoly p = case sortOn termOrder (Map.toList p) of
+  []       -> Lit 0
+  (t : ts) -> foldl (\acc t' -> acc :+: termToAExp t') (termToAExp t) ts
+
+-- | Normaliza una expresión aritmética a su forma polinomial canónica:
+-- expande sumas/productos y combina términos semejantes (lineales y no lineales).
 normArit :: AExp -> AExp
-normArit arit = foldl (+:) (Lit 0) wvars -- 5
-  where
-    vars = freeVars arit -- 1
-    weights = map (weightVar arit) vars -- 2
-    constWeight = weightVar arit ""
-    g (k, x) = k :*: Var x -- 3
-    wvars = [Lit constWeight | constWeight /= 0] ++ zipWith (curry g) weights vars -- 4
+normArit = fromPoly . toPoly
 
--- | SimplifyArit toma un AExp arit y retorna una versión que simplifica sobre el 0 y el 1.
+-- | SimplifyArit hace una limpieza local (0 y 1 como neutros) sin expandir
+-- productos de sumas, a diferencia de normArit. Útil como paso barato que no
+-- reordena ni combina términos, sólo elimina redundancias obvias.
 simplifyArit :: AExp -> AExp
-simplifyArit (arit_1 :+: arit_2) = simplifyArit arit_1 :+: simplifyArit arit_2
-simplifyArit (1 :*: arit)        = simplifyArit arit
-simplifyArit (0 :*: _)           = Lit 0
-simplifyArit (_ :*: Lit 0)       = Lit 0
-simplifyArit (k :*: arit)        = k :*: simplifyArit arit
-simplifyArit otherwise           = otherwise
+simplifyArit (e_1 :+: e_2) = simplifyArit e_1 +: simplifyArit e_2
+simplifyArit (e_1 :*: e_2) = mulSimplify (simplifyArit e_1) (simplifyArit e_2)
+  where
+    mulSimplify (Lit 0) _       = Lit 0
+    mulSimplify _ (Lit 0)       = Lit 0
+    mulSimplify (Lit 1) e       = e
+    mulSimplify e (Lit 1)       = e
+    mulSimplify e_1' e_2'       = e_1' :*: e_2'
+simplifyArit arit = arit
 
 -- | Retorna una versión normalizada de un AExp.
 completeNormArit :: AExp -> AExp
@@ -160,7 +245,7 @@ data BExp
   | BExp :|: BExp -- Or lógico
   | BExp :&: BExp -- And Lógico
   | Not BExp -- Negación expresión booleana
-  deriving (Eq) 
+  deriving (Eq, Ord) -- Ord: idem AExp, sólo orden determinístico para normBExp.
 -- | Definición del método show para expresiones BExp.
 instance Show BExp where
   show True'             = "true"
@@ -246,6 +331,109 @@ deepSimplifyBExp (e_1 :==: e_2) = simplifyBExp (completeNormArit e_1 :==: comple
 deepSimplifyBExp (e_1 :|: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :|: deepSimplifyBExp e_2)
 deepSimplifyBExp (e_1 :&: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :&: deepSimplifyBExp e_2)
 deepSimplifyBExp (Not e_b)      = simplifyBExp (Not $ deepSimplifyBExp e_b)
+
+---------------------------{ FORMA NORMAL DE EXPRESIONES BOOLEANAS }-----------------------------------------------
+-- normBExp da, para un BExp, un árbol canónico único up-to: reescritura
+-- algebraica de los átomos, asociatividad/conmutatividad/idempotencia de
+-- :&:/:|: y complementación (a && !a, a || !a). No calcula DNF/CNF (eso es
+-- exponencial y es justo el blowup que se quiere evitar) — sólo fija una
+-- única representación sintáctica para BExp que son estructuralmente
+-- equivalentes salvo por cómo se escribieron.
+--
+-- Se hace en 3 pasadas, cada una respetando el invariante de la anterior:
+-- 1. canonAtomsBExp: cada átomo `e1 <= e2` / `e1 == e2` pasa a "diferencia
+--    contra cero" (`normArit (e1 - e2) <= 0` / `== 0`), así cualquier
+--    reescritura algebraica del mismo átomo (x <= y, 0 <= y - x, x+1 <= y+1)
+--    cae en el mismo AExp.
+-- 2. toNNF: empuja Not hasta las hojas (De Morgan). Sobre reales, Not de un
+--    átomo no se puede reescribir como otro átomo (Not (a<=b) no es b<=a,
+--    sería a>b, distinto de a>=b en el punto de igualdad) así que Not sólo
+--    puede terminar envolviendo un átomo ya canónico, nunca un :&:/:|:.
+-- 3. normLogic: aplana cadenas anidadas de :&:/:|: en listas, ordena
+--    (usando el Ord derivado, sólo como criterio determinístico) y
+--    deduplica: así "a && b" y "b && a" (o "(a&&b)&&c" y "a&&(b&&c)")
+--    terminan en el mismo árbol. De paso detecta complementación
+--    (a && Not a = False', a || Not a = True').
+
+-- | Lleva cada átomo (:<=:/:==:) a la forma canónica "diferencia contra
+-- cero", recursivamente a través de :&:/:|:/Not.
+canonAtomsBExp :: BExp -> BExp
+canonAtomsBExp True'          = True'
+canonAtomsBExp False'         = False'
+canonAtomsBExp (e_1 :<=: e_2) = completeNormArit (e_1 -: e_2) :<=: Lit 0
+canonAtomsBExp (e_1 :==: e_2) = completeNormArit (e_1 -: e_2) :==: Lit 0
+canonAtomsBExp (e_1 :|: e_2)  = canonAtomsBExp e_1 :|: canonAtomsBExp e_2
+canonAtomsBExp (e_1 :&: e_2)  = canonAtomsBExp e_1 :&: canonAtomsBExp e_2
+canonAtomsBExp (Not e_b)      = Not (canonAtomsBExp e_b)
+
+-- | Empuja Not hasta las hojas (forma normal de negación / De Morgan).
+toNNF :: BExp -> BExp
+toNNF True'                 = True'
+toNNF False'                = False'
+toNNF atom@(_ :<=: _)       = atom
+toNNF atom@(_ :==: _)       = atom
+toNNF (e_1 :|: e_2)         = toNNF e_1 :|: toNNF e_2
+toNNF (e_1 :&: e_2)         = toNNF e_1 :&: toNNF e_2
+toNNF (Not True')           = False'
+toNNF (Not False')          = True'
+toNNF (Not (Not e_b))       = toNNF e_b
+toNNF (Not (e_1 :|: e_2))   = toNNF (Not e_1) :&: toNNF (Not e_2)
+toNNF (Not (e_1 :&: e_2))   = toNNF (Not e_1) :|: toNNF (Not e_2)
+toNNF (Not atom)            = Not atom -- atom :: _ :<=: _ | _ :==: _, ya canónico
+
+-- | Complemento sintáctico de un literal ya en NNF (átomo o Not-átomo):
+-- sólo alterna el Not de más afuera, nunca reescribe el átomo.
+complementOf :: BExp -> BExp
+complementOf (Not e_b) = e_b
+complementOf e_b       = Not e_b
+
+-- | Aplana una cadena de :&: (asociada de cualquier forma) en su lista de conjuntos.
+flattenAnd :: BExp -> [BExp]
+flattenAnd (e_1 :&: e_2) = flattenAnd e_1 ++ flattenAnd e_2
+flattenAnd e_b           = [e_b]
+
+-- | Aplana una cadena de :|: (asociada de cualquier forma) en su lista de disyuntos.
+flattenOr :: BExp -> [BExp]
+flattenOr (e_1 :|: e_2) = flattenOr e_1 ++ flattenOr e_2
+flattenOr e_b           = [e_b]
+
+-- | Reconstruye una conjunción a partir de una lista de literales ya
+-- normalizados: ordena, deduplica, y absorbe False'/complementación.
+buildAnd :: [BExp] -> BExp
+buildAnd lits
+  | False' `elem` cleaned          = False'
+  | any hasComplement cleaned      = False'
+  | null cleaned                   = True'
+  | otherwise                      = foldr1 (:&:) cleaned
+  where
+    cleaned = sort (rmdups (filter (/= True') lits))
+    hasComplement l = complementOf l `elem` cleaned
+
+-- | Idem buildAnd, dual para disyunciones (True' absorbe, se filtra False').
+buildOr :: [BExp] -> BExp
+buildOr lits
+  | True' `elem` cleaned           = True'
+  | any hasComplement cleaned      = True'
+  | null cleaned                   = False'
+  | otherwise                      = foldr1 (:|:) cleaned
+  where
+    cleaned = sort (rmdups (filter (/= False') lits))
+    hasComplement l = complementOf l `elem` cleaned
+
+-- | Aplana, ordena y deduplica :&:/:|: recursivamente. Asume que ya se
+-- corrió toNNF (Not sólo envuelve átomos).
+normLogic :: BExp -> BExp
+normLogic True'           = True'
+normLogic False'          = False'
+normLogic atom@(_ :<=: _) = atom
+normLogic atom@(_ :==: _) = atom
+normLogic (Not e_b)       = Not (normLogic e_b)
+normLogic e_b@(_ :&: _)   = buildAnd (map normLogic (flattenAnd e_b))
+normLogic e_b@(_ :|: _)   = buildOr (map normLogic (flattenOr e_b))
+
+-- | Forma normal de una expresión booleana: ver comentario arriba.
+normBExp :: BExp -> BExp
+normBExp = normLogic . toNNF . canonAtomsBExp
 ----------------------------------{ RUNTIMES }-----------------------------------------------------
 -- | Definición de RunTimes
 data RunTime
@@ -327,7 +515,7 @@ simplifyRunTime (runt :++: RunTimeArit (Lit 0))                            = run
 simplifyRunTime (_ :**: RunTimeArit (Lit 0))                               = rtZero
 simplifyRunTime (1 :**: runt)                                              = runt
 simplifyRunTime (0 :**: _)                                                 = rtZero
-simplifyRunTime (k :**: RunTimeArit arit)                                  = RunTimeArit $ completeNormArit (k:*:arit)
+simplifyRunTime (k :**: RunTimeArit arit)                                  = RunTimeArit $ completeNormArit (Lit k :*: arit)
 simplifyRunTime otherwise                                                  = otherwise
 
 -- Reglas recursivas para simplificar un RunTime
