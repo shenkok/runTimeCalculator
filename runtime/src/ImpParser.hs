@@ -76,8 +76,8 @@ aexpBase = try litAExp <|> varAExp
 --        | aexp - aexp azúcar sintáctica
 aexp :: Parser AExp
 aexp = buildExpressionParser table term
- where term = try ((:*:) <$> (rational <* reservedOp "*") <*> aexpBase)
-           <|> try ((:*:) <$> (rational <* reservedOp "*") <*> parens aexp)
+ where term = try ((:*:) <$> (Lit <$> rational <* reservedOp "*") <*> aexpBase)
+           <|> try ((:*:) <$> (Lit <$> rational <* reservedOp "*") <*> parens aexp)
            <|> try aexpBase
            <|> try (parens aexp)
        table = [[binary "+" (:+:), binary "-" (-:) ]]

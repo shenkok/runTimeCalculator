@@ -52,7 +52,7 @@ sAExp :: ConstantEnv -> AExp -> SBV Constant
 sAExp  _ (Lit q)        = literal q
 sAExp env (Var x)       = envLookup x env
 sAExp env (e_1 :+: e_2) = sAExp env e_1 + sAExp env e_2
-sAExp env (k :*: arit)  = literal k * sAExp env arit
+sAExp env (e_1 :*: e_2) = sAExp env e_1 * sAExp env e_2
 
 
 -- | Constructor de variables booleanas para SBV

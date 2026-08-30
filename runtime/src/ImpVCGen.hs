@@ -128,18 +128,18 @@ vcGenerator' (Seq p_1 p_2) runt       = ProgramVCGenInformation (runtime vc_1) (
   where
     vc_2 = vcGenerator' p_2 runt
     vc_1 = vcGenerator' p_1 (runtime vc_2)
-vcGenerator' (While e_b p inv) runt   = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars): restrictionsInformation vc_p
+vcGenerator' (While e_b p inv) runt   = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars : restrictionsInformation vc_p)
   where
     vc_p = vcGenerator' p inv
-    l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: fst vc_p))
+    l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: runtime vc_p))
     program_vars = freeVarsProgram p
     template_vars = onlyInFirst (freeVarsRunTime inv ++ freeVarsRunTime l_inv) program_vars
-vcGenerator' (PWhile pe_b c inv) runt = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars): restrictionsInformation vc_p
+vcGenerator' (PWhile pe_b c inv) runt = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars : restrictionsInformation vc_p)
   where
     p_true = p pe_b
     p_false = 1 - p_true
     vc_p = vcGenerator' c inv
-    l_inv = rtOne :++: ((p_false :**: runt) :++: (p_true :**: fst vc_p))
+    l_inv = rtOne :++: ((p_false :**: runt) :++: (p_true :**: runtime vc_p))
     program_vars = freeVarsProgram c
     template_vars = onlyInFirst (freeVarsRunTime inv ++ freeVarsRunTime l_inv) program_vars
 
@@ -241,7 +241,7 @@ evalCondition bexp (k :**: runt)          = k :**: evalCondition bexp runt
 runTimeToArit :: RunTime -> AExp
 runTimeToArit (RunTimeArit arit) = arit
 runTimeToArit (e_1 :++: e_2)     = runTimeToArit e_1 :+: runTimeToArit e_2
-runTimeToArit (k :**: e)         = k :*: runTimeToArit e
+runTimeToArit (k :**: e)         = Lit k :*: runTimeToArit e
 runTimeToArit  otherwise         = error $ "No hay versión directa a AExp" ++ show otherwise
 
 -- Versión monádica de la función anterior
@@ -253,7 +253,7 @@ runTimeToArit' (e_1 :++: e_2) = do
   return (aexp1 :+: aexp2)
 runTimeToArit' (k :**: e) = do
   aexp <- runTimeToArit' e
-  return (k :*: aexp)
+  return (Lit k :*: aexp)
 runTimeToArit' _ = Nothing
 
 ---------------------------------------------------------------------------------------------------
@@ -333,9 +333,6 @@ restrictionsToImplications (runtimeA :<==: runtimeB) = map (\x -> Implication { 
 -- TODO: Verificar si PAEXP tiene variables libres
 -- TODO: veri si existen varaibles lñibres e los pif
 
-onlyInFirst :: Eq a => [a] -> [a] -> [a]
-onlyInFirst xs ys = rmdups (filter (`notElem` ys) xs)
-
 -- data Program
 --   = Skip                        -- Programa vacío que toma una unidad de tiempo
 --   | Empty                       -- Programa vacío sin costo de tiempo
@@ -379,7 +376,7 @@ getExistencialAndUniversalVars program = (onlyInFirst exist_variables universal_
 
 
 programToSolverInput :: Program -> SolverInput'
-programToSolverInput program = SolverInput' { solver_formulaes = restrictionsToImplications rest
+programToSolverInput program = SolverInput' { solver_formulaes = concatMap restrictionsToImplications rest
                                              , existential = exist_vars
                                              , for_all = universal_vars }
   where
