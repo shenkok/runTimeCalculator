@@ -504,9 +504,46 @@ freeVarsRunTime (_ :**: e)         = freeVarsRunTime e
 -------------------- {  SIMPLIFICAR RUNTIMES }------------------------------------------------------------------
 
 -- | Reglas de un sólo paso para simplificar un RunTime
+--
+-- Además de las reglas algebraicas originales (neutros de :++:/:<>:/:**:,
+-- literales), se agregaron reglas puntuales para casos que antes quedaban
+-- sin combinar aunque fueran sintácticamente adyacentes (no es una forma
+-- normal completa de RunTime — eso sigue pendiente, ver CLAUDE.md — sólo
+-- cierra los casos más obvios):
+--
+--   1. [b]<>r1 ++ [b]<>r2  =  [b]<>(r1 ++ r2), cuando la condición "b" es
+--      sintácticamente igual (Eq derivado de BExp) en ambos sumandos, tanto
+--      si son los dos únicos términos como si el segundo encabeza una
+--      cadena de :++: más larga.
+--   1b. [b]<>r ++ [!b]<>r = r: la suma de indicatrices complementarias con
+--      el mismo peso "r" es 1*r. A diferencia de la regla 1, esto NO se
+--      generaliza a "suma de indicatrices = OR" — [b1]+[b2] = [b1 || b2]
+--      sólo vale si b1/b2 son mutuamente excluyentes, y en general no lo
+--      son (si ambas son verdaderas, la suma da 2, no 1). El único caso
+--      donde la exclusión mutua es gratis (verdadera para cualquier b) es
+--      justo el complemento sintáctico b/¬b, que es lo que se detecta acá
+--      vía complementOf (misma función que usa normBExp).
+--   2. Reasociación de :++: hacia la derecha: (e1 ++ e2) ++ e3 = e1 ++ (e2 ++ e3).
+--      Sirve para que las reglas 1/1b (y las reglas de RunTimeArit ya
+--      existentes, que asumen la cadena asociada a la derecha) encuentren
+--      términos adyacentes aunque el árbol original los haya parentizado a
+--      la izquierda.
+--   3. k1 :**: (k2 :**: r) = (k1 * k2) :**: r, fusión de ponderaciones anidadas.
+--   4. b1 :<>: (b2 :<>: r) = (b1 :&: b2) :<>: r: el producto de indicatrices
+--      es la indicatriz de la conjunción — a diferencia de la regla 1b, esto
+--      SÍ vale siempre (no depende de exclusión mutua ni de ningún supuesto
+--      extra), así que se fusiona incondicionalmente.
 simplifyRunTime :: RunTime -> RunTime
 simplifyRunTime (RunTimeArit arit_1 :++: RunTimeArit arit_2)               = RunTimeArit $ completeNormArit (arit_1 :+: arit_2)
 simplifyRunTime (RunTimeArit arit_1 :++: (RunTimeArit arit_2 :++: runt))   = RunTimeArit (completeNormArit $ arit_1 :+: arit_2) :++: runt
+simplifyRunTime ((e_b1 :<>: r_1) :++: (e_b2 :<>: r_2))
+  | e_b1 == e_b2                             = simplifyRunTime (e_b1 :<>: simplifyRunTime (r_1 :++: r_2))
+  | complementOf e_b1 == e_b2 && r_1 == r_2  = r_1
+simplifyRunTime ((e_b1 :<>: r_1) :++: ((e_b2 :<>: r_2) :++: runt))
+  | e_b1 == e_b2                             = simplifyRunTime (simplifyRunTime (e_b1 :<>: simplifyRunTime (r_1 :++: r_2)) :++: runt)
+  | complementOf e_b1 == e_b2 && r_1 == r_2  = simplifyRunTime (r_1 :++: runt)
+simplifyRunTime ((e_1 :++: e_2) :++: e_3)                                  = simplifyRunTime (e_1 :++: simplifyRunTime (e_2 :++: e_3))
+simplifyRunTime (b1 :<>: (b2 :<>: r))                                      = simplifyRunTime (simplifyBExp (b1 :&: b2) :<>: r)
 simplifyRunTime (e_b :<>: RunTimeArit (Lit 0))                             = rtZero
 simplifyRunTime (True' :<>: runt)                                          = runt
 simplifyRunTime (False' :<>: _)                                            = rtZero
@@ -515,6 +552,7 @@ simplifyRunTime (runt :++: RunTimeArit (Lit 0))                            = run
 simplifyRunTime (_ :**: RunTimeArit (Lit 0))                               = rtZero
 simplifyRunTime (1 :**: runt)                                              = runt
 simplifyRunTime (0 :**: _)                                                 = rtZero
+simplifyRunTime (k :**: (k' :**: runt))                                    = simplifyRunTime ((k * k') :**: runt)
 simplifyRunTime (k :**: RunTimeArit arit)                                  = RunTimeArit $ completeNormArit (Lit k :*: arit)
 simplifyRunTime otherwise                                                  = otherwise
 
