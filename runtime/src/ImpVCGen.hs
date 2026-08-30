@@ -10,27 +10,18 @@ import Imp
 
 -- | Definición de restricción
 -- | Ya uso el :==: y :<=: en AExp. Por lo mismo añado un igual (=) más.
--- Por ejemplo, :===: en realidad quiero usar :==: pero habría problemas de ambigüedad, por eso se le añade un igual más.
 data Restriction a
-  = a :!==: a
-  | a :!<=: a
-  | a :===: a
-  | a :<==: a
+  = a :<==: a
   deriving (Eq, Show)
 
 -- | Extender a Functor
 instance Functor Restriction where
   -- fmap :: (a -> b) -> Restriction a -> Restriction b
-  fmap f (a_1 :!==: a_2) = f a_1 :!==: f a_2
-  fmap f (a_1 :!<=: a_2) = f a_1 :!<=: f a_2
-  fmap f (a_1 :===: a_2) = f a_1 :===: f a_2
   fmap f (a_1 :<==: a_2) = f a_1 :<==: f a_2
-
 
 -- | Definición de una función de fold para la estructura Restriction
 foldRes :: (b -> b -> c) -> (a -> b) -> Restriction a -> c
-foldRes f g (e_1 :!==: e_2) = f (g e_1) (g e_2)
-foldRes f g (e_1 :!<=: e_2) = f (g e_1) (g e_2)
+foldRes f g (e_1 :<==: e_2) = f (g e_1) (g e_2)
 
 ---------------------------- { SINÓNIMOS DE TIPOS ÚTILES } ---------------------------------------------
 
@@ -61,11 +52,11 @@ vcGenerator (Seq p_1 p_2) runt       = (fst vc_1, snd vc_1 ++ snd vc_2)
   where
     vc_2 = vcGenerator p_2 runt
     vc_1 = vcGenerator p_1 (fst vc_2)
-vcGenerator (While e_b p inv) runt   = (inv, (l_inv :!<=: inv) : snd vc_p)
+vcGenerator (While e_b p inv) runt   = (inv, (l_inv :<==: inv) : snd vc_p)
   where
     vc_p = vcGenerator p inv
     l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: fst vc_p))
-vcGenerator (PWhile pe_b c inv) runt = (inv, (l_inv :!<=: inv) : snd vc_p)
+vcGenerator (PWhile pe_b c inv) runt = (inv, (l_inv :<==: inv) : snd vc_p)
   where
     p_true = p pe_b
     p_false = 1 - p_true
@@ -77,13 +68,88 @@ vcGenerator (PWhile pe_b c inv) runt = (inv, (l_inv :!<=: inv) : snd vc_p)
 vcGenerator0 :: Program -> (RunTime, [RRunTime])
 vcGenerator0 program = vcGenerator program rtZero
 
+
+------------------------------------------{VCGENERATOR V 2.0}------------------------------------------------------------
+
+freeVarsProgram :: Program -> Names
+freeVarsProgram Skip                = []
+freeVarsProgram Empty               = []
+freeVarsProgram (Set x arit)        = x: freeVars arit
+freeVarsProgram (PSet x parit)      = [x]
+freeVarsProgram (If e_b e_t e_f)    = freeVarsBExp e_b ++ freeVarsProgram e_t ++ freeVarsProgram e_f
+freeVarsProgram (PIf _ e_t e_f)     = freeVarsProgram e_t ++ freeVarsProgram e_f
+freeVarsProgram (Seq p_1 p_2)       = freeVarsProgram p_1 ++ freeVarsProgram p_2
+freeVarsProgram (While e_b p _)   = freeVarsBExp e_b ++ freeVarsProgram p
+freeVarsProgram (PWhile _ c _)     = freeVarsProgram c
+
+
+
+-- Data para guardar lo información relevante de un programa y su respectivo VCGen
+-- runtime: Es el tiempo de ejecución calculado del programa
+-- restrictions: Son las restricciones que se generan a partir del programa
+-- programVariables: Son las variables que aparecen en el programa
+-- invariantVariables: Son las variables que aparecen en los invariantes del programa
+
+data RestrictionInformation = RestrictionInformation
+  {
+    restriction :: RRunTime,
+    templateVars:: Names,
+    programVars :: Names
+  } deriving (Eq, Show)
+
+
+data ProgramVCGenInformation = ProgramVCGenInformation
+  {
+    runtime :: RunTime,
+    restrictionsInformation :: [RestrictionInformation]
+  } deriving (Eq, Show)
+
+onlyInFirst :: Eq a => [a] -> [a] -> [a]
+onlyInFirst xs ys = rmdups (filter (`notElem` ys) xs)
+
+-- TODO: verificar si existen varailes libres e los parit 
+-- TODO: Testear
+vcGenerator' :: Program -> RunTime -> ProgramVCGenInformation
+vcGenerator' Skip runt                = ProgramVCGenInformation (rtOne :++: runt) []
+vcGenerator' Empty runt               = ProgramVCGenInformation runt [] 
+vcGenerator' (Set x arit) runt        = ProgramVCGenInformation (rtOne :++: sustRunTime x arit runt) []
+vcGenerator' (PSet x parit) runt      = ProgramVCGenInformation (rtOne :++: aexpE parit x runt) []
+vcGenerator' (If e_b e_t e_f) runt    = ProgramVCGenInformation (rtOne :++: ((e_b :<>: runtime vc_t) :++: (Not e_b :<>: runtime vc_f))) (restrictionsInformation vc_t ++ restrictionsInformation vc_f) 
+  where
+    vc_t = vcGenerator' e_t runt
+    vc_f = vcGenerator' e_f runt
+vcGenerator' (PIf pe_b e_t e_f) runt  = ProgramVCGenInformation (rtOne :++: ((p_true :**: runtime vc_t) :++: (p_false :**: runtime vc_f))) (restrictionsInformation vc_t ++ restrictionsInformation vc_f)
+  where
+    p_true = p pe_b
+    p_false = 1 - p_true
+    vc_t = vcGenerator' e_t runt
+    vc_f = vcGenerator' e_f runt
+vcGenerator' (Seq p_1 p_2) runt       = ProgramVCGenInformation (runtime vc_1) (restrictionsInformation vc_1 ++ restrictionsInformation vc_2)
+  where
+    vc_2 = vcGenerator' p_2 runt
+    vc_1 = vcGenerator' p_1 (runtime vc_2)
+vcGenerator' (While e_b p inv) runt   = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars : restrictionsInformation vc_p)
+  where
+    vc_p = vcGenerator' p inv
+    l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: runtime vc_p))
+    program_vars = freeVarsProgram p
+    template_vars = onlyInFirst (freeVarsRunTime inv ++ freeVarsRunTime l_inv) program_vars
+vcGenerator' (PWhile pe_b c inv) runt = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars : restrictionsInformation vc_p)
+  where
+    p_true = p pe_b
+    p_false = 1 - p_true
+    vc_p = vcGenerator' c inv
+    l_inv = rtOne :++: ((p_false :**: runt) :++: (p_true :**: runtime vc_p))
+    program_vars = freeVarsProgram c
+    template_vars = onlyInFirst (freeVarsRunTime inv ++ freeVarsRunTime l_inv) program_vars
+
 ----------------------------------{ OMEGA - CPO TÓPICOS}-------------------------------------------------
 
 bottom :: RunTime
 bottom = rtLit 0
 
-top :: RunTime
-top = rtLit $ toRational (1/0)
+-- top :: RunTime
+-- top = rtLit $ toRational (1/0)
 
 -- | Función característica de un while
 cfWhile :: BExp -> Program -> RunTime -> RunTime -> RunTime
@@ -114,8 +180,6 @@ type Contexts = [Context]
 type SolverInput = (Context, RArit, Names)
 
 
-
-
 -- Nueva versión de SolverInput
 -- Ahora modela problemas del tipo
 -- a <- sRational "a"
@@ -127,11 +191,11 @@ type SolverInput = (Context, RArit, Names)
 
 data Implication = Implication{
   hypothesis :: Context,
-  conclusion :: RArit } deriving (Eq, Show)
+  conclusion :: BExp } deriving (Eq, Show)
 
 data SolverInput' = SolverInput'
   { solver_formulaes ::[Implication]
-  , existentials :: Names
+  , existential :: Names
   , for_all      :: Names
    } deriving (Eq, Show)
 
@@ -148,6 +212,11 @@ getBExp runt = rmdups conds
 
 -- | Toma un RunTime runt y retorna todos los posibles context (matriz de BExp) que
 -- se pueden extraer a partir de los BExp que tiene el RunTime.
+-- Para el RunTime 1 ++ [x >= 0] ++ [w < 0] se extraen los contextos
+-- [[!(0.0 <= x),!(0.0 <= w)],
+-- [!(0.0 <= x),   0.0 <= w],
+-- [0.0 <= x,    !(0.0 <= w)],
+-- [0.0 <= x,      0.0 <= w]]
 allContext :: RunTime -> Contexts
 allContext runt = map (zipWith f conds) lbools
   where
@@ -172,7 +241,7 @@ evalCondition bexp (k :**: runt)          = k :**: evalCondition bexp runt
 runTimeToArit :: RunTime -> AExp
 runTimeToArit (RunTimeArit arit) = arit
 runTimeToArit (e_1 :++: e_2)     = runTimeToArit e_1 :+: runTimeToArit e_2
-runTimeToArit (k :**: e)         = k :*: runTimeToArit e
+runTimeToArit (k :**: e)         = Lit k :*: runTimeToArit e
 runTimeToArit  otherwise         = error $ "No hay versión directa a AExp" ++ show otherwise
 
 -- Versión monádica de la función anterior
@@ -184,7 +253,7 @@ runTimeToArit' (e_1 :++: e_2) = do
   return (aexp1 :+: aexp2)
 runTimeToArit' (k :**: e) = do
   aexp <- runTimeToArit' e
-  return (k :*: aexp)
+  return (Lit k :*: aexp)
 runTimeToArit' _ = Nothing
 
 ---------------------------------------------------------------------------------------------------
@@ -208,7 +277,10 @@ runTimeToArit' _ = Nothing
 -- 0.c Ejemplo [a, b, c]
 
 -- 1. Simplificar los dos runtimes de la restricción a:!<=:b -> a':!<=:b'
--- 2. Extraer todos los contextos posibles de los dos runtime a' y b'
+-- 2. Extraer todos los contextos posibles de los dos runtime a' y b',
+-- sumo los runtime porque es una forma de tomar ambos contextos de una vez.
+--  TODO: Es algo artificial sumas ambos runtimes, mejor pasar las restricion a:<=:b to
+--  a-b:<=:0 y tomar los contextos de a-b.
 -- 3. Función currificada, para poder evaluar una condición y usarla con los contexts
 -- 4. Evaluar todos los contextos y generar todas las posibles restricciones de runtimes [a'':!<=:b'' ]
 -- 5. A partir de las restricciones de runtimes [a'':<=:b''], se extrae la expresión aritmética subyacente
@@ -233,6 +305,80 @@ restrictionsToSolver rest = zip3 contexts eval_arit free_vars' -- 0
     free_vars' = map (filter (/= "")) free_vars -- 10
 
 
+-- | A partir de una restricción de RunTime genero las formulas lógicas que tomará SBV
+-- TODO: Por ahora el manejo de las variables no lo decido acá, ya que no he decido un standar para
+-- reconocer una variable existencial de una universal.
+-- Estas fórmulas tiene la forma de
+-- condición_1_1 /\ condición_1_2 /\ ... /\ condición_1_n => restricción_1
+-- condición_2_1 /\ condición_2_2 /\ ... /\ condición_2_n => restricción_2
+-- && ...
+-- condición_m_1 /\ condición_m_2 /\ ... /\ condición_m_n => restricción_m
+-- 1. Simplifico la restricción, para evitar pasos innecesarios paso primero de a:!<=:b -> a - b:!<=:0 -> c:!<=:0
+-- 2. Extraigo todos los posibles contextos del runtime c
+-- 3. Defino una función que retorne las restricción_i definas arriba, a partir de cada contexto_i
+-- 3a. El algoritmo que sigo es ir envaluando cada condición_i_j sobre el runtime c, y al final me queda un runtime c_i.
+-- 3b. Esta runtime c_i lo transformo a AExp y lo comparo 0, para que quede de la forma c_i:!<=:0 y este último término
+-- es la restricción_i que busco.
+-- 4. Dado que ya puedo obtener la restricción_i a partir de cada contexto_i, aplico la función f a todos los contextos.
+-- 4a. El resultado final es un arreglo de implicaciones donde la hipotesis del implica_i es el contexto_i y la conclusión es la restricción_i.
+
+restrictionsToImplications :: RRunTime -> [Implication]
+restrictionsToImplications (runtimeA :<==: runtimeB) = map (\x -> Implication { hypothesis = x, conclusion = f x }) contexts -- 4
+  where
+    simplify_runtime = deepSimplifyRunTime runtimeA --: runtimeB  -- 1
+    contexts = allContext simplify_runtime                        -- 2
+    f = (:<=: zero). runTimeToArit . foldr evalCondition simplify_runtime -- 3
+
+-- TODO: definir función que retorne las variables universales y existenciales.
+-- TODO: Verificar si PAEXP tiene variables libres
+-- TODO: veri si existen varaibles lñibres e los pif
+
+-- data Program
+--   = Skip                        -- Programa vacío que toma una unidad de tiempo
+--   | Empty                       -- Programa vacío sin costo de tiempo
+--   | Set Name AExp               -- Asignación
+--   | PSet Name PAExp             -- Asignación probabilista
+--   | Seq Program Program         -- Composición secuencial de programas
+--   | If BExp Program Program     -- Guarda condicional
+--   | PIf PBExp Program Program   -- Guarda condicional probabilista
+--   | While BExp Program RunTime  -- Ciclo while
+--   | PWhile PBExp Program RunTime -- Ciclo while probabilista
+--   deriving (Eq, Show)
+-- ----------------------
+
+getExistencialAndUniversalVars :: Program -> (Names, Names)
+getExistencialAndUniversalVars program = (onlyInFirst exist_variables universal_variables, universal_variables)
+  where
+    get_variables :: Program -> (Names, Names)
+    get_variables Skip                = ([], [])
+    get_variables Empty               = ([], [])
+    get_variables (Set x arit)        = ([], x:freeVars arit)
+    get_variables (PSet x _)          = ([], [x])
+    get_variables (If e_b e_t e_f)    = (fst true_variables ++ fst false_variables, freeVarsBExp e_b ++ snd true_variables ++ snd false_variables)
+          where
+            true_variables  = get_variables e_t
+            false_variables = get_variables e_f
+    get_variables (PIf _ e_t e_f)  = (fst true_variables ++ fst false_variables, snd true_variables ++ snd false_variables)
+          where
+            true_variables  = get_variables e_t
+            false_variables = get_variables e_f
+    get_variables (Seq p_1 p_2)       = (fst true_variables ++ fst false_variables, snd true_variables ++ snd false_variables)
+          where
+            true_variables = get_variables p_1
+            false_variables = get_variables p_2
+    get_variables (While e_b p inv)   = (freeVarsRunTime inv ++ fst body_variables, freeVarsBExp e_b ++ snd body_variables)
+          where
+            body_variables = get_variables p
+    get_variables (PWhile _ c inv) =  (freeVarsRunTime inv ++ fst body_variables, snd body_variables)
+          where
+            body_variables = get_variables c
+    (exist_variables, universal_variables) = get_variables program
 
 
--- restrictionsToSolver' :: RRUnTime -> SolverInput'
+programToSolverInput :: Program -> SolverInput'
+programToSolverInput program = SolverInput' { solver_formulaes = concatMap restrictionsToImplications rest
+                                             , existential = exist_vars
+                                             , for_all = universal_vars }
+  where
+    (exist_vars, universal_vars) = getExistencialAndUniversalVars program
+    (runt, rest) = vcGenerator0 program
