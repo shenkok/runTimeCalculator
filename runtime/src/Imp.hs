@@ -47,7 +47,9 @@ data AExp
   | Var Name -- Variables x, y, z
   | AExp :+: AExp --  Suma de expresiones aritméticas
   | AExp :*: AExp  -- Multipliacion de expresiones aritméticas
-  deriving (Eq)
+  deriving (Eq, Ord) -- Ord: sólo se usa como clave de orden determinístico
+                      -- (p.ej. para ordenar átomos de BExp en normBExp), no
+                      -- tiene significado aritmético.
 
 -- | Instancia Num para AExp: permite escribir literales enteros directamente
 -- como AExp (p.ej. `2 :*: Var "x"`, donde `2` se resuelve via fromInteger)
@@ -243,7 +245,7 @@ data BExp
   | BExp :|: BExp -- Or lógico
   | BExp :&: BExp -- And Lógico
   | Not BExp -- Negación expresión booleana
-  deriving (Eq) 
+  deriving (Eq, Ord) -- Ord: idem AExp, sólo orden determinístico para normBExp.
 -- | Definición del método show para expresiones BExp.
 instance Show BExp where
   show True'             = "true"
@@ -329,6 +331,109 @@ deepSimplifyBExp (e_1 :==: e_2) = simplifyBExp (completeNormArit e_1 :==: comple
 deepSimplifyBExp (e_1 :|: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :|: deepSimplifyBExp e_2)
 deepSimplifyBExp (e_1 :&: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :&: deepSimplifyBExp e_2)
 deepSimplifyBExp (Not e_b)      = simplifyBExp (Not $ deepSimplifyBExp e_b)
+
+---------------------------{ FORMA NORMAL DE EXPRESIONES BOOLEANAS }-----------------------------------------------
+-- normBExp da, para un BExp, un árbol canónico único up-to: reescritura
+-- algebraica de los átomos, asociatividad/conmutatividad/idempotencia de
+-- :&:/:|: y complementación (a && !a, a || !a). No calcula DNF/CNF (eso es
+-- exponencial y es justo el blowup que se quiere evitar) — sólo fija una
+-- única representación sintáctica para BExp que son estructuralmente
+-- equivalentes salvo por cómo se escribieron.
+--
+-- Se hace en 3 pasadas, cada una respetando el invariante de la anterior:
+-- 1. canonAtomsBExp: cada átomo `e1 <= e2` / `e1 == e2` pasa a "diferencia
+--    contra cero" (`normArit (e1 - e2) <= 0` / `== 0`), así cualquier
+--    reescritura algebraica del mismo átomo (x <= y, 0 <= y - x, x+1 <= y+1)
+--    cae en el mismo AExp.
+-- 2. toNNF: empuja Not hasta las hojas (De Morgan). Sobre reales, Not de un
+--    átomo no se puede reescribir como otro átomo (Not (a<=b) no es b<=a,
+--    sería a>b, distinto de a>=b en el punto de igualdad) así que Not sólo
+--    puede terminar envolviendo un átomo ya canónico, nunca un :&:/:|:.
+-- 3. normLogic: aplana cadenas anidadas de :&:/:|: en listas, ordena
+--    (usando el Ord derivado, sólo como criterio determinístico) y
+--    deduplica: así "a && b" y "b && a" (o "(a&&b)&&c" y "a&&(b&&c)")
+--    terminan en el mismo árbol. De paso detecta complementación
+--    (a && Not a = False', a || Not a = True').
+
+-- | Lleva cada átomo (:<=:/:==:) a la forma canónica "diferencia contra
+-- cero", recursivamente a través de :&:/:|:/Not.
+canonAtomsBExp :: BExp -> BExp
+canonAtomsBExp True'          = True'
+canonAtomsBExp False'         = False'
+canonAtomsBExp (e_1 :<=: e_2) = completeNormArit (e_1 -: e_2) :<=: Lit 0
+canonAtomsBExp (e_1 :==: e_2) = completeNormArit (e_1 -: e_2) :==: Lit 0
+canonAtomsBExp (e_1 :|: e_2)  = canonAtomsBExp e_1 :|: canonAtomsBExp e_2
+canonAtomsBExp (e_1 :&: e_2)  = canonAtomsBExp e_1 :&: canonAtomsBExp e_2
+canonAtomsBExp (Not e_b)      = Not (canonAtomsBExp e_b)
+
+-- | Empuja Not hasta las hojas (forma normal de negación / De Morgan).
+toNNF :: BExp -> BExp
+toNNF True'                 = True'
+toNNF False'                = False'
+toNNF atom@(_ :<=: _)       = atom
+toNNF atom@(_ :==: _)       = atom
+toNNF (e_1 :|: e_2)         = toNNF e_1 :|: toNNF e_2
+toNNF (e_1 :&: e_2)         = toNNF e_1 :&: toNNF e_2
+toNNF (Not True')           = False'
+toNNF (Not False')          = True'
+toNNF (Not (Not e_b))       = toNNF e_b
+toNNF (Not (e_1 :|: e_2))   = toNNF (Not e_1) :&: toNNF (Not e_2)
+toNNF (Not (e_1 :&: e_2))   = toNNF (Not e_1) :|: toNNF (Not e_2)
+toNNF (Not atom)            = Not atom -- atom :: _ :<=: _ | _ :==: _, ya canónico
+
+-- | Complemento sintáctico de un literal ya en NNF (átomo o Not-átomo):
+-- sólo alterna el Not de más afuera, nunca reescribe el átomo.
+complementOf :: BExp -> BExp
+complementOf (Not e_b) = e_b
+complementOf e_b       = Not e_b
+
+-- | Aplana una cadena de :&: (asociada de cualquier forma) en su lista de conjuntos.
+flattenAnd :: BExp -> [BExp]
+flattenAnd (e_1 :&: e_2) = flattenAnd e_1 ++ flattenAnd e_2
+flattenAnd e_b           = [e_b]
+
+-- | Aplana una cadena de :|: (asociada de cualquier forma) en su lista de disyuntos.
+flattenOr :: BExp -> [BExp]
+flattenOr (e_1 :|: e_2) = flattenOr e_1 ++ flattenOr e_2
+flattenOr e_b           = [e_b]
+
+-- | Reconstruye una conjunción a partir de una lista de literales ya
+-- normalizados: ordena, deduplica, y absorbe False'/complementación.
+buildAnd :: [BExp] -> BExp
+buildAnd lits
+  | False' `elem` cleaned          = False'
+  | any hasComplement cleaned      = False'
+  | null cleaned                   = True'
+  | otherwise                      = foldr1 (:&:) cleaned
+  where
+    cleaned = sort (rmdups (filter (/= True') lits))
+    hasComplement l = complementOf l `elem` cleaned
+
+-- | Idem buildAnd, dual para disyunciones (True' absorbe, se filtra False').
+buildOr :: [BExp] -> BExp
+buildOr lits
+  | True' `elem` cleaned           = True'
+  | any hasComplement cleaned      = True'
+  | null cleaned                   = False'
+  | otherwise                      = foldr1 (:|:) cleaned
+  where
+    cleaned = sort (rmdups (filter (/= False') lits))
+    hasComplement l = complementOf l `elem` cleaned
+
+-- | Aplana, ordena y deduplica :&:/:|: recursivamente. Asume que ya se
+-- corrió toNNF (Not sólo envuelve átomos).
+normLogic :: BExp -> BExp
+normLogic True'           = True'
+normLogic False'          = False'
+normLogic atom@(_ :<=: _) = atom
+normLogic atom@(_ :==: _) = atom
+normLogic (Not e_b)       = Not (normLogic e_b)
+normLogic e_b@(_ :&: _)   = buildAnd (map normLogic (flattenAnd e_b))
+normLogic e_b@(_ :|: _)   = buildOr (map normLogic (flattenOr e_b))
+
+-- | Forma normal de una expresión booleana: ver comentario arriba.
+normBExp :: BExp -> BExp
+normBExp = normLogic . toNNF . canonAtomsBExp
 ----------------------------------{ RUNTIMES }-----------------------------------------------------
 -- | Definición de RunTimes
 data RunTime

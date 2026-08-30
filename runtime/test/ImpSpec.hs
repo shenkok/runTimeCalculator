@@ -69,6 +69,136 @@ spec = describe "Imp" $ do
       completeNormArit expr
         `shouldBe` ((3 :*: Var "x") :+: (2 :*: (Var "x" :*: (Var "y" :*: Var "y"))))
 
+  describe "normBExp" $ do
+
+    -- Átomos: forma canónica "diferencia contra cero", independiente de
+    -- cómo se escribió la comparación.
+    it "constante true no cambia" $ do
+      normBExp True' `shouldBe` True'
+
+    it "constante false no cambia" $ do
+      normBExp False' `shouldBe` False'
+
+    it "atomo <= se lleva a diferencia contra cero" $ do
+      normBExp (Var "x" :<=: Var "y")
+        `shouldBe` (completeNormArit (Var "x" -: Var "y") :<=: Lit 0)
+
+    it "atomo == se lleva a diferencia contra cero" $ do
+      normBExp (Var "x" :==: Var "y")
+        `shouldBe` (completeNormArit (Var "x" -: Var "y") :==: Lit 0)
+
+    it "x <= y y su equivalente y >= x normalizan igual" $ do
+      normBExp (Var "x" :<=: Var "y") `shouldBe` normBExp (Var "y" >=: Var "x")
+
+    it "reescritura algebraica del mismo átomo normaliza igual: x+1<=y+1 vs x<=y" $ do
+      normBExp ((Var "x" :+: Lit 1) :<=: (Var "y" :+: Lit 1))
+        `shouldBe` normBExp (Var "x" :<=: Var "y")
+
+    -- NNF: Not se empuja hasta las hojas (De Morgan), nunca queda envolviendo
+    -- un :&:/:|:.
+    it "doble negación se cancela" $ do
+      normBExp (Not (Not (Var "x" :<=: Lit 0)))
+        `shouldBe` normBExp (Var "x" :<=: Lit 0)
+
+    it "De Morgan sobre &&" $ do
+      let a = Var "a" :<=: Lit 0
+          b = Var "b" :<=: Lit 0
+      normBExp (Not (a :&: b)) `shouldBe` (Not (normBExp a) :|: Not (normBExp b))
+
+    it "De Morgan sobre ||" $ do
+      let a = Var "a" :<=: Lit 0
+          b = Var "b" :<=: Lit 0
+      normBExp (Not (a :|: b)) `shouldBe` (Not (normBExp a) :&: Not (normBExp b))
+
+    it "Not True' es False'" $ do
+      normBExp (Not True') `shouldBe` False'
+
+    it "Not False' es True'" $ do
+      normBExp (Not False') `shouldBe` True'
+
+    -- Asociatividad/conmutatividad: el orden y la asociación con la que se
+    -- escribe una conjunción/disyunción no afecta la forma normal.
+    it "reasocia y reordena una conjunción de tres átomos" $ do
+      let a = Var "a" :<=: Lit 0
+          b = Var "b" :<=: Lit 0
+          c = Var "c" :<=: Lit 0
+      normBExp ((a :&: b) :&: c) `shouldBe` normBExp ((c :&: b) :&: a)
+
+    it "reasocia y reordena una disyunción de tres átomos" $ do
+      let a = Var "a" :<=: Lit 0
+          b = Var "b" :<=: Lit 0
+          c = Var "c" :<=: Lit 0
+      normBExp (a :|: (b :|: c)) `shouldBe` normBExp ((c :|: a) :|: b)
+
+    -- Idempotencia
+    it "a && a colapsa a a" $ do
+      let a = Var "a" :<=: Lit 0
+      normBExp (a :&: a) `shouldBe` normBExp a
+
+    it "a || a colapsa a a" $ do
+      let a = Var "a" :<=: Lit 0
+      normBExp (a :|: a) `shouldBe` normBExp a
+
+    it "(a||b) && (b||a) colapsa a a||b" $ do
+      let a = Var "a" :<=: Lit 0
+          b = Var "b" :<=: Lit 0
+      normBExp ((a :|: b) :&: (b :|: a)) `shouldBe` normBExp (a :|: b)
+
+    it "dos disyuntos idénticos tras normalizar (aunque estén escritos distinto) colapsan" $ do
+      let a = Var "a" :<=: Lit 0
+          b = Var "x" :<=: Var "y"
+          c = Var "c" :==: Lit 0
+      normBExp (((b :&: a) :&: c) :|: ((c :&: b) :&: a))
+        `shouldBe` normBExp (a :&: b :&: c)
+
+    -- Complementación
+    it "a && !a es False'" $ do
+      let a = Var "a" :<=: Lit 0
+      normBExp (a :&: Not a) `shouldBe` False'
+
+    it "a || !a es True'" $ do
+      let a = Var "a" :<=: Lit 0
+      normBExp (a :|: Not a) `shouldBe` True'
+
+    -- Neutros / absorbentes
+    it "a && True' colapsa a a" $ do
+      let a = Var "a" :<=: Lit 0
+      normBExp (a :&: True') `shouldBe` normBExp a
+
+    it "a || False' colapsa a a" $ do
+      let a = Var "a" :<=: Lit 0
+      normBExp (a :|: False') `shouldBe` normBExp a
+
+    it "a && False' es False'" $ do
+      let a = Var "a" :<=: Lit 0
+      normBExp (a :&: False') `shouldBe` False'
+
+    it "a || True' es True'" $ do
+      let a = Var "a" :<=: Lit 0
+      normBExp (a :|: True') `shouldBe` True'
+
+    -- Azúcar sintáctica (<, >, /=): se desazucaran con Not por debajo, deben
+    -- normalizar de forma consistente con los átomos primitivos.
+    it "x < y normaliza usando Not sobre el átomo canónico y <= x" $ do
+      normBExp (Var "x" <: Var "y")
+        `shouldBe` Not (completeNormArit (Var "y" -: Var "x") :<=: Lit 0)
+
+    it "x /= y normaliza usando Not sobre el átomo canónico x == y" $ do
+      normBExp (Var "x" /=: Var "y")
+        `shouldBe` Not (completeNormArit (Var "x" -: Var "y") :==: Lit 0)
+
+    -- Fuera de alcance a propósito: normBExp NO calcula DNF/CNF, así que no
+    -- aplica distributividad/absorción entre cláusulas distintas aunque sean
+    -- equivalentes proposicionalmente (acá "(X && c) || (X && !c)" sería
+    -- lógicamente igual a X, pero normBExp no lo reduce, sólo normaliza cada
+    -- cláusula por separado). Ver comentario de normBExp en Imp.hs.
+    it "NO reduce por distributividad entre cláusulas (fuera de alcance)" $ do
+      let a = Var "a" :<=: Lit 0
+          b = Var "x" :<=: Var "y"
+          c = Var "c" :==: Lit 0
+      normBExp (((a :&: b) :&: Not c) :|: (c :&: (b :&: a)))
+        `shouldNotBe` normBExp (a :&: b)
+
   describe "aexpE" $ do
 
     -- Distribución de Dirac: E[runt] con x=c es simplemente runt[x:=c]
