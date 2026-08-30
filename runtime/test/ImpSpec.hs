@@ -54,6 +54,21 @@ spec = describe "Imp" $ do
       completeNormArit (Lit 5 :+: (2 :*: Var "x") :+: (3 :*: Var "y") :+: Var "x")
         `shouldBe` (Lit 5 :+: (3 :*: Var "x") :+: (3 :*: Var "y"))
 
+    -- 3x + 56xy² - 18x*3y*y = 3x + 56xy² - 54xy² = 3x + 2xy²
+    it "simplifica un término no lineal: 3x + 56xy² - 18x*3y*y = 3x + 2xy²" $ do
+      let expr = ((3 :*: Var "x") :+: (56 :*: (Var "x" :*: (Var "y" :*: Var "y"))))
+                   -: ((18 :*: Var "x") :*: ((3 :*: Var "y") :*: Var "y"))
+      completeNormArit expr
+        `shouldBe` ((3 :*: Var "x") :+: (2 :*: (Var "x" :*: (Var "y" :*: Var "y"))))
+
+    -- 29xy² - 9x*y*3y - 3x + 6x = 29xy² - 27xy² + 3x = 3x + 2xy² (mismo resultado que el test anterior)
+    it "simplifica otra forma equivalente: 29xy² - 9x*y*3y - 3x + 6x = 3x + 2xy²" $ do
+      let term1 = 29 :*: (Var "x" :*: (Var "y" :*: Var "y"))
+          term2 = (9 :*: Var "x") :*: (Var "y" :*: (3 :*: Var "y"))
+          expr  = ((term1 -: term2) -: (3 :*: Var "x")) :+: (6 :*: Var "x")
+      completeNormArit expr
+        `shouldBe` ((3 :*: Var "x") :+: (2 :*: (Var "x" :*: (Var "y" :*: Var "y"))))
+
   describe "aexpE" $ do
 
     -- Distribución de Dirac: E[runt] con x=c es simplemente runt[x:=c]
