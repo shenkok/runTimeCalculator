@@ -117,22 +117,48 @@ makeSBVModel' SolverInput'{ existential     = existNames
 runModel' :: SolverInput' -> IO SatResult
 runModel' = sat . makeSBVModel'
 
--- Versión monádica IO del and lógico
-ioAnd :: IO Bool -> IO Bool -> IO Bool
-ioAnd = liftA2 (&&)
-
 -- Versión monádica IO del or lógico
 ioOr :: IO Bool -> IO Bool -> IO Bool
 ioOr = liftA2 (||)
--- Dado un programa y un runtime entrega el input necesario para poder imprimir los resultados
-routineInput :: Program -> RunTime -> (RunTime, [RRunTime],[[IO SatResult]], [[SolverInput]], [[IO Bool]], [IO Bool], IO Bool)
-routineInput program runt = (sert, rests, modelss, inputss, bss, bs, b) where
-    (ert, rest)    = vcGenerator program runt
-    sert           = deepSimplifyRunTime ert
-    rests          = map (fmap deepSimplifyRunTime) rest
-    inputss        = map restrictionsToSolver rests
-    problemss      = map (map makeSBVModel) inputss
-    modelss        = map (map sat) problemss
-    bss            = map (map isSatisfiable) problemss
-    bs             = map (foldr ioOr (pure False)) bss
-    b              = foldr ioOr (pure False) bs
+
+-- | True si alguno de los resultados es True (False para la lista vacía).
+anyIO :: [IO Bool] -> IO Bool
+anyIO = foldr ioOr (pure False)
+
+-- | Resultado de verificar una restricción derivada (un caso de la
+-- linealización de una obligación de prueba) con el SMT-solver.
+data DerivedResult = DerivedResult
+  { drInput   :: SolverInput  -- ^ problema enviado al solver
+  , drModel   :: IO SatResult -- ^ modelo (contraejemplo) encontrado por Z3
+  , drInvalid :: IO Bool      -- ^ True si el solver encontró un contraejemplo
+  }
+
+-- | Resultado de verificar una obligación de prueba, junto con las
+-- restricciones derivadas que la componen.
+data ObligationResult = ObligationResult
+  { obRestriction :: RRunTime
+  , obDerived     :: [DerivedResult]
+  , obInvalid     :: IO Bool  -- ^ True si alguna restricción derivada no es válida
+  }
+
+-- | Resultado completo del análisis de un programa: el tiempo de ejecución
+-- calculado, sus obligaciones de prueba, y si alguna de ellas no es válida.
+data AnalysisResult = AnalysisResult
+  { arRuntime     :: RunTime
+  , arObligations :: [ObligationResult]
+  , arInvalid     :: IO Bool
+  }
+
+-- | Dado un programa y un runtime entrega el input necesario para poder imprimir los resultados
+routineInput :: Program -> RunTime -> AnalysisResult
+routineInput program runt = AnalysisResult sert obligations (anyIO (map obInvalid obligations)) where
+    (ert, rest) = vcGenerator program runt
+    sert        = deepSimplifyRunTime ert
+    obligations = map toObligation rest
+
+    toObligation r = ObligationResult r' derived (anyIO (map drInvalid derived)) where
+        r'      = deepSimplifyRunTime <$> r
+        derived = map toDerived (restrictionsToSolver r')
+
+    toDerived input = DerivedResult input (sat problem) (isSatisfiable problem) where
+        problem = makeSBVModel input
