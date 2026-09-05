@@ -21,7 +21,7 @@ por constante a multiplicación entre RunTimes" antes de asumir cómo debería c
 
 **Estado actual de la rama** (`feature/change_arit_expression`): ambos refactores (`AExp` y
 `RunTime`) están terminados y el proyecto compila y pasa sus tests de punta a punta, tanto con
-`cabal` como con `stack` (ver sección **Build**) — `196 examples, 0 failures, 5 pending`. Los
+`cabal` como con `stack` (ver sección **Build**) — `211 examples, 0 failures, 5 pending`. Los
 5 `pending` son esqueletos de tests sin terminar en `ImpVCGenSpec.hs` (trabajo futuro, no
 bugs). El constructor de indicatriz de `RunTime` también cambió esta sesión: ver "RunTime:
 indicatriz como constructor propio (RunTimeBExp)" más abajo antes de tocar cualquier función
@@ -74,6 +74,10 @@ que mencione `:<>:`/indicatrices — ese constructor ya no existe.
   todo variable libre, un problema de SBV por contexto), `completeRoutine'` el modo nuevo
   (`programToSolverInputs`/`mkUniversales`, ∃∀ real, un problema por obligación) — ver sección
   "Flujo de impresión, modo nuevo" más abajo.
+- **`ImpSynth.hs`** — **síntesis**: descubre la *forma* (el grado) de un invariante antes de
+  armar el template, con diferencias finitas simbólicas certificadas por Z3 (`∃c ∀x. Δᵈf(x) = c`).
+  No verifica invariantes — eso sigue siendo `vcg[·]` + `ImpSBV`. Ver sección "ImpSynth:
+  certificar la forma de un invariante" más abajo.
 - **`ImpProgram.hs`** — banco de programas de ejemplo/test en sintaxis abstracta (`Ctrunc`,
   `Cgeo`, las 12 categorías `Cdks`/`Cpvc+`/etc. de la memoria).
 - **`app/Main.hs`** — entry point interactivo: `run "<programa>"`, `fp`/`fpp` (iteración de
@@ -423,6 +427,65 @@ Main, Expected InformeExamples". Se resolvió dándole su propio `source-dirs: a
 tocar el layout de `runtime-exe`. Como es un ejecutable nuevo (no una dependencia), no hizo
 falta `cabal update` esta vez — sólo `stack build`/`cabal build` para regenerar y confirmar.
 
+## ImpSynth: certificar la forma de un invariante (`∃c ∀x. Δᵈf(x) = c`)
+
+Módulo nuevo (`src/ImpSynth.hs`), separado a propósito de `ImpVCGen.hs`: no verifica
+invariantes, se ocupa del paso **anterior** — dado un `RunTime` `f` (típicamente un
+desenrollado de Kleene vía `fpWhile`/`fpPWhile`), decidir **de qué grado** es el polinomio que
+lo describe, que es lo que determina cuántos coeficientes existenciales necesita el template.
+
+El método es el de diferencias finitas (el análogo discreto de la derivada: para un polinomio
+de grado `d`, la `d`-ésima diferencia es la constante `d!` por el coeficiente principal). Pero
+en vez de muestrear en unos pocos puntos concretos y confiar en que alcanzan, la comprobación
+se hace con una **consulta ∃∀ a Z3**:
+
+```
+∃c ∀x.  Δᵈf(x) = c
+```
+
+Si Z3 la satisface, la conclusión es una identidad algebraica válida para **todo** `x`, no
+evidencia sobre los puntos elegidos — y "la `d`-ésima diferencia es constante" equivale (por
+inducción sobre `x`) a que `f` sea polinomio de grado `d`, así que el `d` más chico que la
+satisface **es** el grado.
+
+Piezas del módulo:
+
+- `shiftRunTime`/`finiteDifference`/`nthDifference`: las diferencias finitas simbólicas
+  (`Δf(x) = f[x→x+1] − f(x)`, vía `sustRunTime` y `--:`, simplificando en cada paso).
+- `constantDifferenceInput`: arma el `SolverInput'`. La igualdad se parte en **dos
+  desigualdades** (`Restriction` sólo tiene `:<==:`), y de ahí en más son restricciones de
+  `RunTime` como cualquier otra — misma expansión de contextos de `restrictionsToImplications`,
+  misma cuantificación de `mkUniversales`. `c` va como existencial, todo el resto como
+  universal.
+- `withHypotheses` + el parámetro `piece :: Context`: permite certificar la forma **dentro de
+  una pieza de la partición** (ej. sólo donde vale la guarda). Es necesario porque el método es
+  local, igual que Taylor: un `RunTime` piecewise no tiene diferencia constante si se lo mira
+  cruzando el borde entre dos piezas, aunque cada pieza por separado sea un polinomio limpio.
+- `certifyDegree cap piece x f`: prueba `d = 0, 1, 2, ...` hasta `cap` y devuelve el primero
+  que certifica (`DegreeCertificate` con el grado y el valor de la constante). `Nothing`
+  significa "no es polinomio de grado ≤ cap ahí" — el caso típico es una cola geométrica, que
+  corresponde a proponer una constante existencial en vez de un polinomio.
+
+**Regla de uso que hay que respetar (encontrada probándolo, está fijada en los tests)**: un
+iterado de Kleene sólo es exacto hasta donde alcanzó su profundidad (hace falta `k ≥ x+1` para
+resolver ese `x`). Más allá de ese frente confiable la función se aplana por **truncamiento**, y
+esa meseta rompe la diferencia constante. Verificado con `while(x>0){x:=x-1}` y `k=9`:
+
+- pieza `[x>0]` sin cota superior → `Nothing` (la meseta del truncamiento gana).
+- pieza `[x>0, x≤6]` (dentro del frente confiable) → `DegreeCertificate 1 2`, o sea grado 1 con
+  diferencia 2 — exactamente el `1+2x` que ya habíamos reconstruido a mano por muestreo.
+- pieza `[x≤0]` (la pieza fija del template natural) → `DegreeCertificate 0 1`: constante 1,
+  que es el tick de evaluar la guarda (`cfWhile` suma `rtOne` aunque la guarda dé falso).
+
+O sea: al certificar sobre un iterado de Kleene **hay que acotar la región al frente confiable
+de esa profundidad**, o el truncamiento se hace pasar por "no es polinomial".
+
+Tests: `test/ImpSynthSpec.hs` (nuevo) cubre las diferencias simbólicas (incluido `Δ²(x²) = 2`),
+`freshName`, la estructura del `SolverInput'` armado, `certifyDegree` sobre constante/recta/
+cuadrática, el caso de tope de grado insuficiente, y los tres casos reales de Kleene de arriba.
+Como `ImpSBVSpec`, invocan a Z3 de verdad (varias veces por test, una por grado probado): la
+suite pasó de ~2s a ~14s por esto.
+
 ## Buena-definición (0 ≤ I) y resolución conjunta de obligaciones
 
 Dos arreglos hechos a raíz de probar `Cpvc` (el `pwhile` con un `while` anidado, Anexo C.1.8
@@ -462,7 +525,7 @@ mismo sistema que en la memoria (C.1.8) hubo que despejar a mano con la hipótes
 Tests: `ImpVCGenSpec.hs` cubre `programInvariants` (incluido el orden externo-antes-que-interno,
 del que depende el emparejamiento) y `wellDefinedness`; `ImpIOSpec.hs` cubre `sharedExistentials`
 y la regresión end-to-end del caso anidado. Los tests viejos que contaban implicaciones se
-actualizaron (hay una más por ciclo). Estado: **196 examples, 0 failures, 5 pending**.
+actualizaron (hay una más por ciclo). Estado: **211 examples, 0 failures, 5 pending**.
 
 ## Tests con el banco de la memoria (test/ImpProgramSpec.hs)
 
@@ -563,7 +626,7 @@ cosas no obvias que confirman esos tests:
   `programToSolverInputs` (la continuación de un `while` anidado arrastra el contexto del
   `while` que lo contiene), no una falla del filtro `relevantVars`.
 
-Estado: **196 examples, 0 failures, 5 pending** (correr `cabal test runtime-test` o
+Estado: **211 examples, 0 failures, 5 pending** (correr `cabal test runtime-test` o
 `stack test`, ver **Build**; el conteo subió de 187 a 189 en la sesión de "RunTime: indicatriz
 como constructor propio (RunTimeBExp)", que agregó cobertura de parser para la indicatriz
 ponderada). De paso se encontraron y corrigieron dos bugs reales en los tests mismos (no en el

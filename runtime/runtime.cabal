@@ -30,6 +30,7 @@ library
       ImpParser
       ImpProgram
       ImpSBV
+      ImpSynth
       ImpVCGen
   other-modules:
       Paths_runtime
@@ -90,6 +91,7 @@ test-suite runtime-test
       ImpProgramSpec
       ImpSBVSpec
       ImpSpec
+      ImpSynthSpec
       ImpVCGenSpec
       Paths_runtime
   hs-source-dirs:
