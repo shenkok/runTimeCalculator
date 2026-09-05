@@ -21,7 +21,7 @@ por constante a multiplicación entre RunTimes" antes de asumir cómo debería c
 
 **Estado actual de la rama** (`feature/change_arit_expression`): ambos refactores (`AExp` y
 `RunTime`) están terminados y el proyecto compila y pasa sus tests de punta a punta, tanto con
-`cabal` como con `stack` (ver sección **Build**) — `189 examples, 0 failures, 5 pending`. Los
+`cabal` como con `stack` (ver sección **Build**) — `196 examples, 0 failures, 5 pending`. Los
 5 `pending` son esqueletos de tests sin terminar en `ImpVCGenSpec.hs` (trabajo futuro, no
 bugs). El constructor de indicatriz de `RunTime` también cambió esta sesión: ver "RunTime:
 indicatriz como constructor propio (RunTimeBExp)" más abajo antes de tocar cualquier función
@@ -423,6 +423,47 @@ Main, Expected InformeExamples". Se resolvió dándole su propio `source-dirs: a
 tocar el layout de `runtime-exe`. Como es un ejecutable nuevo (no una dependencia), no hizo
 falta `cabal update` esta vez — sólo `stack build`/`cabal build` para regenerar y confirmar.
 
+## Buena-definición (0 ≤ I) y resolución conjunta de obligaciones
+
+Dos arreglos hechos a raíz de probar `Cpvc` (el `pwhile` con un `while` anidado, Anexo C.1.8
+del informe) con **los dos invariantes como plantilla** en vez de concretos. Ese experimento
+destapó que la herramienta reportaba "todas las obligaciones válidas" con testigos que ni
+existían como invariante ni eran tiempos de ejecución legítimos.
+
+**1. Falta la restricción de buena-definición (`ImpVCGen.hs`).** La inductividad (`Φ(I) ≤ I`)
+por sí sola no impide que un invariante sea negativo, y un `RunTime` es un tiempo *esperado*:
+Z3 devolvía testigos como `b2 = -10/9`. Se agregó `wellDefinedness :: RunTime -> RRunTime`
+(`rtZero :<==: inv`) y `programInvariants :: Program -> [RunTime]`, y ambos builders de
+`SolverInput'` ahora suman esa restricción por cada invariante. Es la misma condición que Batz
+et al. (TACAS 2023) listan como parte de la admisibilidad, junto a inductividad y seguridad.
+**Decisión de diseño**: se agregó en los builders de `SolverInput'`, **no** en `vcGenerator` —
+`vcg[·]` es el artefacto formalizado en la memoria y no debería cambiar de semántica por esto;
+la buena-definición es una condición sobre la instanciación del template, no una obligación
+de prueba del programa. `programInvariants` recorre el programa en el **mismo orden** que
+`vcGenerator` (cada ciclo aporta su restricción antes que las de su cuerpo), y
+`programToSolverInputs` depende de esa correspondencia 1-a-1 para pegarle a cada obligación la
+buena-definición de *su* invariante — si alguna vez cambia el orden de recorrido de
+`vcGenerator`, hay que actualizar `programInvariants` en paralelo.
+
+**2. Resolver obligación por obligación es incorrecto si comparten templates (`ImpIO.hs`).**
+`programToSolverInputs` (plural) arma un problema de SBV por ciclo y los resuelve por separado,
+así que **cada problema re-cuantifica sus propias existenciales**. Con los dos invariantes
+anidados de `Cpvc` eso daba `a1 = 1` en una obligación y `a1 = -1` en la otra — dos veredictos
+"válida" que juntos no significan nada, porque no existe una asignación que satisfaga ambas.
+Se agregó `sharedExistentials :: [SolverInput'] -> Set Name` (variables de template que
+aparecen en más de una obligación) y `completeRoutine'` ahora elige: si el conjunto es vacío,
+sigue resolviendo obligación por obligación (mejor diagnóstico — dice cuál falló y con qué
+contraejemplo, que es el caso de todo el banco de `ImpProgram.hs`, con invariantes concretos);
+si no, resuelve **todas juntas** con `programToSolverInput` (singular) e imprime por qué.
+Verificado con `Cpvc`-plantilla: pasa de dos testigos contradictorios a uno solo consistente y
+no-negativo (`a0=0, a1=19, a2=22.6, b0=0, b1=20, b2=24`) — que es, resuelto automáticamente, el
+mismo sistema que en la memoria (C.1.8) hubo que despejar a mano con la hipótesis de `K`.
+
+Tests: `ImpVCGenSpec.hs` cubre `programInvariants` (incluido el orden externo-antes-que-interno,
+del que depende el emparejamiento) y `wellDefinedness`; `ImpIOSpec.hs` cubre `sharedExistentials`
+y la regresión end-to-end del caso anidado. Los tests viejos que contaban implicaciones se
+actualizaron (hay una más por ciclo). Estado: **196 examples, 0 failures, 5 pending**.
+
 ## Tests con el banco de la memoria (test/ImpProgramSpec.hs)
 
 Módulo de test nuevo, separado de `ImpVCGenSpec.hs`/`ImpSBVSpec.hs`: corre, con el **modo
@@ -522,7 +563,7 @@ cosas no obvias que confirman esos tests:
   `programToSolverInputs` (la continuación de un `while` anidado arrastra el contexto del
   `while` que lo contiene), no una falla del filtro `relevantVars`.
 
-Estado: **189 examples, 0 failures, 5 pending** (correr `cabal test runtime-test` o
+Estado: **196 examples, 0 failures, 5 pending** (correr `cabal test runtime-test` o
 `stack test`, ver **Build**; el conteo subió de 187 a 189 en la sesión de "RunTime: indicatriz
 como constructor propio (RunTimeBExp)", que agregó cobertura de parser para la indicatriz
 ponderada). De paso se encontraron y corrigieron dos bugs reales en los tests mismos (no en el

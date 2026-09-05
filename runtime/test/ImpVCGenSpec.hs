@@ -102,6 +102,24 @@ spec = do
     it "sin fórmulas, ninguna variable es relevante" $ do
       relevantVars [] ["a", "b"] `shouldBe` Set.empty
 
+  describe "programInvariants / wellDefinedness" $ do
+
+    it "un programa sin ciclos no tiene invariantes" $
+      programInvariants progAssign `shouldBe` []
+
+    it "un while aporta su propio invariante" $
+      programInvariants progLoop `shouldBe` [rtVar "a" :**: rtVar "x"]
+
+    -- El orden importa: programToSolverInputs empareja por posición cada
+    -- restricción de vcGenerator0 con el invariante de este recorrido, así
+    -- que el ciclo externo tiene que venir antes que el de su cuerpo.
+    it "dos ciclos anidados aportan sus invariantes, el externo primero" $
+      programInvariants progNested
+        `shouldBe` [rtVar "a" :**: rtVar "x", rtVar "c" :**: rtVar "y"]
+
+    it "la restricción de buena-definición compara el invariante contra cero" $
+      wellDefinedness (rtVar "a") `shouldBe` (rtZero :<==: rtVar "a")
+
   describe "programToSolverInput" $ do
 
     it "un programa sin loops no genera restricciones (pero sí clasifica sus variables)" $ do
@@ -117,15 +135,18 @@ spec = do
       let si = programToSolverInput progLoop
       existential si `shouldBe` Set.fromList ["a"]
       for_all si `shouldBe` Set.fromList ["x"]
-      -- 2 contextos posibles para la única condición del while (x > 0 / ¬(x > 0))
-      length (solver_formulaes si) `shouldBe` 2
+      -- 2 contextos posibles para la única condición del while (x > 0 / ¬(x > 0)),
+      -- más 1 de la restricción de buena-definición (0 <= inv) del invariante,
+      -- cuyo RunTime "a" no tiene ninguna condición y da un solo contexto.
+      length (solver_formulaes si) `shouldBe` 3
 
     it "dos loops anidados generan un único SolverInput' con todas las implicaciones juntas" $ do
       let si = programToSolverInput progNested
       existential si `shouldBe` Set.fromList ["a", "c"]
       for_all si `shouldBe` Set.fromList ["x", "y"]
-      -- una restricción por loop, 2 implicaciones cada una (1 condición por loop)
-      length (solver_formulaes si) `shouldBe` 4
+      -- una restricción por loop, 2 implicaciones cada una (1 condición por
+      -- loop), más 1 de buena-definición por invariante
+      length (solver_formulaes si) `shouldBe` 6
 
   describe "programToSolverInputs" $ do
 
@@ -138,8 +159,9 @@ spec = do
     it "dos loops anidados generan dos SolverInput' independientes, uno por invariante" $ do
       let sis = programToSolverInputs progNested
       length sis `shouldBe` 2
-      -- Cada SolverInput' individual tiene 2 implicaciones (1 condición, 2 contextos)
-      map (length . solver_formulaes) sis `shouldBe` [2, 2]
+      -- Cada SolverInput' individual tiene 2 implicaciones (1 condición, 2
+      -- contextos) más la de buena-definición de su propio invariante
+      map (length . solver_formulaes) sis `shouldBe` [3, 3]
       -- Por cómo vcGenerator encadena la continuación de un while dentro del
       -- otro (ver comentario de programToSolverInputs), en este ejemplo
       -- ambos invariantes terminan dependiendo de las dos variables de
