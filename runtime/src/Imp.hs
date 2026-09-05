@@ -46,7 +46,7 @@ data AExp
   = Lit Constant -- Números
   | Var Name -- Variables x, y, z
   | AExp :+: AExp --  Suma de expresiones aritméticas
-  | AExp :*: AExp  -- Multipliacion de expresiones aritméticas
+  | AExp :*: AExp  -- Multiplicacion de expresiones aritméticas
   deriving (Eq, Ord) -- Ord: sólo se usa como clave de orden determinístico
                       -- (p.ej. para ordenar átomos de BExp en normBExp), no
                       -- tiene significado aritmético.
@@ -54,6 +54,7 @@ data AExp
 -- | Instancia Num para AExp: permite escribir literales enteros directamente
 -- como AExp (p.ej. `2 :*: Var "x"`, donde `2` se resuelve via fromInteger)
 -- y reusar (+)/(*)/negate en vez de tener que usar :+:/:*: a mano.
+-- TODO: Normalizar cada vez que se opera
 instance Num AExp where
   fromInteger n = Lit (fromInteger n)
   (+)           = (:+:)
@@ -78,6 +79,7 @@ type Poly = Map Monomial Constant
 
 ---------------------------------------- { FUNCIONES EXPRESIONES ARITMÉTICAS }--------------------------------
 -- | Función suma que simplifica el zero
+-- | TODO: Acá me tinca que falta un caso recursivo
 (+:) :: AExp -> AExp -> AExp
 (+:) (Lit 0) arit_1 = arit_1
 (+:)  arit_1 (Lit 0) = arit_1
@@ -94,7 +96,6 @@ showFactor (Var x) = show (Var x)
 showFactor e        = "(" ++ show e ++ ")"
 
 -- | Definición del método show para AExp
--- | TODO: Cambiar
 instance Show AExp where
   show (Lit n)       = show n
   show (Var x)       = x
@@ -230,10 +231,6 @@ one = Lit 1
 zero :: AExp
 zero = Lit 0
 
--- infRational :: Rational 
--- infRational = infinity
-
-
 ---------------------------------- { EXPRESIONES BOOLEANAS} ------------------------------------------
 
 -- | Definición de expresiones Booleanas
@@ -246,6 +243,7 @@ data BExp
   | BExp :&: BExp -- And Lógico
   | Not BExp -- Negación expresión booleana
   deriving (Eq, Ord) -- Ord: idem AExp, sólo orden determinístico para normBExp.
+
 -- | Definición del método show para expresiones BExp.
 instance Show BExp where
   show True'             = "true"
@@ -399,6 +397,7 @@ flattenOr e_b           = [e_b]
 
 -- | Reconstruye una conjunción a partir de una lista de literales ya
 -- normalizados: ordena, deduplica, y absorbe False'/complementación.
+-- TODO: REvisar media mágica
 buildAnd :: [BExp] -> BExp
 buildAnd lits
   | False' `elem` cleaned          = False'
@@ -410,6 +409,7 @@ buildAnd lits
     hasComplement l = complementOf l `elem` cleaned
 
 -- | Idem buildAnd, dual para disyunciones (True' absorbe, se filtra False').
+-- TODO: REvisar media mágica
 buildOr :: [BExp] -> BExp
 buildOr lits
   | True' `elem` cleaned           = True'
@@ -438,16 +438,33 @@ normBExp = normLogic . toNNF . canonAtomsBExp
 -- | Definición de RunTimes
 data RunTime
   = RunTimeArit AExp -- RunTime hecho a partir de una expresión aritmética
-  | BExp :<>: RunTime -- Multiplicación por una condición
+  |RunTimeBExp BExp -- Runtime hecho a partir de un BExp,, genera una indicatriz
   | RunTime :++: RunTime -- Suma de RunTime
-  | Constant :**: RunTime -- Ponderación por constante
-  deriving (Eq) 
+  | RunTime :**: RunTime -- Multiplicación entre RunTimes
+  deriving (Eq)
+
+-- | Instancia Num para RunTime: permite escribir literales enteros
+-- directamente como RunTime (p.ej. `2 :**: rtVar "x"`, donde `2` se resuelve
+-- vía fromInteger), igual que hace `instance Num AExp` para AExp. Necesaria
+-- porque, al eliminarse la ponderación por constante (antes `Constant :**:
+-- RunTime`), la única forma de escribir un peso literal es como un
+-- `RunTime` en sí (`RunTimeArit (Lit k)`).
+-- Cuidado: igual que en AExp, negate/(-1) se construye directo con
+-- `RunTimeArit (Lit (-1)) :**: runt`, nunca con `(-1) :**: runt` dentro de
+-- la propia instancia — causaría recursión infinita en negate.
+instance Num RunTime where
+  fromInteger n = RunTimeArit (Lit (fromInteger n))
+  (+)           = (:++:)
+  (*)           = (:**:)
+  negate runt   = RunTimeArit (Lit (-1)) :**: runt
+  abs           = error "abs no está definido para RunTime"
+  signum        = error "signum no está definido para RunTime"
 
 ----------------------------------{ AZÚCAR SINTÁCTICA } -----------------------------------------------------
 
 -- | Azúcar sintáctica para el menos
 (--:) :: RunTime -> RunTime -> RunTime
-runt_1 --: runt_2 = runt_1 :++: ((-1) :**: runt_2)
+runt_1 --: runt_2 = runt_1 :++: (RunTimeArit (Lit (-1)) :**: runt_2)
 
 -- | Azúcar sintáctica para el 0 runtime 
 rtZero :: RunTime
@@ -465,57 +482,127 @@ rtLit k = RunTimeArit (Lit k)
 rtVar :: Name -> RunTime
 rtVar x = RunTimeArit (Var x)
 
--- |Azúcar sintáctica para Función Indicatriz
+-- |Azúcar sintáctica para Función Indicatriz: RunTimeBExp e_b YA es la
+-- indicatriz (vale 0 o 1), no hace falta ponderarla por rtOne como antes.
 toIndicator :: BExp -> RunTime
-toIndicator e_b = e_b :<>: rtOne
+toIndicator e_b = RunTimeBExp e_b
 
--- | Azúcar sintáctica para operar una función indicatriz con expresión aritmética
-(<>:) :: RunTime -> AExp -> RunTime
-(<>:) (e_b :<>: (RunTimeArit (Lit 1))) arit = e_b :<>: RunTimeArit arit
-(<>:) otherwise  _                          = error $ "El runtime no tiene la forma de indicatriz " ++ show otherwise
  ----------------------------------{ FUNCIONES RUNTIMES }-----------------------------------------------------
 
+-- | Muestra un operando de :**: entre paréntesis salvo que sea atómico
+-- (RunTimeArit/RunTimeBExp, que ya llevan su propio delimitador). Análogo a
+-- showFactor para AExp :*:, necesario porque :**: ya no está restringido a
+-- "constante ** algo": ambos lados pueden ser RunTime compuestos.
+showRTFactor :: RunTime -> String
+showRTFactor r@(RunTimeArit _) = show r
+showRTFactor r@(RunTimeBExp _) = show r
+showRTFactor r                 = "(" ++ show r ++ ")"
+
 instance Show RunTime where
-  show (RunTimeArit arit)               = show arit
-  show (e_b :<>: RunTimeArit (Lit 1))   = "[" ++ show e_b ++ "]"
-  show (e_b :<>: RunTimeArit (Lit n))   = "[" ++ show e_b ++ "]<>" ++ show n
-  show (e_b :<>: RunTimeArit (Var x))   = "[" ++ show e_b ++ "]<>" ++ x
-  show (e_b :<>: runt)                  = "[" ++ show e_b ++ "]<>" ++ "(" ++ show runt ++ ")"
-  show (e_1 :++: e_2)                   = show e_1 ++ " ++ " ++ show e_2
-  show (k :**: RunTimeArit (Lit n))     = show k ++ "**" ++ show n
-  show (k :**: RunTimeArit (Var x))     = show k ++ "**" ++ x
-  show (k :**: e)                       = show k ++ "**(" ++ show e ++ ")"
+  show (RunTimeArit arit) = show arit
+  show (RunTimeBExp e_b)  = "[" ++ show e_b ++ "]"
+  show (e_1 :++: e_2)     = show e_1 ++ " ++ " ++ show e_2
+  show (r_1 :**: r_2)     = showRTFactor r_1 ++ "**" ++ showRTFactor r_2
 
 -- | Función de sustitución toma una variable "x", un AExp aritFor, un RunTime runtIn
 -- reemplaza todas las incidencias de "x" en la expresión runtIn por la expresión aritFor.
 sustRunTime :: Name -> AExp -> RunTime -> RunTime
 sustRunTime x aritFor (RunTimeArit aritIn) = RunTimeArit (sustAExp x aritFor aritIn)
-sustRunTime x aritFor (e_b :<>: e_r)       = sustBExp x aritFor e_b :<>: sustRunTime x aritFor e_r
+sustRunTime x aritFor (RunTimeBExp bexp)   = RunTimeBExp (sustBExp x aritFor bexp)
 sustRunTime x aritFor (e_1 :++: e_2)       = sustRunTime x aritFor e_1 :++: sustRunTime x aritFor e_2
-sustRunTime x aritFor (k :**: e)           = k :**: sustRunTime x aritFor e
+sustRunTime x aritFor (r_1 :**: r_2)       = sustRunTime x aritFor r_1 :**: sustRunTime x aritFor r_2
 
 -- | Entrega las variables libres dentro de un Runtime
 freeVarsRunTime :: RunTime -> Names
 freeVarsRunTime (RunTimeArit arit) = freeVars arit
-freeVarsRunTime (b :<>: runt)      = freeVarsBExp b ++ freeVarsRunTime runt
+freeVarsRunTime (RunTimeBExp b)    = freeVarsBExp b
 freeVarsRunTime (e_1 :++: e_2)     = freeVarsRunTime e_1 ++ freeVarsRunTime e_2
-freeVarsRunTime (_ :**: e)         = freeVarsRunTime e
+freeVarsRunTime (r_1 :**: r_2)     = freeVarsRunTime r_1 ++ freeVarsRunTime r_2
 
 -------------------- {  SIMPLIFICAR RUNTIMES }------------------------------------------------------------------
+-- TODO: releer toda la siplificación
+
+-- | Aplana una cadena de :**: (asociada de cualquier forma, izquierda o
+-- derecha, mezclada) en la lista de sus factores. Necesario porque, a
+-- diferencia de :++: (que sólo se reasocia hacia la derecha y por lo tanto
+-- puede fusionarse par a par sin riesgo), :**: no tiene una única dirección
+-- "correcta" — una indicatriz ahora es un factor más, no un caso aparte, y
+-- reasociar por pares en ambas direcciones a la vez puede oscilar
+-- indefinidamente cuando el par que toca fusionar primero no reduce a nada
+-- (se probó a mano: intentarlo cuelga el simplificador). Aplanar toda la
+-- cadena de una vez y reconstruirla con buildMul es la única forma segura
+-- de canonicalizar un producto sin importar cómo haya quedado parentizado.
+flattenMul :: RunTime -> [RunTime]
+flattenMul (r_1 :**: r_2) = flattenMul r_1 ++ flattenMul r_2
+flattenMul r              = [r]
+
+-- | Reconstruye un producto ya canonicalizado a partir de su lista de
+-- factores (ver flattenMul): junta todas las indicatrices (RunTimeBExp) en
+-- una única conjunción a la izquierda, todos los pesos aritméticos
+-- (RunTimeArit) en un único polinomio a la derecha (vía completeNormArit),
+-- y deja cualquier otro factor (ej. una suma :++: usada como peso) tal
+-- cual, multiplicando al final en el orden en que aparecía. Maneja los
+-- casos absorbentes (una indicatriz que colapsa a False', o un peso que
+-- colapsa a 0) devolviendo rtZero directo, y omite cualquier parte que
+-- colapse al neutro (True'/Lit 1) del resultado final — si TODO colapsa al
+-- neutro (producto vacío), el resultado es rtOne.
+buildMul :: [RunTime] -> RunTime
+buildMul factors
+  | boolPart == Just False'  = rtZero
+  | aritPart == Just (Lit 0) = rtZero
+  | otherwise                = case boolFactor ++ aritFactor ++ others of
+      []       -> rtOne
+      (f : fs) -> foldr1 (:**:) (f : fs)
+  where
+    bools    = [b | RunTimeBExp b <- factors]
+    arits    = [a | RunTimeArit a <- factors]
+    others   = filter isOther factors
+      where
+        isOther (RunTimeBExp _) = False
+        isOther (RunTimeArit _) = False
+        isOther _               = True
+    boolPart = if null bools then Nothing else Just (foldr1 (\b1 b2 -> simplifyBExp (b1 :&: b2)) bools)
+    aritPart = if null arits then Nothing else Just (completeNormArit (foldr1 (:*:) arits))
+    boolFactor = case boolPart of
+      Just True' -> []
+      Just b     -> [RunTimeBExp b]
+      Nothing    -> []
+    aritFactor = case aritPart of
+      Just (Lit 1) -> []
+      Just a       -> [RunTimeArit a]
+      Nothing      -> []
+
+-- | Si el RunTime es una indicatriz (con o sin peso explícito), retorna su
+-- condición y su peso: "RunTimeBExp b :**: r" da (b, r), y una indicatriz
+-- desnuda "RunTimeBExp b" (peso implícito 1 — la forma en la que queda tras
+-- pasar por buildMul cuando el peso colapsa al neutro, ej. "[b]**1") da
+-- (b, rtOne). Nothing para cualquier otro RunTime. Necesaria para que las
+-- reglas 1/1b de abajo reconozcan una indicatriz sin importar si buildMul
+-- ya le quitó el "**1" redundante.
+asIndicatorWeight :: RunTime -> Maybe (BExp, RunTime)
+asIndicatorWeight (RunTimeBExp b :**: r) = Just (b, r)
+asIndicatorWeight (RunTimeBExp b)        = Just (b, rtOne)
+asIndicatorWeight _                      = Nothing
 
 -- | Reglas de un sólo paso para simplificar un RunTime
 --
--- Además de las reglas algebraicas originales (neutros de :++:/:<>:/:**:,
+-- Además de las reglas algebraicas originales (neutros de :++:/:**:,
 -- literales), se agregaron reglas puntuales para casos que antes quedaban
 -- sin combinar aunque fueran sintácticamente adyacentes (no es una forma
 -- normal completa de RunTime — eso sigue pendiente, ver CLAUDE.md — sólo
--- cierra los casos más obvios):
+-- cierra los casos más obvios). Una indicatriz ponderada, antes un
+-- constructor dedicado (b :<>: r), ahora es sólo "RunTimeBExp b :**: r" —
+-- multiplicación genuina entre dos RunTime — así que las reglas de abajo se
+-- expresan sobre ese patrón:
 --
---   1. [b]<>r1 ++ [b]<>r2  =  [b]<>(r1 ++ r2), cuando la condición "b" es
+--   1. [b]**r1 ++ [b]**r2  =  [b]**(r1 ++ r2), cuando la condición "b" es
 --      sintácticamente igual (Eq derivado de BExp) en ambos sumandos, tanto
 --      si son los dos únicos términos como si el segundo encabeza una
---      cadena de :++: más larga.
---   1b. [b]<>r ++ [!b]<>r = r: la suma de indicatrices complementarias con
+--      cadena de :++: más larga. Se reconoce una indicatriz vía
+--      asIndicatorWeight, así que también aplica cuando uno de los lados
+--      quedó como indicatriz desnuda (peso 1 implícito, ej. tras pasar por
+--      buildMul).
+--   1b. [b]**r ++ [!b]**r = r: la suma de indicatrices complementarias con
 --      el mismo peso "r" es 1*r. A diferencia de la regla 1, esto NO se
 --      generaliza a "suma de indicatrices = OR" — [b1]+[b2] = [b1 || b2]
 --      sólo vale si b1/b2 son mutuamente excluyentes, y en general no lo
@@ -528,40 +615,44 @@ freeVarsRunTime (_ :**: e)         = freeVarsRunTime e
 --      existentes, que asumen la cadena asociada a la derecha) encuentren
 --      términos adyacentes aunque el árbol original los haya parentizado a
 --      la izquierda.
---   3. k1 :**: (k2 :**: r) = (k1 * k2) :**: r, fusión de ponderaciones anidadas.
---   4. b1 :<>: (b2 :<>: r) = (b1 :&: b2) :<>: r: el producto de indicatrices
---      es la indicatriz de la conjunción — a diferencia de la regla 1b, esto
---      SÍ vale siempre (no depende de exclusión mutua ni de ningún supuesto
---      extra), así que se fusiona incondicionalmente.
+--   3. Cualquier :**: (con cualquier forma de anidamiento) se canonicaliza
+--      de una vez vía flattenMul/buildMul: fusiona todos los pesos
+--      aritméticos en un polinomio único, todas las indicatrices en una
+--      única conjunción, y aplica los neutros/absorbentes (Lit 1/Lit 0,
+--      True'/False') sobre el resultado ya combinado. Esto reemplaza (y
+--      generaliza a cualquier nivel de anidamiento, no sólo el
+--      inmediatamente adyacente) lo que antes eran varias reglas sueltas
+--      para :**: — incluida la vieja "b1 :<>: (b2 :<>: r) = (b1:&:b2):<>:r",
+--      que queda subsumida acá.
 simplifyRunTime :: RunTime -> RunTime
 simplifyRunTime (RunTimeArit arit_1 :++: RunTimeArit arit_2)               = RunTimeArit $ completeNormArit (arit_1 :+: arit_2)
 simplifyRunTime (RunTimeArit arit_1 :++: (RunTimeArit arit_2 :++: runt))   = RunTimeArit (completeNormArit $ arit_1 :+: arit_2) :++: runt
-simplifyRunTime ((e_b1 :<>: r_1) :++: (e_b2 :<>: r_2))
-  | e_b1 == e_b2                             = simplifyRunTime (e_b1 :<>: simplifyRunTime (r_1 :++: r_2))
-  | complementOf e_b1 == e_b2 && r_1 == r_2  = r_1
-simplifyRunTime ((e_b1 :<>: r_1) :++: ((e_b2 :<>: r_2) :++: runt))
-  | e_b1 == e_b2                             = simplifyRunTime (simplifyRunTime (e_b1 :<>: simplifyRunTime (r_1 :++: r_2)) :++: runt)
-  | complementOf e_b1 == e_b2 && r_1 == r_2  = simplifyRunTime (r_1 :++: runt)
+simplifyRunTime (t_1 :++: t_2)
+  | Just (e_b1, r_1) <- asIndicatorWeight t_1
+  , Just (e_b2, r_2) <- asIndicatorWeight t_2
+  , e_b1 == e_b2                             = simplifyRunTime (RunTimeBExp e_b1 :**: simplifyRunTime (r_1 :++: r_2))
+  | Just (e_b1, r_1) <- asIndicatorWeight t_1
+  , Just (e_b2, r_2) <- asIndicatorWeight t_2
+  , complementOf e_b1 == e_b2 && r_1 == r_2  = r_1
+simplifyRunTime (t_1 :++: (t_2 :++: runt))
+  | Just (e_b1, r_1) <- asIndicatorWeight t_1
+  , Just (e_b2, r_2) <- asIndicatorWeight t_2
+  , e_b1 == e_b2                             = simplifyRunTime (simplifyRunTime (RunTimeBExp e_b1 :**: simplifyRunTime (r_1 :++: r_2)) :++: runt)
+  | Just (e_b1, r_1) <- asIndicatorWeight t_1
+  , Just (e_b2, r_2) <- asIndicatorWeight t_2
+  , complementOf e_b1 == e_b2 && r_1 == r_2  = simplifyRunTime (r_1 :++: runt)
 simplifyRunTime ((e_1 :++: e_2) :++: e_3)                                  = simplifyRunTime (e_1 :++: simplifyRunTime (e_2 :++: e_3))
-simplifyRunTime (b1 :<>: (b2 :<>: r))                                      = simplifyRunTime (simplifyBExp (b1 :&: b2) :<>: r)
-simplifyRunTime (e_b :<>: RunTimeArit (Lit 0))                             = rtZero
-simplifyRunTime (True' :<>: runt)                                          = runt
-simplifyRunTime (False' :<>: _)                                            = rtZero
 simplifyRunTime (RunTimeArit (Lit 0) :++: runt)                            = runt
 simplifyRunTime (runt :++: RunTimeArit (Lit 0))                            = runt
-simplifyRunTime (_ :**: RunTimeArit (Lit 0))                               = rtZero
-simplifyRunTime (1 :**: runt)                                              = runt
-simplifyRunTime (0 :**: _)                                                 = rtZero
-simplifyRunTime (k :**: (k' :**: runt))                                    = simplifyRunTime ((k * k') :**: runt)
-simplifyRunTime (k :**: RunTimeArit arit)                                  = RunTimeArit $ completeNormArit (Lit k :*: arit)
+simplifyRunTime rt@(_ :**: _)                                              = buildMul (flattenMul rt)
 simplifyRunTime otherwise                                                  = otherwise
 
 -- Reglas recursivas para simplificar un RunTime
 deepSimplifyRunTime :: RunTime -> RunTime
 deepSimplifyRunTime (RunTimeArit arit) = RunTimeArit (completeNormArit arit)
-deepSimplifyRunTime (bexp :<>: runt)   = simplifyRunTime (deepSimplifyBExp bexp :<>: deepSimplifyRunTime runt)
+deepSimplifyRunTime (RunTimeBExp bexp) = RunTimeBExp (deepSimplifyBExp bexp)
 deepSimplifyRunTime (e_1 :++: e_2)     = simplifyRunTime (deepSimplifyRunTime e_1 :++: deepSimplifyRunTime e_2)
-deepSimplifyRunTime (k :**: runt)      = simplifyRunTime (k :**: deepSimplifyRunTime runt)
+deepSimplifyRunTime (r_1 :**: r_2)     = simplifyRunTime (deepSimplifyRunTime r_1 :**: deepSimplifyRunTime r_2)
 
 
 ----------------------------------{ CONSTRUCCIONES PROBABILISTAS} ----------------------------------
@@ -615,6 +706,14 @@ isDistribution p_x = massDistribution p_x == 1 && and ps where
   predicate x = 0 <= x && x <= 1
   ps          = map (predicate . fst) p_x
 
+-- | Variables libres de una distribución de expresiones aritméticas: la
+-- unión (sin repetidos) de las variables libres de cada punto de la
+-- distribución. Usada por ImpVCGen.getExistencialAndUniversalVars para que
+-- una asignación probabilista (PSet x parit) aporte también las variables
+-- que aparecen dentro de "parit" (ej. `x :~ <y>`), no sólo "x".
+freeVarsPAExp :: PAExp -> Names
+freeVarsPAExp p_x = sort (rmdups (concatMap (freeVars . snd) p_x))
+
 ----------------------------------------{AZÚCAR SINTÁCTICA PARA DISTRIBUCIONES CONOCIDAS}------------------------------
 -- Muestra de distribución de Dirac
 dirac :: AExp -> PAExp
@@ -624,16 +723,6 @@ dirac arit = [(1, arit)]
 coin :: PConstant -> PAExp
 coin p = [(p, Lit 0), (1-p, Lit 1)]
 
--- Dado de N caras
--- uniform :: Constant -> Constant -> Distribution AExp
--- uniform a b = zip (repeat $ 1%len) values  where
---   values = map Lit [a..b]
---   len    = toInteger $ length values
-
--- Variable aleatoria con 1 como inicio o fin
--- uniform1 :: Constant -> Distribution AExp
--- uniform1 q  | q <= 1    = uniform q 1
---             | otherwise = uniform 1 q
 ----------------------------------------{AZÚCAR SINTÁCTICA PARA DISTRIBUCIONES CONOCIDAS}------------------------------
 
 -- | Cálculo de esperanza.
@@ -646,8 +735,11 @@ expectedValue p_x transform scale combine base = foldr (combine . f) base p_x wh
 
 -- | esperanza para distribuciones sobre expresiones aritméticas
 aexpE :: Distribution AExp -> Name -> RunTime -> RunTime
-aexpE p_x x runt = deepSimplifyRunTime $ expectedValue p_x f (:**:) (:++:) rtZero where
+aexpE p_x x runt = deepSimplifyRunTime $ expectedValue p_x f scale (:++:) rtZero where
   f arit = sustRunTime x arit runt
+  -- scale pondera por la probabilidad "k": ya no hay Constant :**: RunTime,
+  -- así que el literal se envuelve como RunTime antes de multiplicar.
+  scale k r = RunTimeArit (Lit k) :**: r
 
 
 ----------------------------------{ PROGRAMAS }-----------------------------------------------------

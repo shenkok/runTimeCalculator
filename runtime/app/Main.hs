@@ -13,12 +13,22 @@ import ImpProgram
 import Data.SBV
 import Data.SBV.Internals (AlgReal, SolverContext (internalVariable))
 import Data.Either (fromRight)
+import qualified Data.Set as Set
 ------------------------------{MÉTODO PARA UNIR LOS PROCESOS}-----------------------------------------------------------------
 
 run :: String -> IO ()
 run input = case parseProgram "<interactive>" input of
   Left err  -> print err
   Right program -> completeRoutine (deepSimplifyProgram program) input rtZero
+
+-- | Igual que "run", pero con el modo nuevo de impresión de resultados
+-- (completeRoutine', ver ImpIO.hs): un SolverInput' por invariante, con
+-- cuantificación ∃∀ real vía mkUniversales en vez de tratar todo como
+-- variable libre y probar cada contexto por separado.
+run' :: String -> IO ()
+run' input = case parseProgram "<interactive>" input of
+  Left err  -> print err
+  Right program -> completeRoutine' (deepSimplifyProgram program) input
 
 -- |Calcula la iteración de punto fijo de orden n de una transformada de un while determinista
 
@@ -144,8 +154,8 @@ implica_4 = Implication
 
 exampleInput :: SolverInput'
 exampleInput = SolverInput'
-  { existential = ["a", "c"]
-  , for_all = ["x"]
+  { existential = Set.fromList ["a", "c"]
+  , for_all = Set.fromList ["x"]
   , solver_formulaes = [implica_1, implica_2, implica_3, implica_4]
   }
 
@@ -178,8 +188,8 @@ implicaB = Implication
 
 exampleInput2 :: SolverInput'
 exampleInput2 = SolverInput'
-  { existential = []
-  , for_all = ["x"]
+  { existential = Set.empty
+  , for_all = Set.fromList ["x"]
   , solver_formulaes = [implicaA, implicaB]
   }
 
@@ -226,8 +236,8 @@ impl_c13_npnq = Implication
 -- SolverInput
 c13Input :: SolverInput'
 c13Input = SolverInput'
-  { existential     = ["a"]
-  , for_all          = ["x", "y", "z"]
+  { existential     = Set.fromList ["a"]
+  , for_all          = Set.fromList ["x", "y", "z"]
   , solver_formulaes = [impl_c13_pq, impl_c13_npq, impl_c13_pnq, impl_c13_npnq]
   }
 

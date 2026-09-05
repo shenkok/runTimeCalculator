@@ -1,6 +1,8 @@
 module ImpVCGen where
 
 import Imp
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 {-
     MODULO QUE SE ENCARGA DE GENERAR EL INPUT PARA SBV A PARTIR
@@ -38,11 +40,11 @@ vcGenerator Skip runt                = (rtOne :++: runt, [])
 vcGenerator Empty runt               = (runt, [])
 vcGenerator (Set x arit) runt        = (rtOne :++: sustRunTime x arit runt, [])
 vcGenerator (PSet x parit) runt      = (rtOne :++: aexpE parit x runt, [])
-vcGenerator (If e_b e_t e_f) runt    = (rtOne :++: ((e_b :<>: fst vc_t) :++: (Not e_b :<>: fst vc_f)), snd vc_t ++ snd vc_f)
+vcGenerator (If e_b e_t e_f) runt    = (rtOne :++: ((RunTimeBExp e_b :**: fst vc_t) :++: (RunTimeBExp (Not e_b) :**: fst vc_f)), snd vc_t ++ snd vc_f)
   where
     vc_t = vcGenerator e_t runt
     vc_f = vcGenerator e_f runt
-vcGenerator (PIf pe_b e_t e_f) runt  = (rtOne :++: ((p_true :**: fst vc_t) :++: (p_false :**: fst vc_f)), snd vc_t ++ snd vc_f)
+vcGenerator (PIf pe_b e_t e_f) runt  = (rtOne :++: ((rtLit p_true :**: fst vc_t) :++: (rtLit p_false :**: fst vc_f)), snd vc_t ++ snd vc_f)
   where
     p_true = p pe_b
     p_false = 1 - p_true
@@ -55,13 +57,13 @@ vcGenerator (Seq p_1 p_2) runt       = (fst vc_1, snd vc_1 ++ snd vc_2)
 vcGenerator (While e_b p inv) runt   = (inv, (l_inv :<==: inv) : snd vc_p)
   where
     vc_p = vcGenerator p inv
-    l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: fst vc_p))
+    l_inv = rtOne :++: ((RunTimeBExp (Not e_b) :**: runt) :++: (RunTimeBExp e_b :**: fst vc_p))
 vcGenerator (PWhile pe_b c inv) runt = (inv, (l_inv :<==: inv) : snd vc_p)
   where
     p_true = p pe_b
     p_false = 1 - p_true
     vc_p = vcGenerator c inv
-    l_inv = rtOne :++: ((p_false :**: runt) :++: (p_true :**: fst vc_p))
+    l_inv = rtOne :++: ((rtLit p_false :**: runt) :++: (rtLit p_true :**: fst vc_p))
 
 
 -- | Genera las restricciones considerando al 0 como runtime
@@ -114,11 +116,11 @@ vcGenerator' Skip runt                = ProgramVCGenInformation (rtOne :++: runt
 vcGenerator' Empty runt               = ProgramVCGenInformation runt [] 
 vcGenerator' (Set x arit) runt        = ProgramVCGenInformation (rtOne :++: sustRunTime x arit runt) []
 vcGenerator' (PSet x parit) runt      = ProgramVCGenInformation (rtOne :++: aexpE parit x runt) []
-vcGenerator' (If e_b e_t e_f) runt    = ProgramVCGenInformation (rtOne :++: ((e_b :<>: runtime vc_t) :++: (Not e_b :<>: runtime vc_f))) (restrictionsInformation vc_t ++ restrictionsInformation vc_f) 
+vcGenerator' (If e_b e_t e_f) runt    = ProgramVCGenInformation (rtOne :++: ((RunTimeBExp e_b :**: runtime vc_t) :++: (RunTimeBExp (Not e_b) :**: runtime vc_f))) (restrictionsInformation vc_t ++ restrictionsInformation vc_f)
   where
     vc_t = vcGenerator' e_t runt
     vc_f = vcGenerator' e_f runt
-vcGenerator' (PIf pe_b e_t e_f) runt  = ProgramVCGenInformation (rtOne :++: ((p_true :**: runtime vc_t) :++: (p_false :**: runtime vc_f))) (restrictionsInformation vc_t ++ restrictionsInformation vc_f)
+vcGenerator' (PIf pe_b e_t e_f) runt  = ProgramVCGenInformation (rtOne :++: ((rtLit p_true :**: runtime vc_t) :++: (rtLit p_false :**: runtime vc_f))) (restrictionsInformation vc_t ++ restrictionsInformation vc_f)
   where
     p_true = p pe_b
     p_false = 1 - p_true
@@ -131,7 +133,7 @@ vcGenerator' (Seq p_1 p_2) runt       = ProgramVCGenInformation (runtime vc_1) (
 vcGenerator' (While e_b p inv) runt   = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars : restrictionsInformation vc_p)
   where
     vc_p = vcGenerator' p inv
-    l_inv = rtOne :++: ((Not e_b :<>: runt) :++: (e_b :<>: runtime vc_p))
+    l_inv = rtOne :++: ((RunTimeBExp (Not e_b) :**: runt) :++: (RunTimeBExp e_b :**: runtime vc_p))
     program_vars = freeVarsProgram p
     template_vars = onlyInFirst (freeVarsRunTime inv ++ freeVarsRunTime l_inv) program_vars
 vcGenerator' (PWhile pe_b c inv) runt = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars : restrictionsInformation vc_p)
@@ -139,7 +141,7 @@ vcGenerator' (PWhile pe_b c inv) runt = ProgramVCGenInformation inv (Restriction
     p_true = p pe_b
     p_false = 1 - p_true
     vc_p = vcGenerator' c inv
-    l_inv = rtOne :++: ((p_false :**: runt) :++: (p_true :**: runtime vc_p))
+    l_inv = rtOne :++: ((rtLit p_false :**: runt) :++: (rtLit p_true :**: runtime vc_p))
     program_vars = freeVarsProgram c
     template_vars = onlyInFirst (freeVarsRunTime inv ++ freeVarsRunTime l_inv) program_vars
 
@@ -153,11 +155,11 @@ bottom = rtLit 0
 
 -- | Función característica de un while
 cfWhile :: BExp -> Program -> RunTime -> RunTime -> RunTime
-cfWhile b program runt x = rtOne :++: ((Not b :<>: runt) :++: (b :<>: fst (vcGenerator program x)))
+cfWhile b program runt x = rtOne :++: ((RunTimeBExp (Not b) :**: runt) :++: (RunTimeBExp b :**: fst (vcGenerator program x)))
 
 -- | Función característica de un pwhile
 cfPWhile :: PBExp -> Program -> RunTime -> RunTime ->  RunTime
-cfPWhile (Ber p) program runt x = rtOne :++: (((1 - p) :**: runt) :++: (p :**: fst (vcGenerator program x)))
+cfPWhile (Ber p) program runt x = rtOne :++: ((rtLit (1 - p) :**: runt) :++: (rtLit p :**: fst (vcGenerator program x)))
 
 -- | Iteración de punto fijo para un while
 fpWhile :: RunTime -> BExp -> Program -> RunTime -> Int -> RunTime
@@ -193,22 +195,36 @@ data Implication = Implication{
   hypothesis :: Context,
   conclusion :: BExp } deriving (Eq, Show)
 
+-- | existential/for_all van como Set Name (no Names/[Name]) para que
+-- duplicados sintácticos (la misma variable libre apareciendo en más de un
+-- punto del programa/invariante, ej. en varios contextos de un while
+-- anidado) no terminen repetidos en la lista que se le pasa a sReals /
+-- mkUniversales.
 data SolverInput' = SolverInput'
   { solver_formulaes ::[Implication]
-  , existential :: Names
-  , for_all      :: Names
+  , existential :: Set Name
+  , for_all      :: Set Name
    } deriving (Eq, Show)
 
 -- | Retorna todas las instancias de BExp dentro un RunTime sin repeticiones
+--
+-- La indicatriz "RunTimeBExp bexp" es ahora una hoja (antes era un
+-- constructor de dos campos "bexp :<>: runt"): el caso de multiplicación de
+-- abajo (f (r_1 :**: r_2) = getBExp r_1 ++ getBExp r_2) ya recorre ambos
+-- lados de cualquier :**:, así que sólo hace falta declarar qué BExp aporta
+-- la hoja misma — no una regla combinada para "indicatriz seguida de peso".
+-- Se preserva el detalle de que, si la condición es una negación (Not
+-- bexp), se guarda el bexp sin negar (igual que antes), para que
+-- allContext siempre trabaje con la forma "positiva" de cada condición.
 getBExp :: RunTime -> Context
 getBExp runt = rmdups conds
   where
     conds = f runt
-    f (RunTimeArit _)        = []
-    f ((Not bexp) :<>: runt) = bexp : getBExp runt
-    f (bexp :<>: runt)       = bexp : getBExp runt
-    f (e_1 :++: e_2)         = getBExp e_1 ++ getBExp e_2
-    f (_ :**: runt)          = getBExp runt
+    f (RunTimeArit _)          = []
+    f (RunTimeBExp (Not bexp)) = [bexp]
+    f (RunTimeBExp bexp)       = [bexp]
+    f (e_1 :++: e_2)           = getBExp e_1 ++ getBExp e_2
+    f (r_1 :**: r_2)           = getBExp r_1 ++ getBExp r_2
 
 -- | Toma un RunTime runt y retorna todos los posibles context (matriz de BExp) que
 -- se pueden extraer a partir de los BExp que tiene el RunTime.
@@ -227,21 +243,35 @@ allContext runt = map (zipWith f conds) lbools
 
 -- | Toma un BExp bexp y un RunTime runt, evalua todas las instancias de bexp
 -- dentro de runt
+--
+-- La indicatriz ponderada "bexp2 :<>: runt" de antes es ahora
+-- "RunTimeBExp bexp2 :**: runt" (multiplicación genuina): se agrega un caso
+-- explícito para esa forma (en vez de dejar que la recursión genérica de
+-- :**: la parta en dos llamadas independientes) para reproducir exactamente
+-- el comportamiento viejo — en particular, cuando bexp1 coincide con la
+-- condición de la indicatriz, el resultado es directamente
+-- "evalCondition bexp1 runt" (la indicatriz desaparece, no queda como
+-- "1 :**: ..."), y cuando es su complemento el resultado colapsa a rtZero
+-- de una, sin dejar un "0 :**: ..." pendiente de simplificar.
 evalCondition :: BExp -> RunTime -> RunTime
 evalCondition bexp (RunTimeArit arit)     = RunTimeArit arit
-evalCondition bexp1 (bexp2 :<>: runt)
+evalCondition bexp1 (RunTimeBExp bexp2 :**: runt)
   | bexp1 == bexp2                        = evalCondition bexp1 runt
   | deepSimplifyBExp (Not bexp1) == bexp2 = rtZero
-  | otherwise                             = bexp2 :<>: evalCondition bexp1 runt
+  | otherwise                             = RunTimeBExp bexp2 :**: evalCondition bexp1 runt
+evalCondition bexp1 (RunTimeBExp bexp2)
+  | bexp1 == bexp2                        = rtOne
+  | deepSimplifyBExp (Not bexp1) == bexp2 = rtZero
+  | otherwise                             = RunTimeBExp bexp2
 evalCondition bexp (e_1 :++: e_2)         = evalCondition bexp e_1 :++: evalCondition bexp e_2
-evalCondition bexp (k :**: runt)          = k :**: evalCondition bexp runt
+evalCondition bexp (r_1 :**: r_2)         = evalCondition bexp r_1 :**: evalCondition bexp r_2
 
 -- | Toma un RunTime runt y retorna su versión AExp en el caso de que se pueda
 
 runTimeToArit :: RunTime -> AExp
 runTimeToArit (RunTimeArit arit) = arit
 runTimeToArit (e_1 :++: e_2)     = runTimeToArit e_1 :+: runTimeToArit e_2
-runTimeToArit (k :**: e)         = Lit k :*: runTimeToArit e
+runTimeToArit (r_1 :**: r_2)     = runTimeToArit r_1 :*: runTimeToArit r_2
 runTimeToArit  otherwise         = error $ "No hay versión directa a AExp" ++ show otherwise
 
 -- Versión monádica de la función anterior
@@ -251,9 +281,10 @@ runTimeToArit' (e_1 :++: e_2) = do
   aexp1 <- runTimeToArit' e_1
   aexp2 <- runTimeToArit' e_2
   return (aexp1 :+: aexp2)
-runTimeToArit' (k :**: e) = do
-  aexp <- runTimeToArit' e
-  return (Lit k :*: aexp)
+runTimeToArit' (r_1 :**: r_2) = do
+  aexp1 <- runTimeToArit' r_1
+  aexp2 <- runTimeToArit' r_2
+  return (aexp1 :*: aexp2)
 runTimeToArit' _ = Nothing
 
 ---------------------------------------------------------------------------------------------------
@@ -346,6 +377,35 @@ restrictionsToImplications (runtimeA :<==: runtimeB) = map (\x -> Implication { 
 --   deriving (Eq, Show)
 -- ----------------------
 
+-- NOTA (pendiente, no resuelto acá): cuando hay varios `while`/`pwhile`
+-- anidados, cada invariante aporta sus variables libres a la misma lista
+-- "exist_variables" de más abajo, sin distinguir a cuál invariante
+-- pertenece cada una. Mientras el usuario use nombres de template distintos
+-- entre sí (y distintos de las variables del programa) esto no causa
+-- problema — cada nombre sigue identificando sin ambigüedad a una única
+-- variable existencial — pero la función no tiene forma de, por ejemplo,
+-- agrupar "qué variables existenciales pertenecen a qué invariante" si
+-- hiciera falta más adelante (para reportar mejor un contraejemplo, o para
+-- resolver cada invariante por separado en vez de todos juntos).
+--
+-- TODO (pendiente, discutido 2026-09-03, no resuelto acá): la heurística de
+-- esta función es puramente sintáctica — "universal" si el nombre aparece
+-- asignado o en una guarda real en algún lugar del programa, "existencial"
+-- si no. Ya considera tanto la condición del while/pwhile (freeVarsBExp e_b)
+-- como el cuerpo (recursión sobre get_variables p), así que "mirar la
+-- condición" no es el gap. El caso real que rompe esto es un ciclo cuya
+-- condición es una constante (ej. `while(false){...}`) y cuyo cuerpo nunca
+-- toca la variable en cuestión — ahí NI la condición NI el cuerpo aportan
+-- ninguna señal sobre esa variable, y queda indistinguible de una variable
+-- de template genuina (que tampoco aparece nunca asignada ni en guardas, por
+-- diseño). Caso concreto confirmado: `cdvcMenos` en ImpProgram.hs
+-- (`while(false){inv=[x>=0]<>x}{skip}`, = Cdvc- del informe, Anexo C.1.4,
+-- pp. 73-74) — "x" queda existencial, y programToSolverInputs responde
+-- "válido" con testigo x=1 en vez de "no válido" con contraejemplo x=-1/x=0
+-- (que es lo que el informe prueba a mano para ese mismo programa). Test que
+-- documenta el hallazgo: test/ImpProgramSpec.hs, describe "caso donde la
+-- heurística de variables existenciales confunde al modo nuevo". Ver
+-- CLAUDE.md, sección "getExistencialAndUniversalVars / SolverInput'".
 getExistencialAndUniversalVars :: Program -> (Names, Names)
 getExistencialAndUniversalVars program = (onlyInFirst exist_variables universal_variables, universal_variables)
   where
@@ -353,7 +413,7 @@ getExistencialAndUniversalVars program = (onlyInFirst exist_variables universal_
     get_variables Skip                = ([], [])
     get_variables Empty               = ([], [])
     get_variables (Set x arit)        = ([], x:freeVars arit)
-    get_variables (PSet x _)          = ([], [x])
+    get_variables (PSet x parit)      = ([], x:freeVarsPAExp parit)
     get_variables (If e_b e_t e_f)    = (fst true_variables ++ fst false_variables, freeVarsBExp e_b ++ snd true_variables ++ snd false_variables)
           where
             true_variables  = get_variables e_t
@@ -377,8 +437,47 @@ getExistencialAndUniversalVars program = (onlyInFirst exist_variables universal_
 
 programToSolverInput :: Program -> SolverInput'
 programToSolverInput program = SolverInput' { solver_formulaes = concatMap restrictionsToImplications rest
-                                             , existential = exist_vars
-                                             , for_all = universal_vars }
+                                             , existential = Set.fromList exist_vars
+                                             , for_all = Set.fromList universal_vars }
   where
     (exist_vars, universal_vars) = getExistencialAndUniversalVars program
     (runt, rest) = vcGenerator0 program
+
+-- | Variables libres de una implicación: unión de las de la hipótesis (el
+-- contexto, una lista de BExp) y las de la conclusión.
+freeVarsImplication :: Implication -> Names
+freeVarsImplication (Implication hyp concl) = concatMap freeVarsBExp hyp ++ freeVarsBExp concl
+
+-- | Filtra "vars" (ya clasificadas como existenciales/universales para todo
+-- el programa por getExistencialAndUniversalVars) a sólo las que
+-- efectivamente aparecen en "formulaes". Sirve para que cada SolverInput'
+-- individual de programToSolverInputs no arrastre variables de otros
+-- invariantes que no le pertenecen (evita, por ejemplo, acercarse más rápido
+-- de lo necesario al tope de 3 variables universales de mkUniversales).
+relevantVars :: [Implication] -> Names -> Set Name
+relevantVars formulaes vars = Set.fromList vars `Set.intersection` Set.fromList used
+  where used = concatMap freeVarsImplication formulaes
+
+-- | Igual que programToSolverInput, pero entrega un SolverInput' *por cada*
+-- restricción del programa (una por cada while/pwhile) en vez de juntarlas
+-- todas en un solo problema — así cada invariante se puede resolver (y
+-- reportar) como un problema de SBV independiente.
+--
+-- No se etiqueta explícitamente a qué invariante corresponde cada elemento
+-- más allá del orden de la lista: es el mismo orden en que vcGenerator
+-- recorre el programa (ver el comentario sobre invariantes anidados en
+-- getExistencialAndUniversalVars) — alcanza para imprimir "para el
+-- invariante 1 se generan estas restricciones, para el invariante 2 estas
+-- otras, etc." enumerando la lista, pero no para identificar el while/pwhile
+-- de origen por nombre o ubicación si hiciera falta más adelante.
+programToSolverInputs :: Program -> [SolverInput']
+programToSolverInputs program = map toSolverInput rest
+  where
+    (exist_vars, universal_vars) = getExistencialAndUniversalVars program
+    (_, rest) = vcGenerator0 program
+    toSolverInput restriction = SolverInput'
+      { solver_formulaes = formulaes
+      , existential      = relevantVars formulaes exist_vars
+      , for_all          = relevantVars formulaes universal_vars
+      }
+      where formulaes = restrictionsToImplications restriction

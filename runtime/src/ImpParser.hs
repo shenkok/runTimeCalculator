@@ -116,39 +116,36 @@ bexp = buildExpressionParser table term
 aritRunTime :: Parser RunTime
 aritRunTime = RunTimeArit <$> aexp
 
--- | Parser para indicatrices 
+-- | Parser para indicatrices
 indicator :: Parser RunTime
 indicator = toIndicator <$> brackets bexp
-
--- | Parser para una indicatriz por una expresión aritmética
-indArit :: Parser RunTime
-indArit = (<>:) <$> (indicator <* reservedOp "<>") <*> parens01 aexp
 
 -- | Parser para runtimes bases
 --  runtimeBase -> [bexp]
 --               | aexp
---               | [bexp] <> aexp      
 runtimeBase :: Parser RunTime
-runtimeBase = try indArit <|> indicator <|> aritRunTime
+runtimeBase = indicator <|> aritRunTime
 
 -- | Parser para runtimes
 -- runtime -> runtimeBase
---          | rational ** runtimeBase
---          | rational ** (runtime)
---          | rational <> runtimeBase 
---          | rational <> (runtime)
+--          | runtime ** runtime
 --          | runtime ++ runtime
 --          | runtime -- runtime
-
+--          | (runtime)
+--
+-- "**" ya no está restringido a "literal ** runtimeBase" (resabio de cuando
+-- RunTime sólo soportaba ponderación por constante): ahora que :**: es
+-- multiplicación genuina entre RunTime, es un operador infijo genérico como
+-- "++"/"--" (con más precedencia que ellos, por ir en su propia fila de la
+-- tabla), así que "[b] ** y", "2 ** y" o "[b] ** 2" se parsean con la misma
+-- regla. La vieja sintaxis dedicada "[b] <> algo" para una indicatriz
+-- ponderada se retiró junto con el constructor :<>: — ahora se escribe
+-- "[b] ** algo".
 runtime :: Parser RunTime
 runtime = buildExpressionParser table term
- where term =  try ((:**:) <$> (rational <* reservedOp "**") <*> runtimeBase)
-           <|> try ((:**:) <$> (rational <* reservedOp "**") <*> parens runtime)
-           <|> try ((:<>:) <$> (brackets bexp <* reservedOp "<>") <*> runtimeBase)
-           <|> try ((:<>:) <$> (brackets bexp <* reservedOp "<>") <*>  parens runtime)
-           <|> try runtimeBase
-           <|> try (parens runtime)
-       table = [ [ binary "++" (:++:), binary "--" (--:) ]]
+ where term  = try runtimeBase <|> parens runtime
+       table = [ [ binary "**" (:**:) ]
+                , [ binary "++" (:++:), binary "--" (--:) ] ]
 
 -- | Parser para expresiones booleanas probabilistas, distribuciones bernoulli sobre true false
 pbexp :: Parser PBExp

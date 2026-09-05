@@ -45,6 +45,24 @@ library
     , transformers >=0.2
   default-language: Haskell2010
 
+executable informe-examples
+  main-is: InformeExamples.hs
+  other-modules:
+      Paths_runtime
+  hs-source-dirs:
+      app-informe
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.5 && <5
+    , containers >=0.5
+    , parsec
+    , runtime
+    , sbv
+    , semigroups >=0.5
+    , text
+    , transformers >=0.2
+  default-language: Haskell2010
+
 executable runtime-exe
   main-is: Main.hs
   other-modules:
@@ -67,7 +85,10 @@ test-suite runtime-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      ImpIOSpec
       ImpParserSpec
+      ImpProgramSpec
+      ImpSBVSpec
       ImpSpec
       ImpVCGenSpec
       Paths_runtime
@@ -85,6 +106,7 @@ test-suite runtime-test
     , runtime
     , sbv
     , semigroups >=0.5
+    , silently
     , text
     , transformers >=0.2
   default-language: Haskell2010

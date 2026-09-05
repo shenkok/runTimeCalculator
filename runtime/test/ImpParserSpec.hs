@@ -124,9 +124,21 @@ spec = describe "ImpParser" $ do
       parseRunTime "" "[x <= y]"
         `shouldParseTo` toIndicator (Var "x" :<=: Var "y")
 
---    it "parsea indicatriz por aritmética" $
---      parseRunTime "" "[x <= y] <> x"
---        `shouldParseTo` (Var "x" :<=: Var "y") :<>: RunTimeArit (Var "x")
+    -- La vieja sintaxis dedicada "[b] <> algo" se retiró junto con el
+    -- constructor :<>: — ahora una indicatriz ponderada por una expresión
+    -- aritmética se escribe con "**", igual que cualquier otro producto de
+    -- runtimes (ver "parsea indicatriz por runtime arbitrario" más abajo).
+    it "parsea indicatriz por aritmética" $
+      parseRunTime "" "[x <= y] ** x"
+        `shouldParseTo` (RunTimeBExp (Var "x" :<=: Var "y") :**: RunTimeArit (Var "x"))
+
+    -- A diferencia de la vieja sintaxis "<>" (restringida a indicatriz por
+    -- aexp), "**" ya es un operador infijo genérico entre dos runtime
+    -- cualesquiera: acá el segundo factor es él mismo un runtime compuesto
+    -- (una suma), no un aexp simple.
+    it "parsea indicatriz por runtime arbitrario" $
+      parseRunTime "" "[x <= y] ** (x ++ y)"
+        `shouldParseTo` (RunTimeBExp (Var "x" :<=: Var "y") :**: (RunTimeArit (Var "x") :++: RunTimeArit (Var "y")))
 
     it "parsea suma de runtimes" $
       parseRunTime "" "x ++ y"

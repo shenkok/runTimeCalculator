@@ -40,6 +40,15 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - runtime
+  informe-examples:
+    main:                InformeExamples.hs
+    source-dirs:         app-informe
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - runtime
 
 tests:
   runtime-test:
@@ -55,3 +64,4 @@ tests:
     - runtime
     - hspec
     - hspec-discover
+    - silently

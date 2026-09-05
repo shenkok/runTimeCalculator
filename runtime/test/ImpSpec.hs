@@ -201,51 +201,64 @@ spec = describe "Imp" $ do
 
   describe "simplifyRunTime / deepSimplifyRunTime" $ do
 
-    -- Regla 1: [b]<>r1 ++ [b]<>r2 = [b]<>(r1 ++ r2) cuando "b" es
+    -- Regla 1: [b]**r1 ++ [b]**r2 = [b]**(r1 ++ r2) cuando "b" es
     -- sintácticamente igual en ambos sumandos. Como r1/r2 son RunTimeArit
     -- puros, la regla de suma de arit ya existente termina de colapsarlos en
     -- un solo RunTimeArit — por eso el resultado esperado usa
-    -- completeNormArit en vez de dejar un :++: sin reducir.
+    -- completeNormArit en vez de dejar un :++: sin reducir. La indicatriz
+    -- ponderada, antes "b :<>: r", ahora es "RunTimeBExp b :**: r"
+    -- (multiplicación genuina entre dos RunTime).
     it "fusiona dos indicatrices iguales en una suma" $ do
       let b = Var "x" :<=: Lit 0
-      deepSimplifyRunTime ((b :<>: rtVar "y") :++: (b :<>: rtOne))
-        `shouldBe` (b :<>: RunTimeArit (completeNormArit (Var "y" :+: Lit 1)))
+      deepSimplifyRunTime ((RunTimeBExp b :**: rtVar "y") :++: (RunTimeBExp b :**: rtOne))
+        `shouldBe` (RunTimeBExp b :**: RunTimeArit (completeNormArit (Var "y" :+: Lit 1)))
 
     it "fusiona indicatriz igual cuando encabeza una cadena de :++: más larga" $ do
       let b = Var "x" :<=: Lit 0
-      deepSimplifyRunTime ((b :<>: rtVar "y") :++: ((b :<>: rtOne) :++: rtVar "z"))
-        `shouldBe` ((b :<>: RunTimeArit (completeNormArit (Var "y" :+: Lit 1))) :++: rtVar "z")
+      deepSimplifyRunTime ((RunTimeBExp b :**: rtVar "y") :++: ((RunTimeBExp b :**: rtOne) :++: rtVar "z"))
+        `shouldBe` ((RunTimeBExp b :**: RunTimeArit (completeNormArit (Var "y" :+: Lit 1))) :++: rtVar "z")
 
+    -- El segundo sumando tiene peso "1" (rtOne): buildMul limpia ese peso
+    -- redundante en cualquier indicatriz, con o sin fusión posible, así que
+    -- el resultado esperado es "RunTimeBExp b2" desnuda (sin "**1"), no
+    -- "RunTimeBExp b2 :**: rtOne" — la ausencia de fusión (b1 /= b2) sólo
+    -- se ve en que el primer sumando queda intacto.
     it "NO fusiona indicatrices distintas (fuera de alcance: eso requeriría normBExp)" $ do
       let b1 = Var "x" :<=: Lit 0
           b2 = Var "y" :<=: Lit 0
-      deepSimplifyRunTime ((b1 :<>: rtVar "y") :++: (b2 :<>: rtOne))
-        `shouldBe` ((b1 :<>: rtVar "y") :++: (b2 :<>: rtOne))
+      deepSimplifyRunTime ((RunTimeBExp b1 :**: rtVar "y") :++: (RunTimeBExp b2 :**: rtOne))
+        `shouldBe` ((RunTimeBExp b1 :**: rtVar "y") :++: RunTimeBExp b2)
 
     -- Regla 2: reasociación de :++: hacia la derecha, para que la regla 1 (y
     -- las reglas de RunTimeArit ya existentes) encuentren términos
     -- adyacentes sin importar cómo se parentizó la suma original. Se usan
     -- indicatrices con condiciones distintas (no fusionables) para que el
     -- test discrimine reasociación pura, sin mezclarse con la regla 1.
+    -- El segundo término tiene peso "1" (rtOne): buildMul lo limpia a una
+    -- indicatriz desnuda "RunTimeBExp b2" (sin "**1"), independientemente
+    -- de la reasociación — por eso el resultado esperado no lleva ":**: rtOne".
     it "reasocia una cadena de :++: parentizada a la izquierda (sin fusión posible)" $ do
       let b1 = Var "x" :<=: Lit 0
           b2 = Var "y" :<=: Lit 0
-      deepSimplifyRunTime (((b1 :<>: rtVar "y") :++: (b2 :<>: rtOne)) :++: rtVar "z")
-        `shouldBe` ((b1 :<>: rtVar "y") :++: ((b2 :<>: rtOne) :++: rtVar "z"))
+      deepSimplifyRunTime (((RunTimeBExp b1 :**: rtVar "y") :++: (RunTimeBExp b2 :**: rtOne)) :++: rtVar "z")
+        `shouldBe` ((RunTimeBExp b1 :**: rtVar "y") :++: (RunTimeBExp b2 :++: rtVar "z"))
 
     it "reasociación deja fusionar dos indicatrices iguales aunque queden a la izquierda" $ do
       let b = Var "x" :<=: Lit 0
-      deepSimplifyRunTime (((b :<>: rtVar "y") :++: (b :<>: rtOne)) :++: rtVar "z")
-        `shouldBe` ((b :<>: RunTimeArit (completeNormArit (Var "y" :+: Lit 1))) :++: rtVar "z")
+      deepSimplifyRunTime (((RunTimeBExp b :**: rtVar "y") :++: (RunTimeBExp b :**: rtOne)) :++: rtVar "z")
+        `shouldBe` ((RunTimeBExp b :**: RunTimeArit (completeNormArit (Var "y" :+: Lit 1))) :++: rtVar "z")
 
-    -- Regla 3: fusión de ponderaciones :**: anidadas. Se envuelve un [b]<>x
-    -- (en vez de un AExp puro) porque un AExp puro ya colapsa a través de la
-    -- regla previa "k :**: RunTimeArit arit" antes de que la fusión nueva
-    -- tenga oportunidad de aplicarse — así el test sí ejercita la regla 3.
-    it "fusiona dos ponderaciones anidadas sobre una indicatriz en una sola" $ do
+    -- Regla 3 (canonicalización de :**: vía flattenMul/buildMul): fusiona
+    -- todos los pesos aritméticos de una cadena de productos en un único
+    -- polinomio, sin importar cómo haya quedado anidada. A diferencia de la
+    -- versión vieja (que sólo reasociaba :**: hacia la derecha, par a par),
+    -- acá "2 :**: (3 :**: ([b] :**: y))" sí termina en la forma totalmente
+    -- fusionada "6 :**: [b] :**: y" (con el peso 6*y ya multiplicado y la
+    -- indicatriz aparte) en vez de quedar parcialmente asociada.
+    it "fusiona ponderaciones anidadas alrededor de una indicatriz en un solo polinomio" $ do
       let b = Var "x" :<=: Lit 0
-      deepSimplifyRunTime (2 :**: (3 :**: (b :<>: rtVar "y")))
-        `shouldBe` (6 :**: (b :<>: rtVar "y"))
+      deepSimplifyRunTime (2 :**: (3 :**: (RunTimeBExp b :**: rtVar "y")))
+        `shouldBe` (RunTimeBExp b :**: RunTimeArit (completeNormArit (Lit 6 :*: Var "y")))
 
     it "ponderación anidada que colapsa a 0 da rtZero" $ do
       deepSimplifyRunTime (0 :**: (3 :**: rtVar "x"))
@@ -255,21 +268,21 @@ spec = describe "Imp" $ do
       deepSimplifyRunTime (1 :**: (1 :**: rtVar "x"))
         `shouldBe` rtVar "x"
 
-    -- Regla 1b: [b]<>r ++ [!b]<>r = r (caso seguro de "suma de indicatrices",
+    -- Regla 1b: [b]**r ++ [!b]**r = r (caso seguro de "suma de indicatrices",
     -- válido para cualquier b porque b y ¬b siempre son excluyentes).
     it "fusiona indicatrices complementarias con el mismo peso en 1*r" $ do
       let b = Var "x" :<=: Lit 0
-      deepSimplifyRunTime ((b :<>: rtVar "y") :++: (Not b :<>: rtVar "y"))
+      deepSimplifyRunTime ((RunTimeBExp b :**: rtVar "y") :++: (RunTimeBExp (Not b) :**: rtVar "y"))
         `shouldBe` rtVar "y"
 
     it "NO fusiona indicatrices complementarias si el peso es distinto" $ do
       let b = Var "x" :<=: Lit 0
-      deepSimplifyRunTime ((b :<>: rtVar "y") :++: (Not b :<>: rtVar "z"))
-        `shouldBe` ((b :<>: rtVar "y") :++: (Not b :<>: rtVar "z"))
+      deepSimplifyRunTime ((RunTimeBExp b :**: rtVar "y") :++: (RunTimeBExp (Not b) :**: rtVar "z"))
+        `shouldBe` ((RunTimeBExp b :**: rtVar "y") :++: (RunTimeBExp (Not b) :**: rtVar "z"))
 
     it "fusiona indicatrices complementarias cuando la segunda encabeza una cadena" $ do
       let b = Var "x" :<=: Lit 0
-      deepSimplifyRunTime ((b :<>: rtVar "y") :++: ((Not b :<>: rtVar "y") :++: rtVar "z"))
+      deepSimplifyRunTime ((RunTimeBExp b :**: rtVar "y") :++: ((RunTimeBExp (Not b) :**: rtVar "y") :++: rtVar "z"))
         `shouldBe` RunTimeArit (completeNormArit (Var "y" :+: Var "z"))
 
     -- Regla 4: el producto de indicatrices es la indicatriz de la
@@ -278,15 +291,15 @@ spec = describe "Imp" $ do
     it "fusiona indicatrices anidadas en la conjunción de sus condiciones" $ do
       let b1 = Var "p" :<=: Lit 0
           b2 = Var "q" :<=: Lit 0
-      deepSimplifyRunTime (b1 :<>: (b2 :<>: rtVar "z"))
-        `shouldBe` ((b1 :&: b2) :<>: rtVar "z")
+      deepSimplifyRunTime (RunTimeBExp b1 :**: (RunTimeBExp b2 :**: rtVar "z"))
+        `shouldBe` (RunTimeBExp (b1 :&: b2) :**: rtVar "z")
 
     it "fusiona una cadena de tres indicatrices anidadas" $ do
       let b1 = Var "p" :<=: Lit 0
           b2 = Var "q" :<=: Lit 0
           b3 = Var "r" :<=: Lit 0
-      deepSimplifyRunTime (b1 :<>: (b2 :<>: (b3 :<>: rtVar "z")))
-        `shouldBe` ((b1 :&: (b2 :&: b3)) :<>: rtVar "z")
+      deepSimplifyRunTime (RunTimeBExp b1 :**: (RunTimeBExp b2 :**: (RunTimeBExp b3 :**: rtVar "z")))
+        `shouldBe` (RunTimeBExp (b1 :&: (b2 :&: b3)) :**: rtVar "z")
 
   describe "aexpE" $ do
 

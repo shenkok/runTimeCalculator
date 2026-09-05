@@ -8,7 +8,10 @@ import Data.SBV.Internals   -- symbolicEnv
 import Control.Monad.IO.Class (liftIO)
 import Data.SBV
 import qualified Data.Map as M
+import qualified Data.Set as Set
 import Data.Maybe
+import Data.Proxy (Proxy (..))
+import GHC.TypeNats (SomeNat (..), someNatVal)
 import Imp
 import Data.SBV.Rational
 import ImpVCGen
@@ -22,18 +25,29 @@ import Control.Applicative (liftA2)
 type Env a = M.Map String (SBV a)
 type ConstantEnv = Env Constant
 
-mkUniversales :: [String] 
-              -> (M.Map String SReal -> SBool) 
+-- | Cuantifica universalmente una cantidad arbitraria de variables reales.
+--
+-- ForallN n "u" AlgReal necesita "n" como Nat de TIPO (DataKinds), resuelto
+-- en compilación vía la typeclass Skolemize — por eso antes esta función
+-- hacía "case length names of 0/1/2/3 -> ..." con un ForallN literal por
+-- cada aridad soportada, y fallaba con error a partir de la cuarta variable.
+-- No es un límite de Z3 ni de la teoría (aritmética real cuantificada sigue
+-- siendo cara para cualquier n, eso no cambia), es sólo que sólo se habían
+-- escrito 4 casos a mano.
+--
+-- someNatVal empaqueta un Nat existencial (SomeNat) a partir de un número
+-- que sólo se conoce en runtime (length names); al desempaquetarlo con
+-- (_ :: Proxy k), "k" queda disponible como el mismo tipo de Nat que
+-- necesita ForallN, sin importar cuánto valga. Verificado a mano contra Z3
+-- con 0 a 8 variables universales (casos sat/unsat esperados, ambos
+-- correctos) antes de aplicar este cambio.
+mkUniversales :: [String]
+              -> (M.Map String SReal -> SBool)
               -> SBool
-mkUniversales names f = case length names of
-  0 -> f M.empty
-  1 -> quantifiedBool $ \(ForallN xs :: ForallN 1 "u" AlgReal) ->
-         f (M.fromList (zip names xs))
-  2 -> quantifiedBool $ \(ForallN xs :: ForallN 2 "u" AlgReal) ->
-         f (M.fromList (zip names xs))
-  3 -> quantifiedBool $ \(ForallN xs :: ForallN 3 "u" AlgReal) ->
-         f (M.fromList (zip names xs))
-  _ -> error "Máximo 3 variables universales soportadas"
+mkUniversales names f = case someNatVal (fromIntegral (length names)) of
+  SomeNat (_ :: Proxy k) ->
+    quantifiedBool $ \(ForallN xs :: ForallN k "u" AlgReal) ->
+      f (M.fromList (zip names xs))
 
 
 -- | Lookup seguro de variable SBV en el entorno
@@ -101,15 +115,19 @@ makeSBVModel' :: SolverInput' -> SymbolicT IO ()
 makeSBVModel' SolverInput'{ existential     = existNames
                            , for_all          = universalNames
                            , solver_formulaes = formulaes     } = do
+  -- existential/for_all son Set Name (ver ImpVCGen.SolverInput'); sReals y
+  -- mkUniversales siguen tomando listas, así que se convierten con toList.
+  let universalNamesL = Set.toList universalNames
+      existNamesL      = Set.toList existNames
   if null existNames
     then do
-      xs <- sReals universalNames
-      let env = M.fromList (zip universalNames xs)
+      xs <- sReals universalNamesL
+      let env = M.fromList (zip universalNamesL xs)
       constrain $ sNot $ sAnd $ map (sImplication env) formulaes
     else do
-      xs <- sReals existNames
-      let existEnv = M.fromList (zip existNames xs)
-      constrain $ mkUniversales universalNames $ \univEnv ->
+      xs <- sReals existNamesL
+      let existEnv = M.fromList (zip existNamesL xs)
+      constrain $ mkUniversales universalNamesL $ \univEnv ->
         let env = existEnv <> univEnv
         in sAnd $ map (sImplication env) formulaes
 
