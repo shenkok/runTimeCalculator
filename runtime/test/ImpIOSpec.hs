@@ -3,6 +3,7 @@ module ImpIOSpec (spec) where
 import Test.Hspec
 import System.IO.Silently (capture)
 import Data.Either (fromRight)
+import Data.List (isPrefixOf)
 import qualified Data.Set as Set
 import Imp hiding (it)
 import ImpParser (parseProgram)
@@ -39,6 +40,14 @@ templateConTestigo = While False' Skip (rtVar "a")
 
 templateSinTestigo :: Program
 templateSinTestigo = While (Var "x" >: Lit 0) (Set "x" (Var "x" -: Lit 1)) (rtVar "a" :**: rtVar "x")
+
+-- Cpvc (informe, Anexo C.1.8): pwhile con un while anidado en su cuerpo, con
+-- los dos invariantes dejados como plantilla. Los dos ciclos comparten
+-- variables de template entre sus obligaciones, así que es el caso que
+-- obliga a resolverlas juntas (ver ImpIO.sharedExistentials).
+cpvcTemplate :: String
+cpvcTemplate = "pwhile(<9/10>) {pinv = a0 ++ a1**[c!=1] ++ a2**[c==1]}"
+            ++ "{while(c == 1){inv = b0 ++ b1**[c!=1] ++ b2**[c==1]} {c:~ 1/2* <0> + 1/2* <1>}}"
 
 spec :: Spec
 spec = do
@@ -119,6 +128,31 @@ spec = do
       output `shouldContain` "es válida."
       output `shouldContain` "Testigo encontrado"
       output `shouldContain` "Análisis Finalizado."
+
+    it "templates compartidos entre obligaciones (Cpvc anidado): resuelve todo junto, un solo testigo" $ do
+      -- Regresión del arreglo de sharedExistentials: antes se resolvía una
+      -- obligación por vez y cada una elegía sus propios valores para las
+      -- mismas variables de template, reportando "todas válidas" con testigos
+      -- contradictorios entre sí (a1 = 1 en una, a1 = -1 en la otra).
+      (output, ()) <- capture (completeRoutine' (getProgram cpvcTemplate) cpvcTemplate)
+      output `shouldContain` "comparten variables de template"
+      output `shouldContain` "se resuelven todas juntas"
+      -- Un único bloque de obligación (el sistema completo), no uno por ciclo.
+      length (filter ("Obligación de prueba" `isPrefixOf`) (lines output)) `shouldBe` 1
+      output `shouldContain` "Testigo encontrado"
+      output `shouldContain` "Análisis Finalizado."
+
+  describe "sharedExistentials" $ do
+
+    it "sin variables de template compartidas devuelve el conjunto vacío" $
+      sharedExistentials (programToSolverInputs templateConTestigo) `shouldBe` Set.empty
+
+    it "dos ciclos anidados con templates propios comparten variables entre sus obligaciones" $ do
+      let compartidas = sharedExistentials (programToSolverInputs (getProgram cpvcTemplate))
+      compartidas `shouldSatisfy` not . Set.null
+      -- Son variables de template (las "a*"/"b*" de los invariantes), no
+      -- variables de programa: "c" nunca puede aparecer acá.
+      compartidas `shouldSatisfy` Set.notMember "c"
 
   describe "showModel'" $ do
 

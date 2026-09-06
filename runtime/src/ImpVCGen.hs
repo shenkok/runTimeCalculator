@@ -435,13 +435,47 @@ getExistencialAndUniversalVars program = (onlyInFirst exist_variables universal_
     (exist_variables, universal_variables) = get_variables program
 
 
+-- | Todos los invariantes de ciclo de un programa, en el MISMO orden en que
+-- vcGenerator recorre el programa — o sea, en el mismo orden en que aparecen
+-- sus restricciones dentro de la lista que devuelve vcGenerator0 (cada
+-- while/pwhile aporta exactamente una restricción, la suya, antes que las de
+-- su cuerpo). Esa correspondencia 1-a-1 es la que usa programToSolverInputs
+-- para pegarle a cada obligación la restricción de buena-definición de *su*
+-- invariante; si alguna vez cambia el orden de recorrido de vcGenerator, hay
+-- que actualizar esta función en paralelo.
+programInvariants :: Program -> [RunTime]
+programInvariants Skip             = []
+programInvariants Empty            = []
+programInvariants (Set _ _)        = []
+programInvariants (PSet _ _)       = []
+programInvariants (Seq p_1 p_2)    = programInvariants p_1 ++ programInvariants p_2
+programInvariants (If _ e_t e_f)   = programInvariants e_t ++ programInvariants e_f
+programInvariants (PIf _ e_t e_f)  = programInvariants e_t ++ programInvariants e_f
+programInvariants (While _ p inv)  = inv : programInvariants p
+programInvariants (PWhile _ c inv) = inv : programInvariants c
+
+-- | Restricción de buena-definición ("well-definedness") de un invariante.
+--
+-- Un RunTime representa un tiempo de ejecución *esperado*, así que no puede
+-- ser negativo en ningún estado. La condición de inductividad por sí sola
+-- (Φ(I) ≤ I) no lo garantiza: sin esta restricción, Z3 puede devolver como
+-- "testigo" de un invariante-plantilla valores negativos (observado con los
+-- dos invariantes anidados de Cpvc, donde salían coeficientes como -10/9),
+-- que satisfacen la desigualdad pero no representan ningún tiempo de
+-- ejecución. Es la misma condición que Batz et al. (TACAS 2023) listan como
+-- parte de la admisibilidad de un invariante, junto a inductividad y
+-- seguridad.
+wellDefinedness :: RunTime -> RRunTime
+wellDefinedness inv = rtZero :<==: inv
+
 programToSolverInput :: Program -> SolverInput'
-programToSolverInput program = SolverInput' { solver_formulaes = concatMap restrictionsToImplications rest
+programToSolverInput program = SolverInput' { solver_formulaes = concatMap restrictionsToImplications (rest ++ well_defined)
                                              , existential = Set.fromList exist_vars
                                              , for_all = Set.fromList universal_vars }
   where
     (exist_vars, universal_vars) = getExistencialAndUniversalVars program
     (runt, rest) = vcGenerator0 program
+    well_defined = map wellDefinedness (programInvariants program)
 
 -- | Variables libres de una implicación: unión de las de la hipótesis (el
 -- contexto, una lista de BExp) y las de la conclusión.
@@ -470,14 +504,25 @@ relevantVars formulaes vars = Set.fromList vars `Set.intersection` Set.fromList 
 -- invariante 1 se generan estas restricciones, para el invariante 2 estas
 -- otras, etc." enumerando la lista, pero no para identificar el while/pwhile
 -- de origen por nombre o ubicación si hiciera falta más adelante.
+-- ATENCIÓN: resolver estos SolverInput' por separado sólo es correcto cuando
+-- no hay variables de template compartidas entre dos obligaciones. Si las
+-- hay (típico en ciclos anidados, donde el invariante externo depende del
+-- interno), cada problema elige sus propios valores para esas variables y
+-- pueden salir testigos contradictorios entre obligaciones — todas
+-- "válidas" sin que exista un único invariante que las cumpla a la vez. Para
+-- ese caso hay que usar programToSolverInput (singular), que las junta en un
+-- solo problema con existenciales compartidos. ImpIO.completeRoutine' hace
+-- esa elección automáticamente vía ImpIO.sharedExistentials.
 programToSolverInputs :: Program -> [SolverInput']
-programToSolverInputs program = map toSolverInput rest
+programToSolverInputs program = map toSolverInput (zip rest well_defined)
   where
     (exist_vars, universal_vars) = getExistencialAndUniversalVars program
     (_, rest) = vcGenerator0 program
-    toSolverInput restriction = SolverInput'
+    well_defined = map wellDefinedness (programInvariants program)
+    toSolverInput (restriction, well_defined_restriction) = SolverInput'
       { solver_formulaes = formulaes
       , existential      = relevantVars formulaes exist_vars
       , for_all          = relevantVars formulaes universal_vars
       }
       where formulaes = restrictionsToImplications restriction
+                     ++ restrictionsToImplications well_defined_restriction

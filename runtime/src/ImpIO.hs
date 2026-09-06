@@ -4,7 +4,7 @@ import Data.SBV
 import ImpSBV
 import Imp
 import ImpVCGen
-import Data.List (zip4, zip5, zip6)
+import Data.List (zip4, zip5, zip6, tails)
 import qualified Data.Set as Set
 import Control.Monad (zipWithM)
 
@@ -215,15 +215,57 @@ showSolverInputs' sis
                 putStrLn "Ajuste los invariantes de ciclo y vuelva a realizar el análisis."
       return allValid
 
+-- | Variables de template (existenciales) que aparecen en más de una
+-- obligación de prueba.
+--
+-- Importa porque resolver las obligaciones por separado (una consulta de SBV
+-- por cada while/pwhile, que es lo que hace programToSolverInputs) sólo es
+-- correcto si cada obligación tiene sus propias variables de template. Si dos
+-- obligaciones comparten una, cada consulta la cuantifica por su cuenta y
+-- puede elegirle valores distintos — se reporta "todas las obligaciones son
+-- válidas" aunque no exista ninguna asignación que las satisfaga a todas a
+-- la vez. Caso concreto donde pasa: los dos invariantes anidados de Cpvc,
+-- donde resolviendo por separado salía a1 = 1 en una obligación y a1 = -1 en
+-- la otra.
+sharedExistentials :: [SolverInput'] -> Set.Set Name
+sharedExistentials sis =
+  Set.unions [ existential si_1 `Set.intersection` existential si_2
+             | (si_1 : rest) <- tails sis
+             , si_2 <- rest ]
+
+-- | Imprime y resuelve TODAS las obligaciones de prueba como un único
+-- problema de SBV (programToSolverInput, singular), con las variables de
+-- template compartidas entre todas. Se usa cuando resolver por separado no
+-- sería correcto — ver sharedExistentials.
+showJointSolverInput' :: Set.Set Name -> SolverInput' -> IO Bool
+showJointSolverInput' shared si = do
+  putStrLn "Obligaciones de prueba asociadas:"
+  putStr newLine
+  putStrLn $ "Las obligaciones comparten variables de template " ++ show (Set.toList shared) ++ ","
+  putStrLn "así que se resuelven todas juntas como un solo sistema: un testigo por"
+  putStrLn "separado para cada obligación podría ser contradictorio con el de las otras."
+  valid <- showSolverInput' 1 si
+  putStr newLine
+  if valid
+    then putStrLn "El tiempo de ejecución calculado es válido porque las obligaciones de prueba son válidas."
+    else do putStrLn "El tiempo de ejecución calculado no es válido porque alguna obligación de prueba no es válida."
+            putStrLn "Ajuste los invariantes de ciclo y vuelva a realizar el análisis."
+  return valid
+
 -- | Igual que completeRoutine, pero con el modo nuevo (programToSolverInputs
 -- en vez de routineInput). No recibe un "runt" inicial porque
 -- programToSolverInputs/vcGenerator0 ya parten siempre de rtZero (mismo
 -- valor que completeRoutine usa en la práctica vía "run" en app/Main.hs).
+--
+-- Elige solo entre resolver obligación por obligación (mejor diagnóstico:
+-- dice cuál falló y con qué contraejemplo) y resolverlas todas juntas
+-- (necesario cuando comparten variables de template, ver sharedExistentials).
 completeRoutine' :: Program -> String -> IO ()
 completeRoutine' program str = do
   let (ert, _rest) = vcGenerator0 program
       sert          = deepSimplifyRunTime ert
       sis           = programToSolverInputs program
+      shared        = sharedExistentials sis
   putStr newLine
   putStrLn "Programa Analizado:"
   putStrLn str
@@ -231,7 +273,9 @@ completeRoutine' program str = do
   putStrLn "Tiempo de ejecución calculado:"
   print sert
   putStr newLine
-  _ <- showSolverInputs' sis
+  _ <- if Set.null shared
+         then showSolverInputs' sis
+         else showJointSolverInput' shared (programToSolverInput program)
   putStr newLine
   putStrLn "Análisis Finalizado."
 
