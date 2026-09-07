@@ -443,7 +443,7 @@ data RunTime
   | RunTime :**: RunTime -- Multiplicación entre RunTimes
   deriving (Eq)
 
--- | Instancia Num para RunTime: permite escribir literales enteros
+-- | Instancia Num para RunTime: permite escrbir literales enteros
 -- directamente como RunTime (p.ej. `2 :**: rtVar "x"`, donde `2` se resuelve
 -- vía fromInteger), igual que hace `instance Num AExp` para AExp. Necesaria
 -- porque, al eliminarse la ponderación por constante (antes `Constant :**:
@@ -762,8 +762,8 @@ data Program
   | Seq Program Program         -- Composición secuencial de programas
   | If BExp Program Program     -- Guarda condicional
   | PIf PBExp Program Program   -- Guarda condicional probabilista
-  | While BExp Program RunTime  -- Ciclo while
-  | PWhile PBExp Program RunTime -- Ciclo while probabilista
+  | While BExp Program (Maybe RunTime)  -- Ciclo while (Nothing = sin invariante todavía, a sintetizar)
+  | PWhile PBExp Program (Maybe RunTime) -- Ciclo while probabilista (ídem)
   deriving (Eq, Show)
 -------------------------------------------{ FUNCIONES AUXILIARES }----------------------------------------------------------
 

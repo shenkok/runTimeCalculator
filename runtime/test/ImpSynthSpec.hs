@@ -2,114 +2,98 @@ module ImpSynthSpec (spec) where
 
 import Test.Hspec
 import Data.Either (fromRight)
-import qualified Data.Set as Set
+import Data.Maybe (isJust)
+import Data.SBV (modelExists)
 import Imp hiding (it)
-import ImpParser (parseBExp, parseProgram, parseRunTime)
+import ImpParser (parseProgram, parseRunTime)
 import ImpVCGen
+import ImpSBV (runModel')
 import ImpSynth
 
 {-
-  Tests de ImpSynth.hs: el paso de descubrir la FORMA de un invariante
-  (su grado) antes de armar el template.
+  Tests de ImpSynth.hs: la síntesis de templates naturales, o sea proponer un
+  invariante-plantilla para cada while/pwhile escrito sin invariante, a partir
+  de la forma del programa. Diseño completo en SINTESIS_TEMPLATE_NATURAL.md.
 
-  Como ImpSBVSpec, estos tests invocan a Z3 de verdad: certifyDegree resuelve
-  un problema ∃∀ por cada grado que prueba, y no hay forma de verificar qué
-  certificó sin resolverlo. Las fórmulas se mantienen chicas (una variable,
-  grado ≤ 2) para que sigan siendo rápidos.
+  Los del último describe invocan a Z3 de verdad: verifican el mismo veredicto
+  que reporta completeRoutine' (¿existe una instancia del template que sea
+  invariante admisible?). Se mantienen chicos para que sigan siendo rápidos.
 -}
-
--- 1 + 2x, el tiempo de ejecución exacto de while(x>0){x:=x-1} sobre enteros
-lineal :: RunTime
-lineal = RunTimeArit (Lit 1 :+: (Lit 2 :*: Var "x"))
-
-cuadratico :: RunTime
-cuadratico = RunTimeArit (Var "x" :*: Var "x")
-
--- Desenrollado real de Kleene para while(x>0){x:=x-1}, continuación 0.
-iteradoKleene :: Int -> RunTime
-iteradoKleene k = deepSimplifyRunTime (fpWhile bottom guarda cuerpo cero k)
-  where
-    guarda = fromRight (error "guarda") (parseBExp "<test>" "x>0")
-    cuerpo = fromRight (error "cuerpo") (parseProgram "<test>" "x:=x-1")
-    cero   = fromRight (error "cero")   (parseRunTime "<test>" "0")
 
 spec :: Spec
 spec = do
 
-  describe "diferencias finitas simbólicas" $ do
+  describe "fillTemplates / synthesizeTemplates (templates naturales)" $ do
 
-    it "shiftRunTime corre la variable un paso" $
-      deepSimplifyRunTime (shiftRunTime "x" lineal)
-        `shouldBe` deepSimplifyRunTime (RunTimeArit (Lit 3 :+: (Lit 2 :*: Var "x")))
+    it "rellena el hueco de un while sin invariante" $
+      invariantsOf (synthesizeTemplates0 (getProgram "while(x > 0){x := x-1}"))
+        `shouldSatisfy` all isJust
 
-    it "la primera diferencia de una recta es su pendiente" $
-      finiteDifference "x" lineal `shouldBe` rtLit 2
+    it "un programa sin ciclos queda igual" $ do
+      let prog = getProgram "x := 10; y := 3"
+      synthesizeTemplates0 prog `shouldBe` prog
 
-    -- Δ(x²) = (x+1)² - x² = 2x + 1, y Δ²(x²) = 2 = 2! por el coeficiente
-    -- principal — el análogo discreto de la segunda derivada.
-    it "la segunda diferencia de una cuadrática es 2! por el coeficiente principal" $ do
-      nthDifference 1 "x" cuadratico `shouldBe` RunTimeArit (Lit 1 :+: (Lit 2 :*: Var "x"))
-      nthDifference 2 "x" cuadratico `shouldBe` rtLit 2
+    it "respeta un invariante que el usuario ya escribió a mano" $
+      invariantsOf (synthesizeTemplates0 (getProgram "while(x > 0){inv = 1 ++ 2**[x>0]**x}{x := x-1}"))
+        `shouldBe` [Just (fromRight (error "no parsea") (parseRunTime "<test>" "1 ++ 2**[x>0]**x"))]
 
-    it "la diferencia de orden 0 deja el RunTime intacto" $
-      nthDifference 0 "x" lineal `shouldBe` lineal
+    it "rellena los dos huecos de un par de ciclos anidados" $
+      invariantsOf (synthesizeTemplates0 (getProgram "while(x > 0){while(y > 0){y := y-1}; x := x-1}"))
+        `shouldSatisfy` (\invs -> length invs == 2 && all isJust invs)
 
-  describe "freshName" $ do
+    -- Regresión: la guarda "x > 0" ya ES "Not (x <= 0)" (azúcar sintáctica), así
+    -- que negarla sin simplificar deja "Not (Not (x <= 0))", y esa doble
+    -- negación revienta después al linealizar ("No hay versión directa a AExp",
+    -- ImpVCGen.runTimeToArit). La pieza [¬φ] tiene que salir ya simplificada.
+    it "la pieza ¬φ no queda con doble negación cuando la guarda es azúcar" $
+      map (fmap getBExp) (invariantsOf (synthesizeTemplates0 (getProgram "while(x > 0){x := x-1}")))
+        `shouldBe` [Just [Var "x" :<=: Lit 0]]
 
-    it "devuelve el nombre pedido si está libre" $
-      freshName "c" ["x", "y"] `shouldBe` "c"
+    it "los coeficientes no chocan con variables del programa que se llamen igual" $ do
+      -- El programa ya usa "a0", así que el primer coeficiente tiene que
+      -- desviarse a otro nombre (freshName le agrega comillas).
+      let prog = synthesizeTemplates0 (getProgram "while(a0 > 0){a0 := a0-1}")
+          (exist, univ) = getExistencialAndUniversalVars prog
+      exist `shouldNotContain` ["a0"]
+      univ `shouldContain` ["a0"]
 
-    it "evita colisionar con un nombre ya usado" $
-      freshName "c" ["c", "x"] `shouldBe` "c'"
+  describe "synthesizeTemplates de punta a punta (invoca Z3)" $ do
 
-  describe "constantDifferenceInput" $ do
+    it "while(x>0){x:=x-1}: encuentra testigo para el template afín" $
+      isValidSynth "while(x > 0){x := x-1}" `shouldReturn` True
 
-    it "deja la constante como única existencial y la variable como universal" $ do
-      let si = constantDifferenceInput "c" [] 1 "x" cuadratico
-      existential si `shouldBe` Set.singleton "c"
-      for_all si `shouldBe` Set.fromList ["x"]
+    it "while(c==1){c:~coin}: encuentra testigo (misma familia que p4_6/p4_8/p4_9)" $
+      isValidSynth "while(c == 1){c :~ 1/2* <0> + 1/2* <1>}" `shouldReturn` True
 
-    it "las hipótesis de la pieza se agregan a todas las implicaciones" $ do
-      let piece = [Var "x" >: Lit 0]
-          si    = constantDifferenceInput "c" piece 1 "x" cuadratico
-      all (\i -> head (hypothesis i) == Var "x" >: Lit 0) (solver_formulaes si)
-        `shouldBe` True
+    it "pwhile con un while anidado: resuelve los dos niveles juntos" $
+      isValidSynth "pwhile(<9/10>){while(c == 1){c :~ 1/2* <0> + 1/2* <1>}}" `shouldReturn` True
 
-  describe "certifyDegree" $ do
+    -- El costo de este programa es CUADRÁTICO en x (el ciclo interno corre x
+    -- veces, x veces), y el template natural es afín: no existe instancia que
+    -- sirva. Es el modo de fallo esperado — se reporta, no se refina.
+    it "un ciclo de costo cuadrático no admite el template afín" $
+      isValidSynth "while(x > 0){y := x; while(y > 0){y := y-1}; x := x-1}" `shouldReturn` False
 
-    it "una constante certifica grado 0, con su propio valor" $ do
-      certificado <- certifyDegree 3 [] "x" (rtLit 3)
-      certificado `shouldBe` Just (DegreeCertificate 0 3)
+-- | Invariantes de cada while/pwhile del programa, en orden, sin fallar ante
+-- un hueco sin llenar (programInvariants sí falla: usa requireInvariant).
+invariantsOf :: Program -> [Maybe RunTime]
+invariantsOf (Seq p_1 p_2)        = invariantsOf p_1 ++ invariantsOf p_2
+invariantsOf (If _ e_t e_f)       = invariantsOf e_t ++ invariantsOf e_f
+invariantsOf (PIf _ e_t e_f)      = invariantsOf e_t ++ invariantsOf e_f
+invariantsOf (While _ body minv)  = minv : invariantsOf body
+invariantsOf (PWhile _ body minv) = minv : invariantsOf body
+invariantsOf _                    = []
 
-    it "una recta certifica grado 1, con su pendiente" $ do
-      certificado <- certifyDegree 3 [] "x" lineal
-      certificado `shouldBe` Just (DegreeCertificate 1 2)
+getProgram :: String -> Program
+getProgram src = deepSimplifyProgram (fromRight (error ("no parsea: " ++ src)) (parseProgram "<test>" src))
 
-    it "una cuadrática certifica grado 2" $ do
-      certificado <- certifyDegree 3 [] "x" cuadratico
-      certificado `shouldBe` Just (DegreeCertificate 2 2)
-
-    it "si el tope de grado es menor al real, no certifica nada" $ do
-      certificado <- certifyDegree 0 [] "x" lineal
-      certificado `shouldBe` Nothing
-
-  describe "certifyDegree sobre un desenrollado de Kleene real" $ do
-
-    -- Regla de uso que estos dos tests fijan: un iterado de Kleene sólo es
-    -- exacto hasta donde alcanzó su profundidad (hace falta k >= x+1 para
-    -- resolver ese x). Más allá del frente confiable la función se aplana por
-    -- truncamiento, y esa meseta rompe la diferencia constante — no porque el
-    -- invariante no sea lineal, sino porque el iterado todavía no lo es.
-    it "sin acotar la región, la meseta del truncamiento impide certificar" $ do
-      certificado <- certifyDegree 2 [Var "x" >: Lit 0] "x" (iteradoKleene 9)
-      certificado `shouldBe` Nothing
-
-    it "acotado al frente confiable, certifica grado 1 con diferencia 2" $ do
-      certificado <- certifyDegree 2 [Var "x" >: Lit 0, Var "x" :<=: Lit 6] "x" (iteradoKleene 9)
-      certificado `shouldBe` Just (DegreeCertificate 1 2)
-
-    -- La pieza [¬φ] del template natural: constante, y su valor es el tick de
-    -- evaluar la guarda (cfWhile suma rtOne aunque la guarda dé falso).
-    it "la pieza donde el ciclo no corre certifica grado 0 con valor 1" $ do
-      certificado <- certifyDegree 2 [Var "x" :<=: Lit 0] "x" (iteradoKleene 9)
-      certificado `shouldBe` Just (DegreeCertificate 0 1)
+-- | Sintetiza los templates del programa y pregunta a Z3 si existe una
+-- instancia válida. Usa programToSolverInput (el singular, que junta todas las
+-- obligaciones en un solo sistema) porque un programa sintetizado siempre
+-- comparte variables de template entre sus obligaciones — resolverlas por
+-- separado podría dar testigos contradictorios (mismo criterio que
+-- ImpIO.completeRoutine' vía sharedExistentials).
+isValidSynth :: String -> IO Bool
+isValidSynth src = do
+  result <- runModel' (programToSolverInput (synthesizeTemplates0 (getProgram src)))
+  return (modelExists result)

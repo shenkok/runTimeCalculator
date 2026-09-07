@@ -1,57 +1,45 @@
 module ImpSynth where
 
 import Imp
-import ImpVCGen
-import ImpSBV (runModel')
-import Data.SBV (AlgReal, SatResult, getModelValue, modelExists)
-import qualified Data.Set as Set
+import ImpVCGen (freeVarsProgram)
+import Control.Monad.Trans.State (State, evalState, get, put)
 
 {-
-    MÓDULO DE SÍNTESIS: DESCUBRIR LA *FORMA* DE UN INVARIANTE
+    MÓDULO DE SÍNTESIS: TEMPLATES NATURALES
 
-    Este módulo no verifica invariantes (eso es vcg[·] + ImpSBV) — se ocupa
-    del paso anterior: dado un tiempo de ejecución "f" (típicamente un
-    desenrollado de Kleene lo bastante profundo, ver fpWhile/fpPWhile en
-    ImpVCGen), decidir de qué grado es el polinomio que lo describe, para
-    poder armar un template con esa cantidad de coeficientes.
+    Rellena los huecos de invariante de un programa (los While/PWhile con
+    Nothing) con templates propuestos a partir de la *forma* del programa, para
+    que después vcGenerator'/programToSolverInput pidan a Z3, en una única
+    consulta ∃∀, los valores de sus coeficientes. Sin lazo de refinamiento: un
+    intento, un veredicto.
 
-    El método es el de diferencias finitas, pero en vez de muestrear en unos
-    pocos puntos concretos y confiar en que alcanzan, la comprobación se hace
-    con una consulta ∃∀ a Z3:
+    La regla (de los "natural templates" de Batz et al., TACAS 2023) es que el
+    invariante de un ciclo se arma con dos piezas:
 
-        ∃c ∀x.  Δᵈf(x) = c
+      - la pieza [¬φ] (o el peso 1-p en un pwhile) multiplica LA CONTINUACIÓN,
+        sin coeficientes propios: cuando la guarda es falsa el valor ya se
+        conoce exactamente, es "f" por definición de Φ_f, y gastar incógnitas
+        ahí sería redundante;
+      - la pieza [φ] (o el peso p) multiplica una combinación AFÍN de las
+        variables relevantes del ciclo, con coeficientes frescos de este nivel.
 
-    Si Z3 la satisface, la conclusión es una identidad algebraica válida para
-    TODO x — no evidencia sobre los puntos que uno haya elegido. Y "la
-    d-ésima diferencia es una constante" equivale (por inducción sobre x) a
-    que f sea un polinomio de grado d en x, así que el d más chico que
-    satisface la consulta ES el grado del polinomio.
+    El recorrido es el mismo de vcGenerator', y como toda recursión usa las dos
+    direcciones del stack: la continuación baja como argumento (es lo que
+    consume la pieza [¬φ]) y el ert sube como resultado (es lo que Seq necesita
+    para darle continuación al statement de la izquierda). Como la pieza [φ]
+    lleva coeficientes frescos y no el valor que sube desde el cuerpo, ningún
+    template depende del ert de su propio cuerpo: no hay circularidad.
 
-    La consulta se arma reusando la maquinaria que ya existe: la igualdad se
-    parte en dos desigualdades (Restriction sólo tiene :<==:), y de ahí en
-    más son restricciones de RunTime como cualquier otra, con la misma
-    expansión de contextos de restrictionsToImplications.
+    Diseño completo, cuidados y validación previa: SINTESIS_TEMPLATE_NATURAL.md
+    en la raíz del repo.
 -}
 
-------------------------------{ DIFERENCIAS FINITAS SIMBÓLICAS }----------------------------------------
-
--- | f[x -> x+1]: corre el tiempo de ejecución un paso en la variable x.
-shiftRunTime :: Name -> RunTime -> RunTime
-shiftRunTime x = sustRunTime x (Var x +: Lit 1)
-
--- | Primera diferencia finita: Δf(x) = f(x+1) - f(x).
---
--- Es el análogo discreto de la derivada: para un polinomio de grado d, la
--- d-ésima diferencia es la constante d! por el coeficiente principal, igual
--- que la d-ésima derivada.
-finiteDifference :: Name -> RunTime -> RunTime
-finiteDifference x f = deepSimplifyRunTime (shiftRunTime x f --: f)
-
--- | Δᵈf: aplica la diferencia finita d veces (d = 0 devuelve f sin tocar).
-nthDifference :: Int -> Name -> RunTime -> RunTime
-nthDifference d x f = iterate (finiteDifference x) f !! max 0 d
-
-------------------------------{ ARMADO DEL PROBLEMA ∃∀ }--------------------------------------------------
+-- | Fuente de nombres frescos. El estado es un contador (para numerar los
+-- coeficientes a0, a1, a2...) junto a los nombres ya ocupados: variables del
+-- programa y coeficientes ya asignados en otros niveles. Así ningún
+-- coeficiente choca con nada y getExistencialAndUniversalVars los clasifica
+-- como existenciales sin ambigüedad.
+type Fresh = State (Int, Names)
 
 -- | Un nombre que no colisione con ninguno de los usados. Le va agregando
 -- comillas simples hasta encontrar uno libre.
@@ -60,77 +48,125 @@ freshName base used
   | base `elem` used = freshName (base ++ "'") used
   | otherwise        = base
 
--- | "Δᵈf es exactamente la constante c", como par de restricciones de
--- RunTime: Restriction sólo tiene :<==:, así que la igualdad se escribe con
--- las dos desigualdades.
-constantDifferenceRestrictions :: Name -> RunTime -> [RRunTime]
-constantDifferenceRestrictions c diff = [ diff :<==: rtVar c, rtVar c :<==: diff ]
+-- | Reserva un nombre de coeficiente nuevo y lo marca como ocupado.
+freshCoefficient :: Fresh Name
+freshCoefficient = do
+  (n, used) <- get
+  let name = freshName ("a" ++ show n) used
+  put (n + 1, name : used)
+  return name
 
--- | Agrega hipótesis extra a todas las implicaciones.
+-- | Combinación afín con coeficientes frescos sobre las variables dadas:
+-- a_0 ++ a_1**v_1 ++ ... ++ a_n**v_n (sólo a_0 si no hay variables).
 --
--- Sirve para certificar la forma DENTRO de una pieza de la partición (ej.
--- sólo donde vale la guarda del ciclo). Es necesario porque el método es
--- local, igual que Taylor: un tiempo de ejecución piecewise no tiene una
--- diferencia constante si se lo mira cruzando el borde entre dos piezas,
--- aunque cada pieza por separado sí sea un polinomio limpio.
-withHypotheses :: Context -> [Implication] -> [Implication]
-withHypotheses extra = map addHyp
-  where addHyp implication = implication { hypothesis = extra ++ hypothesis implication }
-
--- | El problema ∃c ∀x que certifica que la d-ésima diferencia de f es
--- constante en toda la región descrita por "piece".
---
--- "c" es existencial (es el valor que hay que encontrar) y todas las
--- variables que aparecen en la diferencia y en las hipótesis son
--- universales, así que el resultado vale para todos los estados de la
--- región, no sólo para los que uno hubiera muestreado.
-constantDifferenceInput :: Name -> Context -> Int -> Name -> RunTime -> SolverInput'
-constantDifferenceInput c piece d x f = SolverInput'
-  { solver_formulaes = withHypotheses piece implications
-  , existential      = Set.singleton c
-  , for_all          = Set.fromList universales
-  }
+-- Grado 1 y nada más, que es la forma de los natural templates del paper.
+-- Subir el grado se probó y se descartó por ahora: ver "Experimento: subir el
+-- template a grado 2" en SINTESIS_TEMPLATE_NATURAL.md — funciona en casos
+-- chicos pero la consulta se vuelve intratable justo donde haría falta.
+freshAffine :: Names -> Fresh RunTime
+freshAffine vars = do
+  a_0 <- freshCoefficient
+  terms <- mapM weighted (rmdups vars)
+  return (foldl (:++:) (rtVar a_0) terms)
   where
-    diff         = nthDifference d x f
-    implications = concatMap restrictionsToImplications (constantDifferenceRestrictions c diff)
-    universales  = filter (/= c) (rmdups (freeVarsRunTime diff ++ concatMap freeVarsBExp piece))
+    weighted v = do
+      a_i <- freshCoefficient
+      return (rtVar a_i :**: rtVar v)
 
-------------------------------{ BÚSQUEDA DEL GRADO }-----------------------------------------------------
-
--- | Resultado de certificar la forma de un tiempo de ejecución.
-data DegreeCertificate = DegreeCertificate
-  { certifiedDegree   :: Int      -- ^ grado del polinomio en la variable pedida
-  , certifiedConstant :: AlgReal  -- ^ el valor de Δᵈf, constante en toda la región
-  } deriving (Eq, Show)
-
--- | Certifica que Δᵈf es constante, para un d puntual.
-certifyDegreeAt :: Context -> Int -> Name -> RunTime -> IO (Maybe DegreeCertificate)
-certifyDegreeAt piece d x f = do
-  let c  = freshName "c" (freeVarsRunTime f ++ concatMap freeVarsBExp piece)
-      si = constantDifferenceInput c piece d x f
-  result <- runModel' si
-  return (if modelExists result then DegreeCertificate d <$> valueOf c result else Nothing)
-
--- | Busca el grado MÁS CHICO (hasta "cap") cuya diferencia finita es
--- constante en toda la región. Ese es el grado del polinomio que describe a
--- f ahí adentro, y por lo tanto la cantidad de coeficientes que necesita el
--- template.
+-- | Template natural de un while: [¬φ] pesa la continuación, [φ] pesa una
+-- afín con coeficientes frescos.
 --
--- Nothing significa "no es un polinomio de grado ≤ cap en esa región" — el
--- caso típico es una cola geométrica (las diferencias se achican a la mitad
--- en cada nivel pero nunca se hacen constantes), que corresponde a proponer
--- una constante existencial en vez de un polinomio.
-certifyDegree :: Int -> Context -> Name -> RunTime -> IO (Maybe DegreeCertificate)
-certifyDegree cap piece x f = go 0
-  where
-    go d
-      | d > cap   = return Nothing
-      | otherwise = do
-          certificate <- certifyDegreeAt piece d x f
-          case certificate of
-            Just _  -> return certificate
-            Nothing -> go (d + 1)
+-- La negación de la guarda PASA POR simplifyBExp a propósito: las guardas
+-- azucaradas ya son negaciones (">" es "Not (<=)"), así que "Not e_b" crudo
+-- deja una doble negación que revienta más adelante al linealizar
+-- ("No hay versión directa a AExp", ImpVCGen.runTimeToArit).
+naturalTemplateWhile :: BExp -> Program -> RunTime -> Fresh RunTime
+naturalTemplateWhile e_b body f = do
+  t_phi <- freshAffine (freeVarsBExp e_b ++ freeVarsProgram body)
+  return $ (RunTimeBExp (simplifyBExp (Not e_b)) :**: (rtOne :++: f))
+      :++: (RunTimeBExp e_b                      :**: (rtOne :++: t_phi))
 
--- | Extrae el valor de una variable de un modelo de SBV.
-valueOf :: Name -> SatResult -> Maybe AlgReal
-valueOf = getModelValue
+-- | Template natural de un pwhile. Misma partición que el while, pero pesada
+-- por las constantes (1-p)/p en vez de por indicatrices: un pwhile no tiene
+-- guarda booleana, su "condición" es una moneda. Es exactamente la forma en
+-- que vcGenerator' arma su l_inv.
+naturalTemplatePWhile :: PBExp -> Program -> RunTime -> Fresh RunTime
+naturalTemplatePWhile pe_b body f = do
+  t_phi <- freshAffine (freeVarsProgram body)
+  let p_true = p pe_b
+  return $ (rtLit (1 - p_true) :**: (rtOne :++: f))
+      :++: (rtLit p_true       :**: (rtOne :++: t_phi))
+
+-- | Recorre el programa rellenando cada hueco de invariante.
+--
+-- f     : continuación de este programa (ya cerrada, viene bajando)
+-- (p',t): el programa con los Nothing reemplazados por Just template, y el
+--         ert que este programa devuelve hacia arriba.
+--
+-- Cada caso replica el ert que ya calcula vcGenerator'; lo único nuevo es el
+-- relleno de huecos.
+fillTemplates :: Program -> RunTime -> Fresh (Program, RunTime)
+fillTemplates Skip       f = return (Skip,       rtOne :++: f)
+fillTemplates Empty      f = return (Empty,      f)
+fillTemplates (Set x arit)   f = return (Set x arit,   rtOne :++: sustRunTime x arit f)
+fillTemplates (PSet x parit) f = return (PSet x parit, rtOne :++: aexpE parit x f)
+
+-- Acá es donde hay que tocar fondo y volver: el ert de p_2 es la continuación
+-- de p_1, así que p_2 se procesa primero (igual que en vcGenerator').
+fillTemplates (Seq p_1 p_2) f = do
+  (p_2', f_2) <- fillTemplates p_2 f
+  (p_1', f_1) <- fillTemplates p_1 f_2
+  return (Seq p_1' p_2', f_1)
+
+fillTemplates (If e_b e_t e_f) f = do
+  (e_t', f_t) <- fillTemplates e_t f
+  (e_f', f_f) <- fillTemplates e_f f
+  return ( If e_b e_t' e_f'
+         , rtOne :++: ((RunTimeBExp e_b :**: f_t) :++: (RunTimeBExp (Not e_b) :**: f_f)) )
+
+fillTemplates (PIf pe_b e_t e_f) f = do
+  (e_t', f_t) <- fillTemplates e_t f
+  (e_f', f_f) <- fillTemplates e_f f
+  let p_true = p pe_b
+  return ( PIf pe_b e_t' e_f'
+         , rtOne :++: ((rtLit p_true :**: f_t) :++: (rtLit (1 - p_true) :**: f_f)) )
+
+-- El cuerpo recibe como continuación el propio invariante, y lo que sube es
+-- ese invariante (regla ert[while(φ){C}][I] = I), no el ert del cuerpo — por
+-- eso el "_". Un invariante ya escrito por el usuario se respeta tal cual,
+-- pero igual hay que seguir bajando: el cuerpo puede tener huecos.
+fillTemplates (While e_b body minv) f = do
+  inv <- maybe (naturalTemplateWhile e_b body f) return minv
+  (body', _) <- fillTemplates body inv
+  return (While e_b body' (Just inv), inv)
+
+fillTemplates (PWhile pe_b body minv) f = do
+  inv <- maybe (naturalTemplatePWhile pe_b body f) return minv
+  (body', _) <- fillTemplates body inv
+  return (PWhile pe_b body' (Just inv), inv)
+
+-- | Nombres ya ocupados por el programa: sus variables más las que aparezcan
+-- en los invariantes que el usuario ya haya escrito a mano.
+--
+-- No se puede usar programInvariants acá: esa función falla con requireInvariant
+-- justamente ante un hueco sin llenar, que es el caso normal en esta etapa.
+usedNames :: Program -> Names
+usedNames program = rmdups (freeVarsProgram program ++ go program)
+  where
+    go (Seq p_1 p_2)        = go p_1 ++ go p_2
+    go (If _ e_t e_f)       = go e_t ++ go e_f
+    go (PIf _ e_t e_f)      = go e_t ++ go e_f
+    go (While _ body minv)  = maybe [] freeVarsRunTime minv ++ go body
+    go (PWhile _ body minv) = maybe [] freeVarsRunTime minv ++ go body
+    go _                    = []
+
+-- | Rellena todos los huecos de invariante de un programa, dada su
+-- continuación. El resultado ya se puede pasar a vcGenerator'.
+synthesizeTemplates :: Program -> RunTime -> Program
+synthesizeTemplates program f =
+  fst (evalState (fillTemplates program f) (0, rmdups (usedNames program ++ freeVarsRunTime f)))
+
+-- | synthesizeTemplates con continuación 0, que es la que usan
+-- vcGenerator0/completeRoutine'.
+synthesizeTemplates0 :: Program -> Program
+synthesizeTemplates0 program = synthesizeTemplates program rtZero

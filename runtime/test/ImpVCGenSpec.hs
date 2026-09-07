@@ -53,9 +53,9 @@ spec = do
   let progAssign = Set "x" (Var "y")
       progPSet   = PSet "x" (Imp.dirac (Var "y"))
       progIf     = If (Var "x" >: Lit 0) (Set "y" (Lit 1)) (Set "y" (Lit 2))
-      progLoop   = While (Var "x" >: Lit 0) (Set "x" (Var "x" -: Lit 1)) (rtVar "a" :**: rtVar "x")
-      innerLoop  = While (Var "y" >: Lit 0) (Set "y" (Var "y" -: Lit 1)) (rtVar "c" :**: rtVar "y")
-      progNested = While (Var "x" >: Lit 0) (Seq innerLoop (Set "x" (Var "x" -: Lit 1))) (rtVar "a" :**: rtVar "x")
+      progLoop   = While (Var "x" >: Lit 0) (Set "x" (Var "x" -: Lit 1)) (Just (rtVar "a" :**: rtVar "x"))
+      innerLoop  = While (Var "y" >: Lit 0) (Set "y" (Var "y" -: Lit 1)) (Just (rtVar "c" :**: rtVar "y"))
+      progNested = While (Var "x" >: Lit 0) (Seq innerLoop (Set "x" (Var "x" -: Lit 1))) (Just (rtVar "a" :**: rtVar "x"))
 
   describe "getExistencialAndUniversalVars" $ do
 

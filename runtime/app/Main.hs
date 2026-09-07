@@ -10,6 +10,7 @@ import ImpIO
 import ImpVCGen
 import ImpParser
 import ImpProgram
+import ImpSynth (synthesizeTemplates0)
 import Data.SBV
 import Data.SBV.Internals (AlgReal, SolverContext (internalVariable))
 import Data.Either (fromRight)
@@ -29,6 +30,20 @@ run' :: String -> IO ()
 run' input = case parseProgram "<interactive>" input of
   Left err  -> print err
   Right program -> completeRoutine' (deepSimplifyProgram program) input
+
+-- | Igual que "run'", pero SINTETIZANDO los invariantes que falten: cada
+-- while/pwhile escrito sin su bloque "{inv = ...}" recibe un template natural
+-- (ImpSynth.synthesizeTemplates0) antes de generar las obligaciones, y Z3
+-- busca los valores de sus coeficientes en una única consulta ∃∀.
+--
+--   runSynth "while(x > 0){x := x-1}"
+--
+-- Si no hay testigo, se reporta y se termina: no hay refinamiento ni lazo
+-- CEGIS. Ver SINTESIS_TEMPLATE_NATURAL.md en la raíz del repo.
+runSynth :: String -> IO ()
+runSynth input = case parseProgram "<interactive>" input of
+  Left err  -> print err
+  Right program -> completeRoutine' (synthesizeTemplates0 (deepSimplifyProgram program)) input
 
 -- |Calcula la iteración de punto fijo de orden n de una transformada de un while determinista
 

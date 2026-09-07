@@ -33,6 +33,19 @@ type RRunTime = Restriction RunTime
 
 ----------------------------------{ VC GEN }-------------------------------------------------------------
 
+-- | Extrae el invariante de un while/pwhile, o falla con un mensaje claro si
+-- el ciclo todavía no tiene uno.
+--
+-- While/PWhile llevan "Maybe RunTime" (ver Imp.hs) justo para poder escribir
+-- un programa sin invariantes y sintetizarlos después (ImpSynth.hs) — pero
+-- vcg[·] (y todo lo que asume un invariante concreto: vcGenerator,
+-- vcGenerator', la clasificación existencial/universal, programInvariants)
+-- no tiene forma de generar nada sin él. Decisión explícita: fallar acá con
+-- un error claro en vez de propagar Either/Maybe por todas esas firmas.
+requireInvariant :: Maybe RunTime -> RunTime
+requireInvariant (Just inv) = inv
+requireInvariant Nothing    = error "vcg: este while/pwhile no tiene invariante todavía — sintetizalo antes de generar las obligaciones de prueba."
+
 -- | Generador de restricciones y calcula un candidato a cota superior
 -- entrega un conjunto de restricciones y el tiempo de ejecución esperado
 vcGenerator :: Program -> RunTime -> (RunTime, [RRunTime])
@@ -54,12 +67,14 @@ vcGenerator (Seq p_1 p_2) runt       = (fst vc_1, snd vc_1 ++ snd vc_2)
   where
     vc_2 = vcGenerator p_2 runt
     vc_1 = vcGenerator p_1 (fst vc_2)
-vcGenerator (While e_b p inv) runt   = (inv, (l_inv :<==: inv) : snd vc_p)
+vcGenerator (While e_b p minv) runt  = (inv, (l_inv :<==: inv) : snd vc_p)
   where
+    inv = requireInvariant minv
     vc_p = vcGenerator p inv
     l_inv = rtOne :++: ((RunTimeBExp (Not e_b) :**: runt) :++: (RunTimeBExp e_b :**: fst vc_p))
-vcGenerator (PWhile pe_b c inv) runt = (inv, (l_inv :<==: inv) : snd vc_p)
+vcGenerator (PWhile pe_b c minv) runt = (inv, (l_inv :<==: inv) : snd vc_p)
   where
+    inv = requireInvariant minv
     p_true = p pe_b
     p_false = 1 - p_true
     vc_p = vcGenerator c inv
@@ -130,14 +145,16 @@ vcGenerator' (Seq p_1 p_2) runt       = ProgramVCGenInformation (runtime vc_1) (
   where
     vc_2 = vcGenerator' p_2 runt
     vc_1 = vcGenerator' p_1 (runtime vc_2)
-vcGenerator' (While e_b p inv) runt   = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars : restrictionsInformation vc_p)
+vcGenerator' (While e_b p minv) runt  = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars : restrictionsInformation vc_p)
   where
+    inv = requireInvariant minv
     vc_p = vcGenerator' p inv
     l_inv = rtOne :++: ((RunTimeBExp (Not e_b) :**: runt) :++: (RunTimeBExp e_b :**: runtime vc_p))
     program_vars = freeVarsProgram p
     template_vars = onlyInFirst (freeVarsRunTime inv ++ freeVarsRunTime l_inv) program_vars
-vcGenerator' (PWhile pe_b c inv) runt = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars : restrictionsInformation vc_p)
+vcGenerator' (PWhile pe_b c minv) runt = ProgramVCGenInformation inv (RestrictionInformation (l_inv :<==: inv) template_vars program_vars : restrictionsInformation vc_p)
   where
+    inv = requireInvariant minv
     p_true = p pe_b
     p_false = 1 - p_true
     vc_p = vcGenerator' c inv
@@ -356,7 +373,19 @@ restrictionsToSolver rest = zip3 contexts eval_arit free_vars' -- 0
 restrictionsToImplications :: RRunTime -> [Implication]
 restrictionsToImplications (runtimeA :<==: runtimeB) = map (\x -> Implication { hypothesis = x, conclusion = f x }) contexts -- 4
   where
-    simplify_runtime = deepSimplifyRunTime runtimeA --: runtimeB  -- 1
+    -- OJO con los paréntesis: "deepSimplifyRunTime runtimeA --: runtimeB" se
+    -- lee como "(deepSimplifyRunTime runtimeA) --: runtimeB" (la aplicación de
+    -- función liga más fuerte), o sea que el invariante del lado derecho queda
+    -- SIN simplificar. Y deepSimplifyRunTime es justo lo que normaliza la
+    -- aritmética adentro de las indicatrices (RunTimeBExp bexp ->
+    -- RunTimeBExp (deepSimplifyBExp bexp)), así que una condición sin
+    -- normalizar de ese lado (ej. "x + -1*1 <= 0" en vez de "-1 + x <= 0") no
+    -- matchea contra los átomos ya normalizados del otro, evalCondition no la
+    -- reconoce, sobrevive, y runTimeToArit falla con "No hay versión directa a
+    -- AExp". No se notaba mientras todos los invariantes se escribían a mano
+    -- ya normalizados; aparece apenas un invariante lo genera una sustitución
+    -- (ImpSynth.fillTemplates).
+    simplify_runtime = deepSimplifyRunTime (runtimeA --: runtimeB)  -- 1
     contexts = allContext simplify_runtime                        -- 2
     f = (:<=: zero). runTimeToArit . foldr evalCondition simplify_runtime -- 3
 
@@ -372,8 +401,8 @@ restrictionsToImplications (runtimeA :<==: runtimeB) = map (\x -> Implication { 
 --   | Seq Program Program         -- Composición secuencial de programas
 --   | If BExp Program Program     -- Guarda condicional
 --   | PIf PBExp Program Program   -- Guarda condicional probabilista
---   | While BExp Program RunTime  -- Ciclo while
---   | PWhile PBExp Program RunTime -- Ciclo while probabilista
+--   | While BExp Program (Maybe RunTime)  -- Ciclo while
+--   | PWhile PBExp Program (Maybe RunTime) -- Ciclo while probabilista
 --   deriving (Eq, Show)
 -- ----------------------
 
@@ -426,10 +455,10 @@ getExistencialAndUniversalVars program = (onlyInFirst exist_variables universal_
           where
             true_variables = get_variables p_1
             false_variables = get_variables p_2
-    get_variables (While e_b p inv)   = (freeVarsRunTime inv ++ fst body_variables, freeVarsBExp e_b ++ snd body_variables)
+    get_variables (While e_b p minv)   = (freeVarsRunTime (requireInvariant minv) ++ fst body_variables, freeVarsBExp e_b ++ snd body_variables)
           where
             body_variables = get_variables p
-    get_variables (PWhile _ c inv) =  (freeVarsRunTime inv ++ fst body_variables, snd body_variables)
+    get_variables (PWhile _ c minv) =  (freeVarsRunTime (requireInvariant minv) ++ fst body_variables, snd body_variables)
           where
             body_variables = get_variables c
     (exist_variables, universal_variables) = get_variables program
@@ -451,8 +480,8 @@ programInvariants (PSet _ _)       = []
 programInvariants (Seq p_1 p_2)    = programInvariants p_1 ++ programInvariants p_2
 programInvariants (If _ e_t e_f)   = programInvariants e_t ++ programInvariants e_f
 programInvariants (PIf _ e_t e_f)  = programInvariants e_t ++ programInvariants e_f
-programInvariants (While _ p inv)  = inv : programInvariants p
-programInvariants (PWhile _ c inv) = inv : programInvariants c
+programInvariants (While _ p minv)  = requireInvariant minv : programInvariants p
+programInvariants (PWhile _ c minv) = requireInvariant minv : programInvariants c
 
 -- | Restricción de buena-definición ("well-definedness") de un invariante.
 --

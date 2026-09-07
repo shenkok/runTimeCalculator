@@ -36,10 +36,10 @@ getProgram src = deepSimplifyProgram (fromRight (error ("no parsea: " ++ src)) (
 -- "a**x", variable por variable, no es sintaxis concreta soportada — ver
 -- CLAUDE.md, sección de RunTime).
 templateConTestigo :: Program
-templateConTestigo = While False' Skip (rtVar "a")
+templateConTestigo = While False' Skip (Just (rtVar "a"))
 
 templateSinTestigo :: Program
-templateSinTestigo = While (Var "x" >: Lit 0) (Set "x" (Var "x" -: Lit 1)) (rtVar "a" :**: rtVar "x")
+templateSinTestigo = While (Var "x" >: Lit 0) (Set "x" (Var "x" -: Lit 1)) (Just (rtVar "a" :**: rtVar "x"))
 
 -- Cpvc (informe, Anexo C.1.8): pwhile con un while anidado en su cuerpo, con
 -- los dos invariantes dejados como plantilla. Los dos ciclos comparten
