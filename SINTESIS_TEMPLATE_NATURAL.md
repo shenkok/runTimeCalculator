@@ -194,13 +194,33 @@ para que `getExistencialAndUniversalVars` los clasifique como existenciales sin 
    sintaxis; un ciclo cuya guarda no menciona una variable puede clasificarla mal (caso
    `Cdvc-`). Vale igual para los coeficientes generados acá.
 
-## Alcance de esta versión
+## Alcance de esta vía — CERRADO acá
 
-- **Grado**: sólo afín (grado 1), igual que los natural templates del paper. Subir de grado se
-  probó y se revirtió (ver más abajo).
-- **Partición**: sólo por la guarda del propio ciclo. El paper también particiona por las ramas
-  `if` internas del cuerpo (sus `B_i'`); no está acá.
-- **Fallo**: si Z3 no encuentra testigo, se reporta y se termina. Sin refinamiento, sin CEGIS.
+Decisión tomada: **esta vía llega hasta proponer una expresión afín con la estructura de los
+natural templates, y no más**. O sea, exactamente
+
+```
+[¬φ] ** continuación   ++   [φ] ** (expresión afín en las variables)
+```
+
+- **Grado**: sólo afín (grado 1), igual que los natural templates del paper.
+- **Partición**: sólo por la guarda del propio ciclo.
+- **Fallo**: si Z3 no encuentra testigo, se reporta y se termina. Un intento, un veredicto.
+
+### Refinar el template: descartado
+
+**No se va a refinar el template.** No es que esté pendiente: está descartado, y por una razón
+de fondo, no de esfuerzo.
+
+Todo esquema de refinamiento (particionar por las ramas `if` del cuerpo, subdividir el espacio
+de estados, poner los bordes de las piezas como incógnitas, usar la última instancia
+parcialmente admisible como pista) es **CEGIS encubierto**: un lazo que propone, fracasa,
+aprende algo del fracaso y vuelve a proponer, sólo que disfrazado de heurística sintáctica.
+Si el problema requiere un lazo de ese tipo, la respuesta correcta es **hacer CEGIS explícito**
+y aprovechar sus garantías, no reconstruirlo por partes dentro de una arquitectura one-shot
+que no fue pensada para eso.
+
+Así que el eje de partición queda cerrado. El único eje abierto es el grado — ver abajo.
 
 ## Validación previa (hecha a mano antes de escribir el código)
 
@@ -261,7 +281,11 @@ que hace `fillTemplates`. Es el mismo tipo de bug de paréntesis ya documentado 
 para `vcGenerator'`. Corregirlo no cambió ningún veredicto existente (los 212 tests previos
 siguen pasando).
 
-### Experimento: subir el template a grado 2 (probado y revertido)
+### Subir el grado — la única vía abierta
+
+**Esta es la continuación elegida** cuando el template afín no alcanza: no refinar la partición,
+sino subir el grado del polinomio. Se probó una vez y se revirtió, pero no por ser la dirección
+equivocada — por el costo del solver, que está medido abajo y hay que atacar antes de retomarla.
 
 Ante el fallo del cuadrático se probó generalizar `freshAffine` a `freshPolynomial d` (un
 coeficiente por cada monomio de grado ≤ d, o sea C(n+d, d) coeficientes para n variables) y
@@ -284,70 +308,24 @@ Nótese la asimetría: sobre ese mismo programa, el template **afín** responde 
 segundos. Descubrir que el grado 1 no alcanza es barato; confirmar que el grado 2 sí alcanza es
 lo caro.
 
-Se revirtió: el código quedó **sólo afín**. Para retomarlo haría falta primero (a) ponerle
-timeout a Z3 vía `SMTConfig`, para que un template caro devuelva "no se pudo determinar" en vez
-de colgarse, y (b) achicar el problema — subir el grado sólo en el ciclo que lo necesita, o
-restringir la base de monomios (potencias puras, sin cruzados).
+Se revirtió y el código quedó **sólo afín**, pero la vía sigue siendo ésta. Las dificultades
+concretas a resolver antes de retomarla, en orden:
 
-### Cómo refina cegispro2, y por qué no nos sirve para el caso cuadrático
+1. **Timeout de Z3 vía `SMTConfig`.** Hoy un template caro *cuelga* en vez de devolver "no se
+   pudo determinar". Sin esto, cualquier experimento de grado ≥ 2 es inusable: no distinguís
+   "no existe instancia" de "todavía está pensando". Es el prerequisito de todo lo demás.
+2. **Achicar el problema.** Dos palancas independientes: subir el grado **sólo en el ciclo que
+   lo necesita** (no uniformemente en todos los niveles), y **restringir la base de monomios**
+   — potencias puras (`x²`, `y²`) sin los cruzados (`x·y`), que es lo que más infla la cuenta
+   `C(n+d, d)` y lo que más le cuesta a `nlsat`.
+3. **Asumir la asimetría.** Descubrir que un grado no alcanza seguirá siendo barato
+   (`Unsatisfiable` en segundos); confirmar que el siguiente sí alcanza seguirá siendo caro.
+   Eso no se arregla, se administra: conviene subir de a un grado, con timeout, y aceptar
+   "no se pudo determinar" como veredicto legítimo.
 
-Del reporte extendido (Batz et al., **arXiv:2205.06152**, Apéndice D — *no* está en el PDF de
-TACAS de 20 páginas, que sólo lo referencia). El punto central es que **cegispro2 nunca sube el
-grado**: sus invariantes son piecewise linear de punta a punta. La gramática de templates (§3)
-es literalmente
-
-```
-E → r | x | r·x | E + E
-```
-
-— no hay `x·y` ni `x²`. Toda la expresividad extra viene de agregar **más piezas**, cada una
-todavía lineal:  `T = [B₁]·E₁ + ... + [Bₙ]·Eₙ`, con los `Bᵢ` particionando el espacio de estados.
-
-El dilema que plantean: *"If T is too restrictive, it excludes admissible invariants... If T is
-too liberal, the synthesizer has to search a high-dimensional space."* Por eso arrancan
-optimistas, con un `T₁` chico, y refinan sólo si el synthesizer prueba que no hay instancia.
-
-Las tres estrategias:
-
-1. **Static Hyperrectangle Refinement** (sólo estado finito). Acotan cada variable → el espacio
-   es un hiperrectángulo. `Tᵢ` parte cada dimensión en `i` pedazos iguales (hasta `i^|Vars|`
-   piezas): si `T₁ = Σⱼ [Bⱼ]·Eⱼ` y los hiperrectángulos son `R₁…Rₘ`, entonces
-   `Tᵢ = Σⱼ Σₖ [Bⱼ ∧ Rₖ]·E_{k,j}`.
-2. **Dynamic Hyperrectangle Refinement**. Igual, pero los bordes de los hiperrectángulos son
-   **variables de template** (no se fija dónde cortar). Es la variante *non-fixed-partition*.
-3. **Inductivity-Guided Refinement**. Usa como pista la última instancia *parcialmente
-   admisible* `I` que devolvió el synthesizer: parte cada `Bⱼ` en la región donde `I` sí es
-   parcialmente inductiva (`Ψ_f(I) ⪯ I`) y donde no. La partición se computa simbólicamente.
-
-Sobre garantías, son explícitos en que el refinamiento **no es monótono**: *"the approaches do
-not yield step-wise refinements, i.e. ⟨Tᵢ⟩ ⊆ ⟨Tᵢ₊₁⟩, all approaches ensure progress, i.e.
-⟨Tᵢ⟩ ⊊ ⟨Tᵢ₊ⱼ⟩ for some j ≥ 1. **For finite-state programs**, progress ensures completeness: we
-eventually reach a maximally-partitioned template T in which every state has its own piece."*
-
-**Y ahí está el límite que nos importa**: la completitud sale de que, en el límite, cada estado
-tenga su propia pieza constante — eso sólo cierra si el espacio de estados es **finito**. Un
-runtime genuinamente cuadrático (`n²`) **no es piecewise-linear sobre un dominio no acotado**:
-ninguna cantidad finita de piezas lineales lo acota para todo `n`. Sus benchmarks son de estado
-finito o acotados (BRP tiene `sent < 8·10⁶` en la guarda), y en la evaluación de UPAST (pág. 423
-de la versión TACAS) restringen explícitamente a *"N-valued, linear programs with **flattened
-nested loops**"* — o sea, aplanan justo la construcción que genera runtimes cuadráticos. Además
-admiten que hay programas donde su método falla (`gridbig`, timeout en las tres estrategias).
-
-Empíricamente (Tabla 2 del apéndice E.1): la **inductivity-guided gana casi siempre**; la
-**dynamic hace timeout en casi todo** (`chain`, `zeroconf`, `brp`). Ellos mismos concluyen que
-*"searching for good fixed-partition templates in a separate outer loop pays off"*.
-
-**Conclusión para este proyecto**: refinar por particiones y subir el grado son **dos ejes
-distintos**, y cegispro2 sólo recorre el primero. Para nuestro caso cuadrático haría falta el
-segundo, con el costo medido más arriba. Si alguna vez se retoma el refinamiento, el orden
-sensato sería:
-
-1. Lo más barato y que ya tienen ellos en `T₁` y nosotros no: **particionar también por las
-   ramas `if` del cuerpo del ciclo**, no sólo por la guarda. No cuesta nada de solver (sigue
-   siendo lineal).
-2. Después, algo estilo *inductivity-guided*, que es la única de las tres que **no necesita
-   acotar variables** y reusa información que el solver ya produjo.
-3. El grado, sólo con timeout de Z3 configurado y achicando el problema.
+El límite teórico de fondo no se mueve: `∃(coeficientes) ∀(variables de programa)` sobre
+aritmética real **no lineal** es decidible (Tarski) pero doblemente exponencial. La vía del
+grado funciona en casos chicos y se degrada rápido — es la que hay, con los ojos abiertos.
 
 ### Sobre `certifyDegree` (eliminado)
 
@@ -372,3 +350,400 @@ programa, y los cuatro veredictos end-to-end (incluido el cuadrático que debe f
 
 Total del proyecto: **207 examples, 0 failures, 5 pending**, con `cabal test runtime-test` y
 con `stack test` (eran 222 antes de eliminar los 15 tests de `certifyDegree`).
+
+---
+
+# Vía 2: iteración de punto fijo sobre la estructura afín de `ert`
+
+**Estado: análisis, no implementado** (sesión 2026-09-20). **Queda como trabajo futuro**
+(decidido 2026-10-05): antes se refinan los simplificadores de `AExp`/`BExp`/`RunTime`. Es una vía *alternativa* a los
+templates, no un refinamiento de ellos: donde aplica, calcula el invariante exacto **sin Z3 y
+sin adivinar**. Cubre una clase de programas distinta a la de la Vía 1, y notablemente incluye
+casos que en la memoria hubo que despejar a mano.
+
+Hay una versión presentable de la primera parte de este análisis (el desglose constructor por
+constructor) en `https://claude.ai/artifact/X5SbygvbrdSiodamjG7g7h`.
+
+## 1. El hecho estructural: `ert[C]` es afín en la continuación
+
+Para todo `C` sin ciclos, `ert[C](f) = ert[C](0) + wp[C](f)` — costo propio más parte lineal.
+Verificado caso por caso contra `ImpVCGen.hs:52-63`:
+
+| constructor | `ert[C](f)` en el código | costo `c_C` | lineal `L_C(f)` |
+|---|---|---|---|
+| `Empty` | `f` | `0` | `f` |
+| `Skip` | `1 + f` | `1` | `f` |
+| `Set x e` | `1 + f[x:=e]` | `1` | `f[x:=e]` |
+| `PSet x d` | `1 + E_d[f]` | `1` | `Σ pᵢ·f[x:=vᵢ]` |
+| `If b C₁ C₂` | `1 + [b]·ert₁ + [¬b]·ert₂` | `1 + [b]c₁ + [¬b]c₂` | `[b]·L₁(f) + [¬b]·L₂(f)` |
+| `PIf p C₁ C₂` | `1 + p·ert₁ + (1−p)·ert₂` | `1 + p·c₁ + (1−p)c₂` | `p·L₁(f) + (1−p)·L₂(f)` |
+| `Seq C₁ C₂` | `ert₁(ert₂(f))` | `c₁ + L₁(c₂)` | `L₁ ∘ L₂` |
+| `While`/`PWhile` | `I` (el invariante) | — | — |
+
+Cuatro hechos elementales lo sostienen: sustituir es lineal, la esperanza es lineal,
+multiplicar por una **función fija** (una indicatriz, un peso constante) es lineal *en `f`*, y
+componer afines da afín. Inducción estructural sobre `Program` y listo.
+
+**La columna de la derecha es `wp[C]`.** No es un concepto nuevo que haya que agregarle a la
+herramienta: es el nombre de la mitad de `ert` que depende de `f`. Nunca se ve en el código
+porque `vcGenerator` calcula `c + L(f)` como una sola expresión.
+
+**Esta parte es robusta.** Ni siquiera una asignación no afín (`x := x*y`) la rompe: la
+linealidad es *en `f`*, y sustituir distribuye sobre sumas sin importar qué tan fea sea la
+expresión que se sustituye. Lo único que la rompería es **no-determinismo** (`wp` demoníaco es
+un `min`, que no es lineal) — que este lenguaje no tiene.
+
+`While`/`PWhile` son la excepción, y no por casualidad: `vcGenerator` devuelve el invariante e
+**ignora `runt`**. Es el punto donde la herramienta deja de computar y empieza a suponer;
+la obligación de prueba `Φ(I) ⊑ I` es la deuda que salda esa suposición.
+
+## 2. Consecuencia: la iteración de Kleene es una serie de Neumann
+
+El funcional característico (`cfWhile`, `ImpVCGen.hs:175`) hereda la forma afín:
+
+```
+Φ(X) = a + L(X)      a    = Φ(0)   = 1 + [¬φ]·f + [φ]·c_C
+                     L(X) = Φ(X) − a = [φ]·L_C(X)
+```
+
+Ambas piezas son computables con lo que ya existe — `a = cfWhile b body f rtZero` y
+`L(v) = cfWhile b body f v --: a`. No hace falta implementar `L` por separado.
+
+Y un funcional afín iterado desde el fondo produce **sumas parciales de una serie**:
+
+```
+xₙ = Φⁿ(0) = a + L(a) + L²(a) + … + Lⁿ⁻¹(a)            lfp = Σ_{k≥0} Lᵏ(a)
+```
+
+Serie de Neumann (la geométrica, para operadores). La convergencia deja de ser una pregunta
+sobre programas y pasa a ser una pregunta sobre **el radio espectral de `L`**.
+
+Interpretación: `Φⁿ(0)` no es una aproximación abstracta — **es el tiempo esperado exacto del
+ciclo que se rinde después de `n` vueltas** (y al rendirse no cobra nada, que es el `0` del que
+se parte). Cada `Lᵏ(a) = x_{k+1} − x_k` es lo que gana una vuelta más de paciencia.
+
+### Desglose verificado sobre `p4_6`
+
+`while(c == 1){ c :~ ½<0> + ½<1> }`, con `Φ(X) = 1 + [c==1]·(1 + E[X])`:
+
+```
+a     = 1 + [c==1]
+L(X)  = [c==1]·E[X]
+Lᵏ(a) = 3·(½)ᵏ · [c==1]      para k ≥ 1
+```
+
+| n | término `Lⁿ⁻¹(a)` | suma parcial `xₙ` | salida real de `fp` |
+|---|---|---|---|
+| 1 | `1 + [c==1]` | `1 + 1·[c==1]` | `1.0 ++ [c == 1.0]` |
+| 2 | `(3/2)[c==1]` | `1 + (5/2)[c==1]` | `… ** 2.5` |
+| 3 | `(3/4)[c==1]` | `1 + (13/4)[c==1]` | `… ** 3.25` |
+| 4 | `(3/8)[c==1]` | `1 + (29/8)[c==1]` | `… ** 3.625` |
+| 5 | `(3/16)[c==1]` | `1 + (61/16)[c==1]` | `… ** 3.8125` |
+| 6 | `(3/32)[c==1]` | `1 + (125/32)[c==1]` | `… ** 3.90625` |
+
+La tercera columna es la salida literal de
+`fp "0" "c==1" "c :~ 1/2* <0> + 1/2* <1>" "0" n` (el `examplePresentacion` que ya está en
+`app/Main.hs`). Forma cerrada `Kₙ = 4 − 3·(½)ⁿ⁻¹`, límite `4`, o sea `1 ++ 4**[c==1]`.
+
+El `3` de cada término se decodifica como `2 + 1`: **una vuelta más** (guarda + cuerpo) para
+los que siguen, más **la guarda de salida** para los que ya terminaron y que la truncación
+anterior nunca alcanzó a ejecutar. Verificado: `½·2 + ½·1 = 3/2` ✓.
+
+Y la distancia al punto fijo es exactamente la cola: `4 − Kₙ = 3(½)ⁿ⁻¹ = Σ_{k≥n} Lᵏ(a)`.
+
+## 3. La órbita, la base finita y el lema del estancamiento
+
+La pregunta "¿cierra la serie?" es: **¿la órbita `{Lᵏ(a)}` vive en un subespacio de dimensión
+finita?** Los `RunTime` son funciones del estado a los reales, o sea vectores; el espacio
+ambiente es de dimensión infinita, pero la órbita puede quedar atrapada en un subespacio chico.
+
+Se construye incrementalmente, `V₁ ⊆ V₂ ⊆ V₃ ⊆ …` con `V_k = span{a, L(a), …, L^{k-1}(a)}`
+(subespacios de Krylov). Y vale el
+
+> **Lema del estancamiento.** Si `Lᵏ(a) ∈ V_k`, entonces `V_j = V_k` para todo `j > k`.
+>
+> Prueba: si `Lᵏ(a) = Σ cᵢ·Lⁱ(a)` con `i < k`, aplicando `L` queda
+> `L^{k+1}(a) = Σ cᵢ·L^{i+1}(a)`, y todos los de la derecha ya están en `V_k`. Inducción. ∎
+
+**Por eso el chequeo es finito y decidible**: basta que *una sola vez* el iterado nuevo sea
+linealmente dependiente de los anteriores. No hay que verificar infinitos pasos. (En la
+literatura: el paso donde se estanca es el grado del polinomio mínimo de `L` relativo a `a`.)
+
+## 4. Taxonomía de programas
+
+| clase | condición | qué se puede hacer |
+|---|---|---|
+| **C0** | la órbita es finita, `Φⁿ` se estabiliza literal | Kleene termina; nada que adivinar |
+| **C1** | la órbita vive en dimensión finita | **álgebra lineal: invariante exacto, sin solver** |
+| **C2** | la órbita es una familia parametrizada sumable | sumación simbólica (geométrica, Faulhaber, Gosper) |
+| **C3** | el resto | template + ∃∀ (la Vía 1) |
+
+Dos condiciones garantizan C1, y son justamente los dos modos de escape:
+
+1. **Los átomos booleanos no crecen.** Es lo que da `PSet` sobre soporte finito: sustituye
+   literales concretos, así que todo átomo que dependa de esa variable **colapsa a
+   `True'`/`False'`** — nunca fabrica uno nuevo. Es lo que rompe `x := x-1` sobre `[x>0]`, que
+   genera `[x>1]`, `[x>2]`, … para siempre.
+2. **El grado aritmético no crece.** Es lo que dan las asignaciones **afines** (`x := ax+b`):
+   sustituir una afín en un polinomio de grado `d` deja grado `d`. Los polinomios de grado ≤ d
+   en `n` variables son un subespacio de dimensión finita — `C(n+d, d)`, que es exactamente el
+   número de coeficientes de `freshPolynomial d` del experimento de grado 2. No es casualidad:
+   **es la dimensión de ese subespacio**.
+
+### El banco, clasificado
+
+| programas | forma | clase |
+|---|---|---|
+| `p4_1`, `cpkcMas`, `cpkcMenos` | `pwhile(<p>){skip}` | **C1**, dim 1 |
+| `p4_2`, `p4_6`–`p4_9` | `while(c==1){c:~coin}` | **C1**, dim 2 |
+| `p4_3`, `cpvcMas`, `cpvcMenos`, `cpvc` | `pwhile(<9/10>){ while(c==1){c:~coin} }` | **C1**, dim 2 |
+| `cdvcMenos` | `while(false){skip}` | C1 degenerado (`L = 0`) |
+| `p2_1`, `cdkcMenos/Mas`, `p4_10`–`p4_15` | `while(x>0){x:=x-1}` | **C2** |
+| `p2_2` | `while(y>=10){y:=y-1; x:=x+1}` | **C2** |
+| `cdvcMas` | `while(y<=x && x<=z){x:=x+½}` | **C2** |
+| anidado cuadrático | `while(x>0){y:=x; while(y>0){…}; x:=x-1}` | **C2** |
+
+El anidado `Cpvc` es C1 y conviene justificarlo porque sorprende: el `wp` del ciclo interno es
+`[c≠1]·X + [c==1]·X[c:=0]`, y si `X ∈ span{1,[c==1]}` entonces `X[c:=0]` es una constante, así
+que **el resultado se queda en el mismo span de dimensión 2**. El `pwhile` externo no aporta
+átomos (su "guarda" es una probabilidad).
+
+**El corte no es por dificultad aparente, es por determinista vs. probabilista.** Todo el lado
+probabilista del banco es C1; todo el lado de contador determinista es C2. Y eso invierte la
+dificultad respecto de la memoria: **`Cpvc` —el caso que hubo que despejar a mano con la
+hipótesis de `K`, y que en la herramienta necesitó `sharedExistentials` para resolver los dos
+ciclos como un sistema conjunto— se resolvería invirtiendo una matriz de 2×2.** Tiene sentido a
+posteriori: muestrear de una distribución de soporte finito **destruye información de estado**,
+y eso mantiene la dimensión baja; un contador determinista la preserva y la desplaza.
+
+## 5. El algoritmo
+
+```
+FASE 0 — partir el funcional
+    a    := cfWhile b body f rtZero
+    L(v) := cfWhile b body f v --: a
+
+FASE 1 — base de Krylov, con presupuesto N
+    B := [a];  v := a
+    repetir hasta N:
+        v := L(v)
+        si v es combinación lineal de B  →  ESTANCÓ: base cerrada, salir (C1)
+        si no                            →  B := B ++ [v]
+    presupuesto agotado → caer a la Vía 1 (template + ∃∀)
+
+FASE 2 — coordenadas
+    base canónica átomo × monomio (ej. {1, [c==1]})
+    â      := coordenadas de a
+    col j de M := coordenadas de L(Bⱼ)
+
+FASE 3 — resolver
+    El invariante es punto fijo:  I = a + L(I)
+    En coordenadas eso ES un sistema lineal:   (Id − M)·v = â
+    Gaussiana sobre Rational. Exacto, sin punto flotante, sin solver.
+    I := Σ vᵢ·Bᵢ
+
+FASE 4 — certificar
+    I queda como invariante CONCRETO (sin existenciales) → vcGenerator + completeRoutine',
+    que es el camino barato por contradicción que ya anda rápido con todo el banco.
+```
+
+Es un **semi-decisor correcto**: cuando el lema del estancamiento dispara, el veredicto es
+definitivo (no hay falsos positivos); cuando no, simplemente se usa la Vía 1.
+
+### `p4_6` completo
+
+```
+Base {1, [c==1]}:
+    a = 1 + [c==1]                          →  â = (1, 1)
+    L(1)      = [c==1]                      →  columna (0, 1)
+    L([c==1]) = ½·[c==1]                    →  columna (0, ½)
+
+    M = ⎡0  0⎤      (Id − M)·v = â:   v₁ = 1
+        ⎣1  ½⎦                        −v₁ + ½v₂ = 1  →  v₂ = 4
+
+    ρ(M): autovalores 0 y ½  →  ρ = ½ < 1  ✓
+
+    I = 1 + 4·[c==1]                        ← el invariante documentado del banco
+```
+
+Atajo cuando el estancamiento es escalar (`L^{k+1}(a) = r·Lᵏ(a)`): ni hace falta la matriz,
+`Σ Lᵏ(a) = a + L(a)/(1−r)`.
+
+## 6. El chequeo `ρ(M) < 1` y su trampa
+
+La condición de convergencia **no es sobre el determinante** (error fácil de cometer). Es sobre
+el radio espectral:
+
+```
+‖M‖ < 1   ⟹   ρ(M) < 1   ⟺   converge   ⟹   |det M| < 1
+(suficiente)              (exacta)         (necesaria, NO suficiente)
+```
+
+Contraejemplo del determinante: `M = diag(2, 0.1)` tiene `det = 0.2 < 1` y diverge.
+
+**Y el atajo de la norma falla en nuestro propio caso**: la `M` de `p4_6` tiene una fila que
+suma `1.5 > 1`, y sin embargo `ρ = ½`. La razón es que **la norma depende de la base y el radio
+espectral no** — la base `{1, [c==1]}` no es una base de probabilidades.
+
+**La trampa concreta**: si `1` es autovalor, `(Id − M)` es singular y la gaussiana avisa sola;
+pero si `ρ(M) > 1` sin que `1` lo sea, el sistema **igual tiene solución única** — un punto fijo
+que **no es el mínimo**, mientras el verdadero vale `∞` en algún estado. Un número creíble y
+equivocado. El chequeo no es opcional.
+
+### Lo que garantiza la semántica
+
+`L(X) = [φ]·wp[C](X)` es un operador **positivo y subestocástico**: `L(1) ≤ 1`, porque
+`wp[C](1)` es una probabilidad de terminación y `[φ]` sólo puede matar masa. De ahí
+**`ρ(L) ≤ 1` siempre** — el caso explosivo no puede pasar en esta semántica.
+
+Ojo con el matiz: `L(1) ≤ 1` **no** acota los valores (`L(1000)` puede valer casi mil). Acota el
+**factor de amplificación**. Es perfectamente compatible con que los `RunTime` vivan en `[0,∞]`:
+el infinito entra por la puerta de la **suma infinita**, no de ningún paso individual — igual
+que `1 + 1 + 1 + … = ∞` sin que ningún término explote.
+
+Queda entonces un único modo de falla:
+
+| | significado |
+|---|---|
+| `ρ(L) < 1` | se fuga masa hacia la salida → **tiempo esperado finito**, la serie cierra |
+| `ρ(L) = 1` | hay región donde no se fuga → **tiempo esperado infinito** |
+
+O sea que el chequeo es, de yapa, **el certificado de terminación en expectativa** (PAST).
+El caso canónico de `ρ = 1` es expresable en este lenguaje y sería un buen test del borde:
+
+```
+while(x > 0){ x :~ 1/2 * <x-1> + 1/2 * <x+1> }
+```
+
+La caminata aleatoria simétrica: termina con probabilidad 1 (AST) pero su tiempo esperado es
+infinito (no PAST). En la semántica de `ert` el `lfp` existe igual y vale `∞`; lo que no puede
+representar el infinito es el vector de coordenadas — se rompe el álgebra lineal, no la teoría.
+
+## 7. C2: la identidad de capas y el `+1` de grado
+
+A las indicatrices que proliferan **no se las acota, se las cambia de base**. La familia
+`[x>0], [x>1], [x>2], …` no es un conjunto arbitrario: es *una representación de un polinomio*.
+
+```
+Σ_{k≥0} [x > k]  =  x            (layer cake / Fubini discreto)
+```
+
+Desarrollado sobre `cdkcMenos` (`Φ(X) = 1 + [x>0]·(1 + X[x:=x-1])`), usando el colapso por
+subsunción `[x>0]·[x>1] = [x>1]`:
+
+```
+x₁ = 1 + [x>0]
+x₂ = 1 + 2[x>0] + [x>1]
+x₃ = 1 + 2[x>0] + 2[x>1] + [x>2]
+x₄ = 1 + 2[x>0] + 2[x>1] + 2[x>2] + [x>3]
+
+xₙ = 1 + 2·Σ_{k=0}^{n-2} [x>k]  +  [x>n-1]
+                                   └─ término de borde: se anula apenas n > x
+
+lfp = 1 + 2·Σ_{k≥0}[x>k] = 1 + 2x        ← exactamente p2_1: `1 ++ 2**[x>0]**x`
+```
+
+**La sumación cuesta exactamente un grado** (Faulhaber: `Σ_{k<n} kᵈ` es de grado `d+1`). En
+`cdkcMenos` el sumando era constante → grado 1. En el anidado cuadrático el sumando es lineal
+en `k` (el ciclo interno cuesta ≈ `x−k` en la vuelta `k`) → **grado 2**.
+
+O sea: **el experimento de subir el template a grado 2 no era arbitrario, estaba forzado por la
+teoría.** Pero las dos rutas hacia ese grado 2 no cuestan lo mismo:
+
+| ruta | qué hace | costo medido |
+|---|---|---|
+| template ∃∀ | **busca** 9 coeficientes con aritmética real no lineal cuantificada | timeout > 5 min |
+| sumación simbólica | **calcula** `Σ_{k<n} g(k,x)` con Faulhaber | cerrado, aritmético |
+
+La asimetría anotada más arriba ("confirmar que el grado 2 alcanza es lo caro") **desaparece si
+se calcula la suma en vez de buscar los coeficientes**.
+
+### Wald: cuándo alcanza "vueltas × costo"
+
+La intuición `E[total] = E[vueltas] × costo de una vuelta` es la identidad de Wald, y necesita
+que **todas las vueltas cuesten lo mismo**. En este lenguaje eso se traduce a: el cuerpo es
+código recto (sin ciclo anidado, sin `if` con ramas de distinto largo).
+
+- `p4_6`: `2 vueltas × 2 + 1 = 5` ✓  (`E[N] = 2`, constante sobre `c==1`)
+- `cdkcMenos`: `x vueltas × 2 + 1 = 1 + 2x` ✓  (`E[N] = x` — **una función del estado**, no un
+  número; sólo es escalar cuando el ciclo no depende del estado)
+- anidado cuadrático: la vuelta `k` cuesta `≈ 2(x−k)+4`. No hay "el costo de una vuelta" que
+  sacar factor común; `Σ [2(x−k)+4] = x(x+1)+4x`, cuadrático.
+
+**"Se rompe Wald" y "hace falta subir el grado" son el mismo fenómeno dicho de dos maneras**:
+costo constante → sale factor común, el grado no se mueve; costo variable → hay que sumar una
+sucesión no constante, y ahí aparece el grado extra.
+
+## 8. Banderas rojas para reconocer el escape
+
+| # | señal sintáctica | qué rompe | ¿recuperable? |
+|---|---|---|---|
+| 1 | asignación no afín (`x := x*y`) | el grado explota (se duplica por paso) | no, ni con sumación |
+| 2 | asignación autorreferente a variable de guarda (`x := x-1`) | los átomos proliferan | sí — C2, se suma |
+| 3 | **ciclo anidado con cota dependiente del externo** | el costo por vuelta varía | sí — C2, sube un grado |
+| 4 | `if` en el cuerpo con ramas de distinto largo | nada, en realidad | **no rompe nada acá** — ver abajo |
+
+Sobre la fila 4: en la Vía 1 un `if` en el cuerpo obligaría a particionar el template a mano.
+Acá **no hace falta ninguna heurística**: el átomo de la guarda del `if` simplemente aparece
+como un vector más de la base, y si el conjunto de átomos sigue siendo finito la órbita sigue
+cerrando. La base *descubre* la partición en vez de que haya que adivinarla. Es una de las
+ventajas concretas de esta vía sobre la de templates.
+
+**La trampa está en la fila 3**: las otras tres se ven mirando el AST, pero la 3 **no se ve
+mirando ningún iterado**, porque cada iterado finito es piecewise-afín y sólo el límite es
+cuadrático. Un recognizer basado en "inspeccioná el grado de los iterados" diría "grado 1, todo
+bien" indefinidamente. Por eso el chequeo dinámico (iterar con presupuesto + testear dependencia
+lineal) es el único confiable: detecta que la base *no cierra* sin necesitar entender por qué.
+Las banderas sintácticas sirven para explicar y para filtrar rápido, no para decidir.
+
+Distinción útil: **un producto en el programa no es lo mismo que un producto en la respuesta**.
+Producto en una asignación (`x := x*y`) mata el método; producto en el invariante (`n*m`, `x²`)
+es normal y esperado — es lo que pasa al sumar una familia, y es exactamente para lo que se
+generalizó `AExp` de lineal a polinomial en esta rama.
+
+Y la caracterización sintáctica *no hay que intentar completarla*: es suficiente pero no
+necesaria (a `x := 1-x` sobre `[x==1]` se le escapa, y sin embargo su órbita es periódica de
+período 2, así que cierra). La condición verdadera es "las variables de guarda recorren un
+conjunto finito de valores alcanzables" — o sea, *finite-state en la parte del estado que tocan
+las guardas*, que es la misma hipótesis bajo la cual `cegispro2` tiene completitud.
+
+## 9. Subsunción: la regla angosta que hace falta
+
+Para que los iterados de C2 no queden ilegibles hace falta que `[x>0]·[x>1]` colapse a `[x>1]`.
+`buildMul` ya junta las indicatrices en una conjunción, pero `simplifyBExp` (`Imp.hs`) **no
+tiene razonamiento de subsunción** — sólo resuelve constantes e igualdad sintáctica.
+
+La regla que alcanza, y es aritmética de `Rational`, no un solver:
+
+```
+(p ≤ c₁) ∧ (p ≤ c₂)   ≡   p ≤ min(c₁, c₂)
+(p ≤ c₁) ∨ (p ≤ c₂)   ≡   p ≤ max(c₁, c₂)
+```
+
+o sea: **mismo polinomio normalizado (módulo escalar positivo), distinta constante**. Con
+`completeNormArit` ya está media hecha.
+
+Y es exactamente la familia que genera la iteración, porque una asignación afín autorreferente
+`x := ax+b` sobre un átomo lineal siempre produce **el mismo polinomio con la constante
+corrida**. Vale incluso multivariado: en `cdvcMas` (`x := x+1/2` sobre `y−x ≤ 0` y `x−z ≤ 0`)
+los polinomios quedan idénticos y sólo se mueve la constante.
+
+**La incompletitud acá es segura**: no subsumir deja una expresión más grande, nunca una
+respuesta incorrecta. Es optimización de tamaño, no condición de corrección — muy distinto del
+paso de verificación, donde un `Unknown` es un veredicto perdido. Por eso conviene implementar
+los casos baratos y parar, y **no** meter Z3 adentro de `simplifyBExp`: volverla
+`BExp -> IO BExp` cambiaría la firma de todo lo que está aguas abajo, metería latencia en el
+camino caliente y un tercer resultado posible en una función que hoy no puede fallar.
+
+## 10. Lo único que falta implementar
+
+De todo el algoritmo, el único ingrediente que no existe es la **extracción de coordenadas**:
+dado un `RunTime`, descomponerlo canónicamente como `Σ cᵢ·(átomo × monomio)`, para poder
+(a) testear dependencia lineal en la Fase 1 y (b) armar `M` y `â` en la Fase 2. `cfWhile`, la
+aritmética racional, `completeNormArit` y toda la certificación ya están.
+
+Esa descomposición es, otra vez, la **forma normal de `RunTime`** que la memoria deja como
+trabajo futuro (§6.4) y que `CLAUDE.md` documenta como deuda técnica pre-existente. La
+diferencia es que ahora tiene un uso concreto que la justifica, y que **no hace falta la forma
+normal completa**: alcanza con decidir igualdad y dependencia lineal en el fragmento que
+generan estas iteraciones.

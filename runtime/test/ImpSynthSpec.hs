@@ -23,6 +23,32 @@ import ImpSynth
 spec :: Spec
 spec = do
 
+  describe "kleeneHints (iterados de punto fijo como pista)" $ do
+
+    it "da el iterado 0 más kleeneDepth iteraciones" $
+      fmap length (iterates (head (kleeneHints kleeneDepth (getProgram "while(x > 0){x := x-1}"))))
+        `shouldBe` Just (kleeneDepth + 1)
+
+    it "reproduce los iterados de pwhile(<1/2>){skip}: 0, 3/2, 9/4, 21/8, 45/16" $
+      iterates (head (kleeneHints 4 (getProgram "pwhile(<1/2>){skip}")))
+        `shouldBe` Just (map rtLit [0, 3/2, 9/4, 21/8, 45/16])
+
+    it "no da iterados propios a un ciclo anidado en otro sin invariante" $
+      map (isJust . iterates) (kleeneHints 2 (getProgram "while(x > 0){while(y > 0){y := y-1}; x := x-1}"))
+        `shouldBe` [True, False]
+
+    it "sí da iterados al ciclo interno si el externo tiene invariante" $
+      map (isJust . iterates) (kleeneHints 2 (getProgram "while(x > 0){inv = 1 ++ [x>0]**(2 ++ 3**y)}{while(y > 0){y := y-1}; x := x-1}"))
+        `shouldBe` [True]
+
+    it "ignora los ciclos que ya tienen invariante" $
+      length (kleeneHints 4 (getProgram "while(x > 0){inv = 1 ++ 2**[x>0]**x}{x := x-1}"))
+        `shouldBe` 0
+
+    it "synthesizedTemplates da un template por cada pista, en el mismo orden" $
+      length (synthesizedTemplates (getProgram "while(x > 0){while(y > 0){y := y-1}; x := x-1}"))
+        `shouldBe` 2
+
   describe "fillTemplates / synthesizeTemplates (templates naturales)" $ do
 
     it "rellena el hueco de un while sin invariante" $

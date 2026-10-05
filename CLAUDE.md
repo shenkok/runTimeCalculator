@@ -40,6 +40,33 @@ tanto con `cabal` como con `stack` (ver sección **Build**) — `207 examples, 0
 pending`. Los 5 `pending` son esqueletos de tests sin terminar en `ImpVCGenSpec.hs` (trabajo
 futuro, no bugs).
 
+## PRÓXIMA SESIÓN: refinar los simplificadores (decidido 2026-10-05)
+
+Trabajo comprometido para la siguiente sesión — **hay que hacerlo**, no es opcional: refinar
+los tres simplificadores para que un `RunTime` quede **muy simplificado** de forma confiable.
+
+1. **Aritmética (`AExp`)**: `normArit`/`simplifyArit`/`completeNormArit` (`Imp.hs`). Ya existe
+   la forma polinomial canónica (`Poly`); revisar que se aplique en todos los sitios donde hoy
+   queda aritmética sin normalizar (ej. `x + -1*1 <= 0` dentro de indicatrices).
+2. **Booleanos (`BExp`)**: `simplifyBExp` y `normBExp` (`Imp.hs`). `normBExp` (átomos
+   canónicos + NNF + aplanar/ordenar/deduplicar, sin DNF/CNF a propósito) existe pero **todavía
+   no está conectada** a `ImpVCGen.hs` (`getBExp`/`evalCondition`), que dependen de igualdad
+   estructural de `BExp`.
+3. **RunTime**: `simplifyRunTime`/`deepSimplifyRunTime` (`flattenMul`/`buildMul`,
+   `asIndicatorWeight`). Es la deuda técnica de "RunTime no tiene forma normal" (ver sección
+   "Deuda técnica pre-existente" más abajo, y §6.2/§6.4 del informe): `f <= f` no colapsa,
+   indicatrices compuestas sin normalizar generan `2^n` problemas.
+
+Cómo encararlo, decidir con el usuario al empezar la sesión (alcance de cada simplificador,
+orden, y si se apunta a forma normal completa o a un fragmento). Lo que **no** entra en esta
+tarea: la iteración de Kleene / "Vía 2" de `SINTESIS_TEMPLATE_NATURAL.md` queda como **trabajo
+futuro** (aunque la extracción de coordenadas que necesita es, en el fondo, esta misma forma
+normal de `RunTime`).
+
+Pendiente menor relacionado, conversado pero no confirmado para aplicar: escribir el template
+natural de `ImpSynth.hs` como `1 ++ [¬φ]**f ++ [φ]**t` (forma de `cfWhile`) en vez de
+`[¬φ]**(1++f) ++ [φ]**(1++t)` — matemáticamente idénticos, el primero es más legible.
+
 ## Contexto extenso (leer antes de decisiones de diseño no triviales)
 
 - `INFORME_TRABAJO_DE_T_TULO_LUIS_PINOCHET_GONZALEZ.pdf` (raíz del repo): la memoria de
@@ -600,6 +627,28 @@ Verificado de punta a punta contra los cuatro casos del banco (ver la tabla de
 `SINTESIS_TEMPLATE_NATURAL.md`): reproduce exactamente los mismos testigos que los experimentos
 manuales, y un programa de costo **cuadrático** (`while(x>0){y:=x; while(y>0){y:=y-1}; x:=x-1}`)
 reporta correctamente que no hay instancia válida.
+
+## runSynth: pista por iteración de Kleene (2026-10-05)
+
+`runSynth` imprime, **antes** del análisis, para cada ciclo sin invariante: sus iterados de
+punto fijo `Φ⁰(0) … Φ⁴(0)` (`ImpSynth.kleeneDepth = 4`, pedido explícito del usuario: 0 más 4
+iteraciones) como pista para proponer un invariante a mano, y el template natural propuesto
+(`ImpIO.showSynthesisHints`). Los iterados son sólo informativos: no alimentan al template ni a
+Z3 (eso sería la "Vía 2", que sigue como trabajo futuro).
+
+- `ImpSynth.ertApprox` es `vcGenerator` sin obligaciones, salvo que un ciclo **sin** invariante
+  se reemplaza por su n-ésimo iterado (en vez de fallar con `requireInvariant`) — así un ciclo
+  externo puede iterarse aunque el interno no tenga invariante.
+- Un ciclo anidado dentro de otro **sin** invariante no muestra iterados propios (`iterates =
+  Nothing`): su continuación depende de ese invariante desconocido. Si el externo sí tiene
+  invariante, el interno sí se itera, con ese invariante como continuación.
+- `kleeneHints` y `synthesizedTemplates` recorren en el mismo orden que `programInvariants`.
+- En programas anidados los iterados explotan de tamaño — es justo el problema de
+  simplificación de la sección "PRÓXIMA SESIÓN".
+
+De paso se corrigió `showRTFactor` (`Imp.hs`): trataba cualquier `RunTimeArit` como atómico, así
+que `[b]**(1 + a0)` se imprimía `[b]**1 + a0` (ambiguo). Ahora usa `showFactor`. Estado:
+**213 examples, 0 failures, 5 pending** (6 tests nuevos de `kleeneHints` en `ImpSynthSpec.hs`).
 
 ## Tests con el banco de la memoria (test/ImpProgramSpec.hs)
 
