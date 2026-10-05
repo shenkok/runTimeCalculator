@@ -213,7 +213,9 @@ paexp = buildExpressionParser table term
 --          | it (bexp) {program}         Azúcar sintáctica
 --          | pit (<rational>) {program}  Azúcar sintáctica
 --          | while (bexp) {inv = runtime}{program}
+--          | while (bexp) {program}                    -- sin invariante, a sintetizar después
 --          | pwhile (<rational>) {pinv = runtime}{program}
+--          | pwhile (<rational>) {program}              -- sin invariante, ídem
 --          | for (integer) {program}     Azúcar sintáctica
 --
 
@@ -230,10 +232,10 @@ program = foldl Seq Imp.Empty  <$> (statement `sepBy1` symbol ";")
                  <|> pit <$> try (reserved "pit" *> parens pbexp)
                         <*> braces program
                  <|> flipw While <$> try (reserved "while" *> parens bexp)
-                          <*> braces (reserved "inv" *> reserved "=" *> runtime)
+                          <*> optionMaybe (try (braces (reserved "inv" *> reserved "=" *> runtime)))
                           <*> braces program
                  <|> flipw PWhile <$> try (reserved "pwhile" *> parens pbexp)
-                          <*> braces (reserved "pinv" *> reserved "=" *> runtime)
+                          <*> optionMaybe (try (braces (reserved "pinv" *> reserved "=" *> runtime)))
                           <*> braces program
                  <|> Set  <$> try (identifier <* reservedOp ":=") <*> aexp
                  <|> PSet <$> try (identifier <* reservedOp ":~") <*> paexp

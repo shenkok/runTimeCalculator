@@ -19,13 +19,26 @@ generalizar las expresiones aritméticas de *lineales* a *polinomiales*, y gener
 tocar `Imp.hs`, lee las secciones "AExp: de lineal a polinomial" y "RunTime: de ponderación
 por constante a multiplicación entre RunTimes" antes de asumir cómo debería comportarse.
 
-**Estado actual de la rama** (`feature/change_arit_expression`): ambos refactores (`AExp` y
-`RunTime`) están terminados y el proyecto compila y pasa sus tests de punta a punta, tanto con
-`cabal` como con `stack` (ver sección **Build**) — `196 examples, 0 failures, 5 pending`. Los
-5 `pending` son esqueletos de tests sin terminar en `ImpVCGenSpec.hs` (trabajo futuro, no
-bugs). El constructor de indicatriz de `RunTime` también cambió esta sesión: ver "RunTime:
-indicatriz como constructor propio (RunTimeBExp)" más abajo antes de tocar cualquier función
-que mencione `:<>:`/indicatrices — ese constructor ya no existe.
+**Estado actual de la rama** (`feature/add_synth_invariants`, sobre `feature/change_arit_expression`
+ya mergeada): los refactores de `AExp` (lineal→polinomial) y `RunTime` (ponderación por
+constante→multiplicación genuina, incluida la indicatriz como constructor propio
+`RunTimeBExp` — el viejo `:<>:` ya no existe, no lo asumas si tocás `Imp.hs`) están terminados
+y estables. Esta rama agrega el trabajo de **síntesis de invariantes**:
+
+- `ImpSynth.hs` propone templates naturales (ver "Síntesis de templates naturales" más abajo).
+- `While`/`PWhile` ahora llevan invariante **opcional** (`Maybe RunTime`, ver sección
+  "While/PWhile: invariante opcional" más abajo) para poder escribir un ciclo sin invariante
+  y completarlo después.
+
+- `ImpSynth.fillTemplates`/`synthesizeTemplates0` rellenan esos huecos con **templates
+  naturales** derivados de la forma del programa (ver sección "Síntesis de templates naturales"
+  más abajo, y el documento `SINTESIS_TEMPLATE_NATURAL.md` en la raíz del repo). Punto de
+  entrada interactivo: `runSynth "..."` en `app/Main.hs`.
+
+El proyecto compila y pasa sus tests de punta a punta,
+tanto con `cabal` como con `stack` (ver sección **Build**) — `207 examples, 0 failures, 5
+pending`. Los 5 `pending` son esqueletos de tests sin terminar en `ImpVCGenSpec.hs` (trabajo
+futuro, no bugs).
 
 ## Contexto extenso (leer antes de decisiones de diseño no triviales)
 
@@ -57,13 +70,17 @@ que mencione `:<>:`/indicatrices — ese constructor ya no existe.
 - **`Imp.hs`** — el núcleo: ASTs de `AExp`, `BExp`, `RunTime`, `PAExp`/`PBExp` (probabilistas),
   `Program`; azúcar sintáctica; sustitución; `freeVars`; simplificación y normalización de
   `AExp` (`normArit`, `simplifyArit`, `completeNormArit`); simplificación de `BExp`/`RunTime`/
-  `Program`; `expectedValue`/`aexpE` para calcular esperanzas sobre distribuciones.
+  `Program`; `expectedValue`/`aexpE` para calcular esperanzas sobre distribuciones. `While`/
+  `PWhile` llevan invariante `Maybe RunTime` (ver sección "While/PWhile: invariante opcional"
+  más abajo).
 - **`ImpParser.hs`** — parser Parsec de la sintaxis concreta (`aexp`, `bexp`, `runtime`,
   `program`, etc.), espejo de la sintaxis abstracta de `Imp.hs`.
 - **`ImpVCGen.hs`** — `vcg[·]`: recorre un `Program` y devuelve `(RunTime, [obligaciones])`;
   linealización de `RunTime`→`AExp` bajo hipótesis sobre las indicatrices (`getBExp`,
   contexto/restricción derivada); `restrictionsToImplications`/`programToSolverInput` arman
-  el input final para SBV.
+  el input final para SBV. `requireInvariant` extrae el invariante de un `While`/`PWhile` o
+  falla con un error claro si todavía es `Nothing` (ver sección "While/PWhile: invariante
+  opcional").
 - **`ImpSBV.hs`** — traduce `AExp`/`BExp`/implicaciones a `SBV`; `mkUniversales` cuantifica una
   cantidad arbitraria de variables universales (ver sección "mkUniversales: de tope de 3 a
   cantidad arbitraria" más abajo — el tope duro de 3 que hubo en algún momento era un artefacto
@@ -74,6 +91,10 @@ que mencione `:<>:`/indicatrices — ese constructor ya no existe.
   todo variable libre, un problema de SBV por contexto), `completeRoutine'` el modo nuevo
   (`programToSolverInputs`/`mkUniversales`, ∃∀ real, un problema por obligación) — ver sección
   "Flujo de impresión, modo nuevo" más abajo.
+- **`ImpSynth.hs`** — **síntesis**: `fillTemplates`/`synthesizeTemplates0` rellenan los huecos
+  de invariante de un programa (`While`/`PWhile` con `Nothing`) con **templates naturales**
+  derivados de la forma del programa. No verifica invariantes — eso sigue siendo `vcg[·]` +
+  `ImpSBV`. Ver la sección "Síntesis de templates naturales" más abajo.
 - **`ImpProgram.hs`** — banco de programas de ejemplo/test en sintaxis abstracta (`Ctrunc`,
   `Cgeo`, las 12 categorías `Cdks`/`Cpvc+`/etc. de la memoria).
 - **`app/Main.hs`** — entry point interactivo: `run "<programa>"`, `fp`/`fpp` (iteración de
@@ -423,6 +444,20 @@ Main, Expected InformeExamples". Se resolvió dándole su propio `source-dirs: a
 tocar el layout de `runtime-exe`. Como es un ejecutable nuevo (no una dependencia), no hizo
 falta `cabal update` esta vez — sólo `stack build`/`cabal build` para regenerar y confirmar.
 
+## ImpSynth: certificación de grado por diferencias finitas (ELIMINADO)
+
+`ImpSynth.hs` tuvo una segunda vía de síntesis, anterior a los templates naturales: certificar
+el **grado** de un `RunTime` con diferencias finitas simbólicas, vía la consulta `∃c ∀x.
+Δᵈf(x) = c` a Z3 (si la d-ésima diferencia es constante, `f` es polinomio de grado `d`).
+Funcionaba, estaba testeada (15 tests), e incluía la regla de uso de que un iterado de Kleene
+sólo es confiable hasta su profundidad — más allá, la meseta del truncamiento rompe la
+diferencia constante, así que hay que acotar la región.
+
+**Se eliminó** al cerrar la sesión de templates naturales: el camino que quedó (afín, sin subir
+el grado) no necesita certificar nada, y mantener las dos vías era cargar código sin usar.
+**Está completo en el commit `cf6407d`** — `git show cf6407d:runtime/src/ImpSynth.hs` y
+`git show cf6407d:runtime/test/ImpSynthSpec.hs`. No lo reimplementes desde cero si hace falta.
+
 ## Buena-definición (0 ≤ I) y resolución conjunta de obligaciones
 
 Dos arreglos hechos a raíz de probar `Cpvc` (el `pwhile` con un `while` anidado, Anexo C.1.8
@@ -462,7 +497,109 @@ mismo sistema que en la memoria (C.1.8) hubo que despejar a mano con la hipótes
 Tests: `ImpVCGenSpec.hs` cubre `programInvariants` (incluido el orden externo-antes-que-interno,
 del que depende el emparejamiento) y `wellDefinedness`; `ImpIOSpec.hs` cubre `sharedExistentials`
 y la regresión end-to-end del caso anidado. Los tests viejos que contaban implicaciones se
-actualizaron (hay una más por ciclo). Estado: **196 examples, 0 failures, 5 pending**.
+actualizaron (hay una más por ciclo). Estado: **211 examples, 0 failures, 5 pending**.
+
+## While/PWhile: invariante opcional (Maybe RunTime)
+
+Sesión posterior a "ImpSynth"/"Buena-definición". Motivación: para poder sintetizar invariantes
+hacía falta poder escribir primero un programa con un ciclo **sin** invariante todavía — antes
+era imposible, `While`/`PWhile` exigían un `RunTime` concreto en el constructor mismo.
+
+Decisiones de diseño confirmadas explícitamente antes de implementar (mismo criterio que en
+"RunTime: indicatriz como constructor propio"):
+
+- **Representación**: `While BExp Program (Maybe RunTime)` / `PWhile PBExp Program (Maybe
+  RunTime)` — se reusan los mismos constructores (`Nothing` = sin invariante todavía) en vez de
+  agregar uno nuevo (`WhileNoInv`). Cambio mínimo: mismos constructores, un campo más flexible.
+- **vcg sin invariante**: falla con un `error` claro en vez de propagar `Either`/`Maybe` por las
+  firmas de `vcGenerator`/`vcGenerator'` y todo lo que depende de ellas (`ImpIO.hs`,
+  `app/Main.hs`, varios tests) — hubiera sido un refactor bastante más grande para un caso que,
+  por diseño, nunca debería llegar a producción (si hay un `Nothing`, el paso previo de síntesis
+  no se corrió).
+- **Sintaxis concreta**: se omite el bloque `{inv = ...}` completo — `while(cond){body}` en vez
+  de `while(cond){inv=...}{body}` — mismo principio que `it`/`pit` (azúcar de `if`/`pif` sin
+  rama `else`), no un marcador nuevo dentro del bloque.
+
+Implementación:
+
+- `Imp.hs`: cambio del tipo de `While`/`PWhile`. `deepSimplifyProgram` no necesitó tocarse — ya
+  trataba el tercer campo como opaco, sin pattern-matchearlo.
+- `ImpParser.hs`: `optionMaybe (try (braces (reserved "inv" *> reserved "=" *> runtime)))` antes
+  de `braces program` (mismo patrón para `pwhile`/`pinv`) — `optionMaybe` ya venía de
+  `Text.Parsec`, no hizo falta importar nada nuevo. El `try` es necesario: si el bloque `{inv =
+  ...}` no está, hay que poder backtrackear sin consumir el `{` que en realidad abre el cuerpo.
+- `ImpVCGen.hs`: se agregó `requireInvariant :: Maybe RunTime -> RunTime` (`Just inv -> inv`;
+  `Nothing -> error "vcg: este while/pwhile no tiene invariante todavía — sintetizalo antes de
+  generar las obligaciones de prueba."`). Se usó en los cinco sitios que asumían un invariante
+  concreto: `vcGenerator` y `vcGenerator'` (casos `While`/`PWhile`), `get_variables` (dentro de
+  `getExistencialAndUniversalVars`), y `programInvariants`. `freeVarsProgram` no necesitó
+  cambios — ya ignoraba ese campo con `_`.
+- Tests: los sitios que construían `While`/`PWhile` a mano con un `RunTime` desnudo
+  (`ImpIOSpec.hs`, `ImpVCGenSpec.hs`) se envolvieron en `Just`; se agregó un test nuevo en
+  `ImpParserSpec.hs` ("parsea while sin invariante") que confirma que `while (x <= y) {skip}`
+  parsea a `While ... Nothing`.
+
+Verificado a mano en GHCi: `parseProgram` acepta `while(x>0){x:=x-1}` (sin invariante) y da
+`While ... Nothing`; llamar `vcGenerator0` sobre ese programa lanza el error de
+`requireInvariant` en vez de un fallo de patrón opaco.
+
+Estado: **212 examples, 0 failures, 5 pending** con `cabal test runtime-test` y `stack test`
+(subió de 211 por el test nuevo del parser).
+
+Ese hueco lo llena `ImpSynth.fillTemplates` — ver "Síntesis de templates naturales" más abajo.
+
+## Síntesis de templates naturales (ImpSynth.hs: fillTemplates)
+
+Cierra el ciclo abierto por el invariante opcional: rellena cada `While`/`PWhile` con `Nothing`
+con un invariante-plantilla derivado de la **forma del programa**, para que
+`vcGenerator'`/`programToSolverInput` le pidan a Z3 los coeficientes en una única consulta ∃∀.
+**Sin lazo CEGIS**: un intento, un veredicto.
+
+El diseño completo (regla, recorrido, algoritmo caso por caso, cuidados y validación previa)
+está en **`SINTESIS_TEMPLATE_NATURAL.md`**, en la raíz del repo — leerlo antes de tocar
+`fillTemplates`. Lo esencial:
+
+- La regla viene de los *natural templates* de Batz et al. (TACAS 2023, Def. p. 418): la pieza
+  `[¬φ]` multiplica **la continuación** sin coeficientes propios (cuando la guarda es falsa el
+  valor ya se conoce exactamente, es `f` por definición de `Φ_f`), y la pieza `[φ]` multiplica
+  una **afín** con coeficientes frescos de ese nivel.
+- Para un `pwhile` la partición existe igual pero pesada por las constantes `1-p`/`p` en vez de
+  por indicatrices — extensión nuestra: el lenguaje del paper sólo tiene `while(φ){C}` con `φ`
+  booleana y la probabilidad como elección *dentro* del cuerpo.
+- El recorrido usa las **dos direcciones** de la recursión, igual que `vcGenerator'`: la
+  continuación baja como argumento (la consume la pieza `[¬φ]`) y el `ert` sube como resultado
+  (lo consume `Seq` para darle continuación al statement de la izquierda). Como la pieza `[φ]`
+  lleva coeficientes frescos y **no** el valor que sube desde el cuerpo, ningún template depende
+  del `ert` de su propio cuerpo y no hay circularidad.
+- `Fresh = State (Int, Names)` numera los coeficientes (`a0`, `a1`, ...) y lleva los nombres ya
+  ocupados para que `freshName` evite colisiones con variables del programa y con coeficientes
+  de otros niveles.
+- La negación de la guarda **tiene que pasar por `simplifyBExp`**: las guardas azucaradas ya son
+  negaciones (`>` es `Not (<=)`), así que un `Not e_b` crudo deja doble negación y revienta al
+  linealizar.
+
+**Bug pre-existente que destapó esta sesión** (corregido, `ImpVCGen.restrictionsToImplications`):
+`deepSimplifyRunTime runtimeA --: runtimeB` se leía como `(deepSimplifyRunTime runtimeA) --:
+runtimeB` — faltaban paréntesis, así que **el invariante del lado derecho nunca se
+simplificaba**. Como `deepSimplifyRunTime` es lo que normaliza la aritmética dentro de las
+indicatrices, una condición sin normalizar de ese lado (`x + -1*1 <= 0`) no matcheaba contra los
+átomos normalizados del otro, `evalCondition` no la reconocía y `runTimeToArit` fallaba con "No
+hay versión directa a AExp". No se notaba porque todos los invariantes del banco están escritos
+a mano ya normalizados; aparece apenas un invariante lo genera una sustitución. Corregirlo no
+cambió ningún veredicto existente.
+
+**Alcance de esta versión**: sólo afín (grado 1), partición sólo por la guarda del propio ciclo
+(no por los `if` internos del cuerpo, que el paper sí usa), y sin refinamiento ante un fallo.
+**Subir el grado se probó y se revirtió** (ver "Experimento: subir el template a grado 2" en
+`SINTESIS_TEMPLATE_NATURAL.md`): anda en casos chicos pero en el anidado cuadrático —justo donde
+haría falta— la consulta ∃∀ con monomios `x²`/`x·y`/`y²` no termina en 5 minutos. Antes de
+retomarlo hay que ponerle timeout a Z3 (`SMTConfig`) y achicar el problema. Ojo con la
+asimetría: descubrir que el afín NO alcanza es barato (`Unsatisfiable` en segundos);
+confirmar que el grado 2 sí alcanza es lo caro.
+Verificado de punta a punta contra los cuatro casos del banco (ver la tabla de
+`SINTESIS_TEMPLATE_NATURAL.md`): reproduce exactamente los mismos testigos que los experimentos
+manuales, y un programa de costo **cuadrático** (`while(x>0){y:=x; while(y>0){y:=y-1}; x:=x-1}`)
+reporta correctamente que no hay instancia válida.
 
 ## Tests con el banco de la memoria (test/ImpProgramSpec.hs)
 
@@ -563,11 +700,13 @@ cosas no obvias que confirman esos tests:
   `programToSolverInputs` (la continuación de un `while` anidado arrastra el contexto del
   `while` que lo contiene), no una falla del filtro `relevantVars`.
 
-Estado: **196 examples, 0 failures, 5 pending** (correr `cabal test runtime-test` o
+Estado: **207 examples, 0 failures, 5 pending** (correr `cabal test runtime-test` o
 `stack test`, ver **Build**; el conteo subió de 187 a 189 en la sesión de "RunTime: indicatriz
-como constructor propio (RunTimeBExp)", que agregó cobertura de parser para la indicatriz
-ponderada). De paso se encontraron y corrigieron dos bugs reales en los tests mismos (no en el
-código de producción):
+como constructor propio (RunTimeBExp)", de 189 a 211 con `ImpSynthSpec.hs`/`ImpIOSpec.hs`/
+`ImpVCGenSpec.hs` de las sesiones de "ImpSynth"/"Buena-definición", y de 211 a 212 con el test
+de parser de "While/PWhile: invariante opcional"; después subió a 222 con `ImpSynthSpec.hs` y volvió a
+207 al eliminar los 15 tests de `certifyDegree`). De paso se encontraron y corrigieron dos
+bugs reales en los tests mismos (no en el código de producción):
 - `ImpParserSpec.hs`, test "parsea for": el valor esperado no envolvía el cuerpo del `for` en
   `Seq Empty (...)`, aunque la gramática de `program` siempre envuelve así cualquier cuerpo
   parseado (el test de `while`, dos líneas arriba en el mismo archivo, sí lo hace bien —

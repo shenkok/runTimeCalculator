@@ -274,7 +274,11 @@ spec = describe "ImpParser" $ do
 
     it "parsea while con invariante" $
       parseProgram "" "while (x <= y) {inv = x} {skip}"
-        `shouldParseTo` Seq Empty (While (Var "x" :<=: Var "y") (Seq Empty Skip) (RunTimeArit (Var "x")))
+        `shouldParseTo` Seq Empty (While (Var "x" :<=: Var "y") (Seq Empty Skip) (Just (RunTimeArit (Var "x"))))
+
+    it "parsea while sin invariante" $
+      parseProgram "" "while (x <= y) {skip}"
+        `shouldParseTo` Seq Empty (While (Var "x" :<=: Var "y") (Seq Empty Skip) Nothing)
 
     it "parsea for" $
       parseProgram "" "for (3) {x := 1}"
