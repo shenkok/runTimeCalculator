@@ -4,6 +4,7 @@ import Data.SBV
 import ImpSBV
 import Imp
 import ImpVCGen
+import ImpSynth (KleeneHint (..), kleeneDepth, kleeneHints, synthesizedTemplates)
 import Data.List (zip4, zip5, zip6, tails)
 import qualified Data.Set as Set
 import Control.Monad (zipWithM)
@@ -281,3 +282,29 @@ completeRoutine' program str = do
 
 
                                       
+
+-- | Para cada ciclo sin invariante: sus primeros iterados de Kleene (pista
+-- para que el usuario proponga un invariante a mano) y el template natural
+-- que propone ImpSynth, cuyos coeficientes busca después completeRoutine'.
+showSynthesisHints :: Program -> IO ()
+showSynthesisHints program = do
+  let hints     = kleeneHints kleeneDepth program
+      templates = synthesizedTemplates program
+  if null hints
+    then return ()
+    else do
+      putStr newLine
+      putStrLn "Ciclos sin invariante anotado:"
+      mapM_ showHint (zip3 [1 :: Int ..] hints templates)
+  where
+    showHint (i, hint, template) = do
+      putStr newLine
+      putStrLn ("Ciclo " ++ show i ++ ": " ++ loopHeader hint)
+      case iterates hint of
+        Nothing ->
+          putStrLn "  Sin iterados propios: está anidado en un ciclo sin invariante, y su continuación depende de ese invariante."
+        Just xs -> do
+          putStrLn "  Iteraciones de punto fijo desde 0 (pista para el invariante):"
+          mapM_ (\(k, x) -> putStrLn ("    Φ^" ++ show k ++ "(0) = " ++ show x)) (zip [0 :: Int ..] xs)
+      putStrLn "  Template propuesto (Z3 busca sus coeficientes):"
+      putStrLn ("    " ++ show (deepSimplifyRunTime template))

@@ -38,12 +38,18 @@ run' input = case parseProgram "<interactive>" input of
 --
 --   runSynth "while(x > 0){x := x-1}"
 --
+-- Antes, para cada ciclo sin invariante imprime sus primeros iterados de
+-- Kleene (ImpSynth.kleeneDepth) como pista, junto al template propuesto.
+--
 -- Si no hay testigo, se reporta y se termina: no hay refinamiento ni lazo
 -- CEGIS. Ver SINTESIS_TEMPLATE_NATURAL.md en la raíz del repo.
 runSynth :: String -> IO ()
 runSynth input = case parseProgram "<interactive>" input of
   Left err  -> print err
-  Right program -> completeRoutine' (synthesizeTemplates0 (deepSimplifyProgram program)) input
+  Right program -> do
+    let program' = deepSimplifyProgram program
+    showSynthesisHints program'
+    completeRoutine' (synthesizeTemplates0 program') input
 
 -- |Calcula la iteración de punto fijo de orden n de una transformada de un while determinista
 

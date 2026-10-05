@@ -494,8 +494,8 @@ toIndicator e_b = RunTimeBExp e_b
 -- showFactor para AExp :*:, necesario porque :**: ya no está restringido a
 -- "constante ** algo": ambos lados pueden ser RunTime compuestos.
 showRTFactor :: RunTime -> String
-showRTFactor r@(RunTimeArit _) = show r
-showRTFactor r@(RunTimeBExp _) = show r
+showRTFactor (RunTimeArit arit) = showFactor arit  -- una suma adentro sí lleva paréntesis
+showRTFactor r@(RunTimeBExp _)  = show r
 showRTFactor r                 = "(" ++ show r ++ ")"
 
 instance Show RunTime where

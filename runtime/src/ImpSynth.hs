@@ -1,7 +1,7 @@
 module ImpSynth where
 
 import Imp
-import ImpVCGen (freeVarsProgram)
+import ImpVCGen (freeVarsProgram, programInvariants)
 import Control.Monad.Trans.State (State, evalState, get, put)
 
 {-
@@ -170,3 +170,94 @@ synthesizeTemplates program f =
 -- vcGenerator0/completeRoutine'.
 synthesizeTemplates0 :: Program -> Program
 synthesizeTemplates0 program = synthesizeTemplates program rtZero
+
+{-
+    SUGERENCIAS POR ITERACIÓN DE KLEENE
+
+    Antes de proponer el template, a cada ciclo sin invariante se le muestran
+    sus primeros iterados de punto fijo Φ_f⁰(0), ..., Φ_fⁿ(0), como pista
+    para que el usuario adivine el invariante a mano (técnica de la memoria,
+    §5.4.3 / Anexo C.1.8). No se usan para nada más: no certifican ni
+    alimentan al template.
+-}
+
+-- | Cantidad de iteraciones que se muestran (además del iterado 0).
+kleeneDepth :: Int
+kleeneDepth = 4
+
+-- | Iterados de Kleene de un ciclo, ya pasados por el simplificador.
+--
+-- Pista para un ciclo sin invariante. iterates es Nothing cuando el ciclo
+-- está anidado dentro de otro que tampoco tiene invariante: su continuación
+-- depende de ese invariante desconocido, así que no tiene iterados propios.
+data KleeneHint = KleeneHint
+  { loopHeader :: String
+  , iterates   :: Maybe [RunTime]
+  }
+
+-- | ert aproximado: igual que vcGenerator, salvo que un ciclo sin invariante
+-- se reemplaza por su n-ésimo iterado de Kleene (en vez de fallar con
+-- requireInvariant). Un ciclo con invariante devuelve el invariante, igual
+-- que vcGenerator.
+ertApprox :: Int -> Program -> RunTime -> RunTime
+ertApprox _ Skip           f = rtOne :++: f
+ertApprox _ Empty          f = f
+ertApprox _ (Set x arit)   f = rtOne :++: sustRunTime x arit f
+ertApprox _ (PSet x parit) f = rtOne :++: aexpE parit x f
+ertApprox n (Seq p_1 p_2)  f = ertApprox n p_1 (ertApprox n p_2 f)
+ertApprox n (If e_b e_t e_f) f =
+  rtOne :++: ((RunTimeBExp e_b :**: ertApprox n e_t f) :++: (RunTimeBExp (Not e_b) :**: ertApprox n e_f f))
+ertApprox n (PIf pe_b e_t e_f) f =
+  rtOne :++: ((rtLit (p pe_b) :**: ertApprox n e_t f) :++: (rtLit (1 - p pe_b) :**: ertApprox n e_f f))
+ertApprox _ (While _ _ (Just inv))  _ = inv
+ertApprox n (While e_b body Nothing) f = last (whileIterates n e_b body f)
+ertApprox _ (PWhile _ _ (Just inv)) _ = inv
+ertApprox n (PWhile pe_b body Nothing) f = last (pwhileIterates n pe_b body f)
+
+-- | Φ_f⁰(0), ..., Φ_fⁿ(0) de un while: la misma función característica que
+-- cfWhile, pero con el cuerpo vía ertApprox para tolerar ciclos internos sin
+-- invariante. Se simplifica en cada paso para que el tamaño no explote.
+whileIterates :: Int -> BExp -> Program -> RunTime -> [RunTime]
+whileIterates n e_b body f = take (n + 1) (iterate step rtZero)
+  where
+    step x = deepSimplifyRunTime $
+      rtOne :++: ((RunTimeBExp (simplifyBExp (Not e_b)) :**: f) :++: (RunTimeBExp e_b :**: ertApprox n body x))
+
+-- | Igual que whileIterates, para un pwhile (función característica de cfPWhile).
+pwhileIterates :: Int -> PBExp -> Program -> RunTime -> [RunTime]
+pwhileIterates n pe_b body f = take (n + 1) (iterate step rtZero)
+  where
+    p_true = p pe_b
+    step x = deepSimplifyRunTime $
+      rtOne :++: ((rtLit (1 - p_true) :**: f) :++: (rtLit p_true :**: ertApprox n body x))
+
+-- | Una pista por cada ciclo sin invariante, en el mismo orden que
+-- programInvariants (ciclo antes que su cuerpo, izquierda antes que derecha),
+-- con continuación inicial 0 (la misma de vcGenerator0).
+kleeneHints :: Int -> Program -> [KleeneHint]
+kleeneHints n program = go program (Just rtZero)
+  where
+    -- La continuación es Nothing dentro de un ciclo sin invariante.
+    go (Seq p_1 p_2) mf     = go p_1 (ertApprox n p_2 <$> mf) ++ go p_2 mf
+    go (If _ e_t e_f) mf    = go e_t mf ++ go e_f mf
+    go (PIf _ e_t e_f) mf   = go e_t mf ++ go e_f mf
+    go (While _ body (Just inv))  _ = go body (Just inv)
+    go (PWhile _ body (Just inv)) _ = go body (Just inv)
+    go (While e_b body Nothing) mf =
+      KleeneHint ("while(" ++ show e_b ++ ")") (whileIterates n e_b body <$> mf) : go body Nothing
+    go (PWhile pe_b body Nothing) mf =
+      KleeneHint ("pwhile(" ++ show pe_b ++ ")") (pwhileIterates n pe_b body <$> mf) : go body Nothing
+    go _ _ = []
+
+-- | Los templates que synthesizeTemplates0 le asigna a cada ciclo que venía
+-- sin invariante, en el mismo orden que kleeneHints.
+synthesizedTemplates :: Program -> [RunTime]
+synthesizedTemplates program =
+  [ inv | (Nothing, inv) <- zip (holes program) (programInvariants (synthesizeTemplates0 program)) ]
+  where
+    holes (Seq p_1 p_2)        = holes p_1 ++ holes p_2
+    holes (If _ e_t e_f)       = holes e_t ++ holes e_f
+    holes (PIf _ e_t e_f)      = holes e_t ++ holes e_f
+    holes (While _ body minv)  = minv : holes body
+    holes (PWhile _ body minv) = minv : holes body
+    holes _                    = []
