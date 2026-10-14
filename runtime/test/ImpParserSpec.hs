@@ -60,6 +60,89 @@ spec = describe "ImpParser" $ do
       parseAExp "" "1 + x"
         `shouldParseTo` (Lit 1 :+: Var "x")
 
+    it "parsea producto de variables" $
+      parseAExp "" "x * y"
+        `shouldParseTo` (Var "x" :*: Var "y")
+
+    it "parsea variable por constante" $
+      parseAExp "" "x * 2"
+        `shouldParseTo` (Var "x" :*: 2)
+
+    it "parsea producto de sumas parentizadas" $
+      parseAExp "" "(x + 1) * (x - 1)"
+        `shouldParseTo` ((Var "x" :+: 1) :*: (Var "x" -: 1))
+
+    it "parsea producto encadenado asociando por la izquierda" $
+      parseAExp "" "2 * x * y"
+        `shouldParseTo` ((2 :*: Var "x") :*: Var "y")
+
+    it "da más precedencia a * que a + y -" $
+      parseAExp "" "x + y * z - 1"
+        `shouldParseTo` ((Var "x" :+: (Var "y" :*: Var "z")) -: 1)
+
+    it "ida y vuelta show/parse de un producto genérico" $
+      let e = (Var "x" :+: Var "y") :*: (Var "z" :*: Var "w")
+      in parseAExp "" (show e) `shouldParseTo` e
+
+    it "ida y vuelta show/parse con literales enteros, racionales y negativos" $
+      let e = (Lit 3 :*: Var "x") :+: (Lit (1/3) :*: (Var "y" :*: Lit (-1/2)))
+      in parseAExp "" (show e) `shouldParseTo` e
+
+    it "muestra los literales en notación del parser" $
+      map show [Lit 3, Lit (-1/2), Lit (1/3)] `shouldBe` ["3", "-1/2", "1/3"]
+
+    it "parsea producto entre constantes" $
+      parseAExp "" "2 * 3"
+        `shouldParseTo` (Lit 2 :*: Lit 3)
+
+    it "parsea producto entre racionales" $
+      parseAExp "" "1/2 * 2/3"
+        `shouldParseTo` (Lit (1/2) :*: Lit (2/3))
+
+    it "parsea un racional con espacios alrededor de /" $
+      parseAExp "" "1 / 2"
+        `shouldParseTo` Lit (1/2)
+
+    it "parsea un racional negativo" $
+      parseAExp "" "-1/2"
+        `shouldParseTo` Lit (-1/2)
+
+    it "parsea * seguido de un literal negativo sin espacio" $
+      parseAExp "" "x*-1"
+        `shouldParseTo` (Var "x" :*: Lit (-1))
+
+    it "parsea + seguido de un literal negativo sin espacio" $
+      parseAExp "" "x+-1"
+        `shouldParseTo` (Var "x" :+: Lit (-1))
+
+    it "parsea el menos unario sobre una variable" $
+      parseAExp "" "-x"
+        `shouldParseTo` (Lit (-1) :*: Var "x")
+
+    it "parsea * seguido de una variable negada sin espacio" $
+      parseAExp "" "x*-y"
+        `shouldParseTo` (Var "x" :*: (Lit (-1) :*: Var "y"))
+
+    it "parsea el menos unario sobre un paréntesis" $
+      parseAExp "" "-(x + 1)"
+        `shouldParseTo` (Lit (-1) :*: (Var "x" :+: 1))
+
+    it "el menos unario liga más fuerte que *" $
+      parseAExp "" "-x*y"
+        `shouldParseTo` ((Lit (-1) :*: Var "x") :*: Var "y")
+
+    it "resta de una variable negada" $
+      parseAExp "" "x - -y"
+        `shouldParseTo` (Var "x" -: (Lit (-1) :*: Var "y"))
+
+    it "un menos seguido de dígito sigue siendo literal negativo" $
+      parseAExp "" "- 1"
+        `shouldParseTo` Lit (-1)
+
+    it "guarda 1/3 como racional exacto" $
+      fmap (\e -> e :*: 3) (parseAExp "" "1/3")
+        `shouldSatisfy` (\r -> fmap completeNormArit r == Right (Lit 1))
+
     it "falla con string vacío" $
       shouldFail (parseAExp "" "")
 
@@ -73,6 +156,26 @@ spec = describe "ImpParser" $ do
     it "parsea false" $
       parseBExp "" "false"
         `shouldParseTo` False'
+
+    it "parsea una comparación con literal negativo sin espacio" $
+      parseBExp "" "x<=-1"
+        `shouldParseTo` (Var "x" :<=: Lit (-1))
+
+    it "parsea producto de variables dentro de una comparación" $
+      parseBExp "" "x*y < 3"
+        `shouldParseTo` (Var "x" :*: Var "y" <: 3)
+
+    it "sigue leyendo -- de runtime como resta de runtimes" $
+      parseRunTime "" "x--1"
+        `shouldParseTo` (RunTimeArit (Var "x") --: RunTimeArit 1)
+
+    it "sigue leyendo x -- y de runtime como resta de runtimes" $
+      parseRunTime "" "x -- y"
+        `shouldParseTo` (RunTimeArit (Var "x") --: RunTimeArit (Var "y"))
+
+    it "sigue leyendo ** de runtime como producto de runtimes" $
+      parseRunTime "" "x**y"
+        `shouldParseTo` (RunTimeArit (Var "x") :**: RunTimeArit (Var "y"))
 
     it "parsea menor igual" $
       parseBExp "" "x <= y"

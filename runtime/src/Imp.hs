@@ -97,9 +97,19 @@ showFactor (Lit n) = show (Lit n)
 showFactor (Var x) = show (Var x)
 showFactor e        = "(" ++ show e ++ ")"
 
+-- | Muestra un literal en la misma notación que acepta el parser de racionales
+-- ("3", "-1/2", "1/3"). Show AlgReal daría "3.0", "-0.5" o "1 % 3", que no se
+-- pueden volver a parsear. Un algebraico no racional (sólo puede venir de un
+-- modelo de Z3, nunca del parser) cae en el show de AlgReal.
+showConstant :: Constant -> String
+showConstant n = case algRealToRational n of
+  RatExact r | denominator r == 1 -> show (numerator r)
+             | otherwise          -> show (numerator r) ++ "/" ++ show (denominator r)
+  _                               -> show n
+
 -- | Definición del método show para AExp
 instance Show AExp where
-  show (Lit n)       = show n
+  show (Lit n)       = showConstant n
   show (Var x)       = x
   show (e_1 :+: e_2) = show e_1 ++ " + " ++ show e_2
   show (e_1 :*: e_2) = showFactor e_1 ++ "*" ++ showFactor e_2
