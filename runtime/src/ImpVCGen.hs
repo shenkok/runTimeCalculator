@@ -233,15 +233,44 @@ data SolverInput' = SolverInput'
 -- Se preserva el detalle de que, si la condición es una negación (Not
 -- bexp), se guarda el bexp sin negar (igual que antes), para que
 -- allContext siempre trabaje con la forma "positiva" de cada condición.
+--
+-- Desde la forma normal de RunTime (Imp.deepSimplifyRunTime) una guarda es
+-- una conjunción de literales canónicos, así que se extraen los ÁTOMOS de
+-- cada guarda (atomsOf) y no la guarda entera: dos guardas distintas que
+-- comparten átomos ("x > 0" y "x > 0 && y <= 0") generan contextos sobre
+-- los mismos átomos en vez de condiciones independientes.
 getBExp :: RunTime -> Context
 getBExp runt = rmdups conds
   where
     conds = f runt
     f (RunTimeArit _)          = []
-    f (RunTimeBExp (Not bexp)) = [bexp]
-    f (RunTimeBExp bexp)       = [bexp]
+    f (RunTimeBExp bexp)       = atomsOf bexp
     f (e_1 :++: e_2)           = getBExp e_1 ++ getBExp e_2
     f (r_1 :**: r_2)           = getBExp r_1 ++ getBExp r_2
+
+-- | Átomos (:<=:/:==:) de un BExp, en su forma "positiva" (sin el Not)
+atomsOf :: BExp -> [BExp]
+atomsOf True'         = []
+atomsOf False'        = []
+atomsOf (Not bexp)    = atomsOf bexp
+atomsOf (e_1 :&: e_2) = atomsOf e_1 ++ atomsOf e_2
+atomsOf (e_1 :|: e_2) = atomsOf e_1 ++ atomsOf e_2
+atomsOf atom          = [atom]
+
+-- | Fija el valor de verdad de un átomo dentro de un BExp: "assignAtom lit
+-- bexp" reemplaza el átomo de lit por True' (o por False' si lit es su
+-- negación) y propaga con simplifyBExp.
+assignAtom :: BExp -> BExp -> BExp
+assignAtom lit = go
+  where
+    (atom, value) = case lit of
+      Not a -> (a, False')
+      a     -> (a, True')
+    go e_b | e_b == atom = value
+    go (Not e_b)         = simplifyBExp (Not (go e_b))
+    go (e_1 :&: e_2)     = simplifyBExp (go e_1 :&: go e_2)
+    go (e_1 :|: e_2)     = simplifyBExp (go e_1 :|: go e_2)
+    go e_b               = e_b
 
 -- | Toma un RunTime runt y retorna todos los posibles context (matriz de BExp) que
 -- se pueden extraer a partir de los BExp que tiene el RunTime.
@@ -250,9 +279,14 @@ getBExp runt = rmdups conds
 -- [!(0.0 <= x),   0.0 <= w],
 -- [0.0 <= x,    !(0.0 <= w)],
 -- [0.0 <= x,      0.0 <= w]]
+--
+-- Se descartan los contextos inconsistentes según el razonamiento por
+-- intervalos de Imp.guardsOf (ej. "x <= 0" junto a "!(x <= 1)"): su
+-- implicación vale trivialmente, así que no aportan nada al solver.
 allContext :: RunTime -> Contexts
-allContext runt = map (zipWith f conds) lbools
+allContext runt = filter consistent (map (zipWith f conds) lbools)
   where
+    consistent ctx = not (null (guardsOf (foldr (:&:) True' ctx)))
     f bexp True = bexp
     f bexp _    = Not bexp
     conds       = getBExp runt
@@ -270,16 +304,21 @@ allContext runt = map (zipWith f conds) lbools
 -- "evalCondition bexp1 runt" (la indicatriz desaparece, no queda como
 -- "1 :**: ..."), y cuando es su complemento el resultado colapsa a rtZero
 -- de una, sin dejar un "0 :**: ..." pendiente de simplificar.
+--
+-- Con getBExp extrayendo átomos, bexp1 es un literal (átomo o su negación) y
+-- la guarda puede ser una conjunción: se le asigna el valor del átomo
+-- (assignAtom) y la indicatriz desaparece sólo cuando la guarda entera queda
+-- decidida.
 evalCondition :: BExp -> RunTime -> RunTime
-evalCondition bexp (RunTimeArit arit)     = RunTimeArit arit
-evalCondition bexp1 (RunTimeBExp bexp2 :**: runt)
-  | bexp1 == bexp2                        = evalCondition bexp1 runt
-  | deepSimplifyBExp (Not bexp1) == bexp2 = rtZero
-  | otherwise                             = RunTimeBExp bexp2 :**: evalCondition bexp1 runt
-evalCondition bexp1 (RunTimeBExp bexp2)
-  | bexp1 == bexp2                        = rtOne
-  | deepSimplifyBExp (Not bexp1) == bexp2 = rtZero
-  | otherwise                             = RunTimeBExp bexp2
+evalCondition _ (RunTimeArit arit)        = RunTimeArit arit
+evalCondition bexp1 (RunTimeBExp bexp2 :**: runt) = case assignAtom bexp1 bexp2 of
+  True'  -> evalCondition bexp1 runt
+  False' -> rtZero
+  bexp2' -> RunTimeBExp bexp2' :**: evalCondition bexp1 runt
+evalCondition bexp1 (RunTimeBExp bexp2)   = case assignAtom bexp1 bexp2 of
+  True'  -> rtOne
+  False' -> rtZero
+  bexp2' -> RunTimeBExp bexp2'
 evalCondition bexp (e_1 :++: e_2)         = evalCondition bexp e_1 :++: evalCondition bexp e_2
 evalCondition bexp (r_1 :**: r_2)         = evalCondition bexp r_1 :**: evalCondition bexp r_2
 

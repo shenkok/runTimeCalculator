@@ -57,6 +57,27 @@ spec = do
       innerLoop  = While (Var "y" >: Lit 0) (Set "y" (Var "y" -: Lit 1)) (Just (rtVar "c" :**: rtVar "y"))
       progNested = While (Var "x" >: Lit 0) (Seq innerLoop (Set "x" (Var "x" -: Lit 1))) (Just (rtVar "a" :**: rtVar "x"))
 
+  -- Contextos sobre átomos (desde la forma normal Σ [g]·p, una guarda es una
+  -- conjunción de literales): getBExp extrae átomos, evalCondition asigna un
+  -- átomo dentro de una conjunción y allContext poda contextos inconsistentes.
+  describe "getBExp / evalCondition / allContext (átomos)" $ do
+    let bx0 = Var "x" :<=: Lit 0
+        bx1 = Var "x" :<=: Lit 1
+        by0 = Var "y" :<=: Lit 0
+
+    it "getBExp extrae los átomos de una guarda conjuntiva, sin el Not" $ do
+      getBExp (RunTimeBExp (bx0 :&: Not by0) :**: rtVar "z") `shouldBe` [bx0, by0]
+
+    it "evalCondition asigna un átomo dentro de una conjunción" $ do
+      evalCondition bx0 (RunTimeBExp (bx0 :&: by0) :**: rtVar "z")
+        `shouldBe` (RunTimeBExp by0 :**: rtVar "z")
+
+    it "evalCondition anula la pieza si el literal contradice la guarda" $ do
+      evalCondition (Not bx0) (RunTimeBExp (bx0 :&: by0) :**: rtVar "z") `shouldBe` rtZero
+
+    it "allContext descarta el contexto inconsistente x <= 0 && !(x <= 1)" $ do
+      allContext (RunTimeBExp bx0 :++: RunTimeBExp bx1) `shouldSatisfy` ((== 3) . length)
+
   describe "getExistencialAndUniversalVars" $ do
 
     it "una asignación simple no aporta variables existenciales" $ do
