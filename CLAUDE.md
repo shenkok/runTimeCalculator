@@ -36,7 +36,7 @@ y estables. Esta rama agrega el trabajo de **síntesis de invariantes**:
   entrada interactivo: `runSynth "..."` en `app/Main.hs`.
 
 El proyecto compila y pasa sus tests de punta a punta,
-tanto con `cabal` como con `stack` (ver sección **Build**) — `234 examples, 0 failures, 5
+tanto con `cabal` como con `stack` (ver sección **Build**) — `260 examples, 0 failures, 5
 pending`. Los 5 `pending` son esqueletos de tests sin terminar en `ImpVCGenSpec.hs` (trabajo
 futuro, no bugs).
 
@@ -110,23 +110,30 @@ como trabajo futuro (la extracción de coordenadas que necesita ahora puede part
 `1 ++ [¬φ]**f ++ [φ]**t` — tras la forma normal ambas formas imprimen igual, así que perdió
 relevancia.
 
-## PENDIENTE: `*` genérico en la sintaxis concreta de `aexp` (anotado 2026-10-13)
+## `*` genérico en la sintaxis concreta de `aexp` (rama `feature/parser_generic_mul`, 2026-10-13)
 
-El usuario lo va a hacer **él mismo, en otra rama** (no implementarlo por iniciativa propia).
-`AExp :*: AExp` ya es producto genuino en el AST (ver "AExp: de lineal a polinomial"), pero el
-parser de `aexp` (`ImpParser.hs:79-80`) sigue con la gramática de la versión lineal: `*` sólo
-acepta un **número a la izquierda** (`rational * aexpBase` o `rational * (aexp)`). Verificado con
-`parseAExp`:
+Resuelto (antes era un pendiente anotado). El parser de `aexp` (`ImpParser.hs`) arrastraba la
+gramática de la versión lineal: `*` sólo aceptaba un número a la izquierda. Ahora `*` es un
+operador infijo genérico en `buildExpressionParser`, asociativo por la izquierda y con su propia
+fila antes de `+`/`-` (más precedencia). Parsean `x*y`, `x*2`, `(x+1)*(x-1)` y `2*x*y` (este
+último da `(2*x)*y`). `reservedOp "*"` no choca con el `**` de `runtime` porque exige que no
+siga otro símbolo de operador. Tests nuevos en `ImpParserSpec.hs`.
 
-- Parsean: `2*3`, `2*x`, `2*(x+1)`.
-- **Fallan**: `x*y`, `x*2`, `(x+1)*(x-1)`, `2*x*y`.
-
-Consecuencia práctica: cualquier ejemplo o test con producto de variables hay que construirlo
-directo en el AST (así se hizo en los decks y en `ImpSpec.hs`), y un template como `a**x` (variable
-por variable) tampoco se puede escribir en concreto. El `**` de `runtime` sí es genérico desde la
-sesión de `RunTimeBExp`; lo que falta es el `*` de `aexp`. Al cambiarlo, ojo con la precedencia
-respecto de `+`/`-` en la tabla de `buildExpressionParser` y con que `Show AExp` ya imprime ambos
-operandos parentizados (`showFactor`), así que la ida y vuelta show/parse debería cerrar.
+**Ida y vuelta show/parse, también arreglada en esta rama**:
+- `Show AExp` imprime los literales con `showConstant` (`Imp.hs`) en la notación del parser:
+  `3`, `-1/2`, `1/3`. Antes salían por `Show AlgReal` (`3.0`, `-0.5`, `1 % 3`), que el parser no
+  acepta. Un algebraico no racional, que sólo puede venir de un modelo de Z3, sigue usando
+  `Show AlgReal`. Los testigos y contraejemplos de `ImpIO` no pasan por acá, así que no cambian.
+- `signedOp` (`ImpParser.hs`) reemplaza a `reservedOp` en `binary` y en las comparaciones de
+  `bexp`: admite un `-` pegado al operador (`x*-1`, `x+-1`, `x<=-1`, `2**-1`) y sigue
+  prohibiendo cualquier otro símbolo (`*` vs `**`, `<` vs `<=`). Si el operador termina en `-`,
+  tampoco admite otro `-`, así `x--1` en `runtime` sigue siendo la resta de runtimes.
+- Menos unario en `aexp`: `-x` es azúcar de `-1 * x`, en la fila de más precedencia (`-x*y` es
+  `(-x)*y`). No se aplica si lo sigue un dígito, así `-1` y `-1/2` siguen siendo literales.
+  Ahora parsean `-x`, `x*-y`, `-(x+1)` y `x - -y`.
+- `rationalFractional` usa `symbol "/"`, así que `1 / 2` también parsea (antes sólo `1/2`).
+- Verificado: el `ert` impreso de los 33 programas del banco se vuelve a parsear al mismo
+  `RunTime`, comparando después de `deepSimplifyRunTime`.
 
 ## Contexto extenso (leer antes de decisiones de diseño no triviales)
 
@@ -810,13 +817,13 @@ cosas no obvias que confirman esos tests:
   `programToSolverInputs` (la continuación de un `while` anidado arrastra el contexto del
   `while` que lo contiene), no una falla del filtro `relevantVars`.
 
-Estado: **234 examples, 0 failures, 5 pending** (correr `cabal test runtime-test` o
+Estado: **260 examples, 0 failures, 5 pending** (correr `cabal test runtime-test` o
 `stack test`, ver **Build**; el conteo subió de 187 a 189 en la sesión de "RunTime: indicatriz
 como constructor propio (RunTimeBExp)", de 189 a 211 con `ImpSynthSpec.hs`/`ImpIOSpec.hs`/
 `ImpVCGenSpec.hs` de las sesiones de "ImpSynth"/"Buena-definición", y de 211 a 212 con el test
 de parser de "While/PWhile: invariante opcional"; después subió a 222 con `ImpSynthSpec.hs` y volvió a
 207 al eliminar los 15 tests de `certifyDegree`; 213 con `kleeneHints`, 230 con la forma normal
-de RunTime y 234 con disyunciones ordenadas/igualdades sustituidas). De paso se encontraron y corrigieron dos
+de RunTime 234 con disyunciones ordenadas/igualdades sustituidas 240 con el `*` genérico del parser y 252 con la ida y vuelta show/parse y 260 con el menos unario). De paso se encontraron y corrigieron dos
 bugs reales en los tests mismos (no en el código de producción):
 - `ImpParserSpec.hs`, test "parsea for": el valor esperado no envolvía el cuerpo del `for` en
   `Seq Empty (...)`, aunque la gramática de `program` siempre envuelve así cualquier cuerpo

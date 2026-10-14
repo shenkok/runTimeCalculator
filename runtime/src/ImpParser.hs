@@ -19,8 +19,19 @@ import Data.SBV (AlgReal)
 -------------------------------{DEFINICIONES ÚTILES}-------------------------------------------------------------------------------------------
 Token.TokenParser {..} = Token.makeTokenParser javaStyle
 
+-- | Como reservedOp, pero admite que al operador lo siga pegado el signo de un
+-- literal negativo ("x*-1", "x<=-1", "x+-1"): reservedOp exige que no siga
+-- ningún símbolo de operador, y "-" lo es. Cualquier otro símbolo sigue
+-- prohibido, para no confundir "*" con "**", "+" con "++", "<" con "<=", etc.
+-- Si el operador ya termina en "-", tampoco puede seguirle otro "-" (si no,
+-- "x--1" dentro de un runtime se leería como "x - -1" en vez de "x -- 1").
+signedOp :: String -> Parser ()
+signedOp name = void $ lexeme $ try $ string name <* notFollowedBy (oneOf forbidden)
+  where opChars   = ":!#$%&*+./<=>?@\\^|-~"
+        forbidden = if last name == '-' then opChars else filter (/= '-') opChars
+
 -- | Define la asociación por la izquierda
-binary name fun = Infix (fun <$ reservedOp name) AssocLeft
+binary name fun = Infix (fun <$ signedOp name) AssocLeft
 
 whitespace :: Parser ()
 whitespace = void $ many $ oneOf " \n\t"
@@ -42,7 +53,7 @@ rationalFractional :: Parser AlgReal
 rationalFractional = do
     whitespace
     num <- integer
-    void $ char '/'
+    void $ symbol "/"
     den <- integer
     whitespace
     return $ fromRational (toRational num / toRational den)
@@ -69,18 +80,30 @@ aexpBase :: Parser AExp
 aexpBase = try litAExp <|> varAExp
 
 -- | Parser para AExp
---  aexp -> aexpBase 
---        | rational * aexpBase
---        | rational * (aexp)
+--  aexp -> aexpBase
+--        | (aexp)
+--        | - aexp      azúcar sintáctica, -e = -1 * e
+--        | aexp * aexp
 --        | aexp + aexp
 --        | aexp - aexp azúcar sintáctica
+--
+-- "*" ya no está restringido a "rational * aexpBase" (resabio de la versión
+-- lineal): como :*: es producto genuino, es un operador infijo genérico,
+-- asociativo por la izquierda y con más precedencia que "+"/"-" (fila propia
+-- antes en la tabla). reservedOp "*" no se confunde con el "**" de runtime,
+-- porque signedOp sólo deja pasar un "-" pegado, no otro "*".
+--
+-- El "-" unario va en la fila de más precedencia, así "-x*y" es (-x)*y. No se
+-- aplica si lo sigue un dígito: "-1" o "-1/2" siguen siendo un literal
+-- negativo (lo parsea integer), no "-1 * 1".
 aexp :: Parser AExp
 aexp = buildExpressionParser table term
- where term = try ((:*:) <$> (Lit <$> rational <* reservedOp "*") <*> aexpBase)
-           <|> try ((:*:) <$> (Lit <$> rational <* reservedOp "*") <*> parens aexp)
-           <|> try aexpBase
-           <|> try (parens aexp)
-       table = [[binary "+" (:+:), binary "-" (-:) ]]
+ where term = try aexpBase
+           <|> parens aexp
+       neg  = Prefix ((Lit (-1) :*:) <$ try (signedOp "-" *> notFollowedBy digit))
+       table = [ [ neg ]
+               , [ binary "*" (:*:) ]
+               , [ binary "+" (:+:), binary "-" (-:) ] ]
 
 
 -- | Parser para BExp
@@ -99,12 +122,12 @@ bexp :: Parser BExp
 bexp = buildExpressionParser table term
   where term =  True' <$ reserved "true"
             <|> False' <$ reserved "false"
-            <|> try ((:<=:) <$> (aexp <* reservedOp "<=") <*> aexp)
-            <|> try ((:==:) <$> (aexp <* reservedOp "==") <*> aexp)
-            <|> try ((>=:)  <$> (aexp <* reservedOp ">=") <*> aexp)
-            <|> try ((>:)   <$> (aexp <* reservedOp ">")  <*> aexp)
-            <|> try ((<:)   <$> (aexp <* reservedOp "<")  <*> aexp)
-            <|> try ((/=:)  <$> (aexp <* reservedOp "!=") <*> aexp)
+            <|> try ((:<=:) <$> (aexp <* signedOp "<=") <*> aexp)
+            <|> try ((:==:) <$> (aexp <* signedOp "==") <*> aexp)
+            <|> try ((>=:)  <$> (aexp <* signedOp ">=") <*> aexp)
+            <|> try ((>:)   <$> (aexp <* signedOp ">")  <*> aexp)
+            <|> try ((<:)   <$> (aexp <* signedOp "<")  <*> aexp)
+            <|> try ((/=:)  <$> (aexp <* signedOp "!=") <*> aexp)
             <|> try (parens bexp)
         table = [ [ Prefix (Not <$ reservedOp "!") ]
                 , [ binary "&&" (:&:), binary "||" (:|:) ]
