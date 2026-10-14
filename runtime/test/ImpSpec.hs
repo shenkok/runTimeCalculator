@@ -201,6 +201,11 @@ spec = describe "Imp" $ do
 
   describe "simplifyRunTime / deepSimplifyRunTime" $ do
 
+    -- Estos tests son de las reglas sueltas previas a la forma normal Σ [g]·p
+    -- (ver "forma normal de RunTime" más abajo). Siguen valiendo los mismos
+    -- resultados, salvo el orden: la forma normal pone primero la pieza sin
+    -- guarda (ej. "z") y después las piezas con guarda.
+
     -- Regla 1: [b]**r1 ++ [b]**r2 = [b]**(r1 ++ r2) cuando "b" es
     -- sintácticamente igual en ambos sumandos. Como r1/r2 son RunTimeArit
     -- puros, la regla de suma de arit ya existente termina de colapsarlos en
@@ -216,7 +221,7 @@ spec = describe "Imp" $ do
     it "fusiona indicatriz igual cuando encabeza una cadena de :++: más larga" $ do
       let b = Var "x" :<=: Lit 0
       deepSimplifyRunTime ((RunTimeBExp b :**: rtVar "y") :++: ((RunTimeBExp b :**: rtOne) :++: rtVar "z"))
-        `shouldBe` ((RunTimeBExp b :**: RunTimeArit (completeNormArit (Var "y" :+: Lit 1))) :++: rtVar "z")
+        `shouldBe` (rtVar "z" :++: (RunTimeBExp b :**: RunTimeArit (completeNormArit (Var "y" :+: Lit 1))))
 
     -- El segundo sumando tiene peso "1" (rtOne): buildMul limpia ese peso
     -- redundante en cualquier indicatriz, con o sin fusión posible, así que
@@ -241,12 +246,12 @@ spec = describe "Imp" $ do
       let b1 = Var "x" :<=: Lit 0
           b2 = Var "y" :<=: Lit 0
       deepSimplifyRunTime (((RunTimeBExp b1 :**: rtVar "y") :++: (RunTimeBExp b2 :**: rtOne)) :++: rtVar "z")
-        `shouldBe` ((RunTimeBExp b1 :**: rtVar "y") :++: (RunTimeBExp b2 :++: rtVar "z"))
+        `shouldBe` (rtVar "z" :++: ((RunTimeBExp b1 :**: rtVar "y") :++: RunTimeBExp b2))
 
     it "reasociación deja fusionar dos indicatrices iguales aunque queden a la izquierda" $ do
       let b = Var "x" :<=: Lit 0
       deepSimplifyRunTime (((RunTimeBExp b :**: rtVar "y") :++: (RunTimeBExp b :**: rtOne)) :++: rtVar "z")
-        `shouldBe` ((RunTimeBExp b :**: RunTimeArit (completeNormArit (Var "y" :+: Lit 1))) :++: rtVar "z")
+        `shouldBe` (rtVar "z" :++: (RunTimeBExp b :**: RunTimeArit (completeNormArit (Var "y" :+: Lit 1))))
 
     -- Regla 3 (canonicalización de :**: vía flattenMul/buildMul): fusiona
     -- todos los pesos aritméticos de una cadena de productos en un único
@@ -300,6 +305,82 @@ spec = describe "Imp" $ do
           b3 = Var "r" :<=: Lit 0
       deepSimplifyRunTime (RunTimeBExp b1 :**: (RunTimeBExp b2 :**: (RunTimeBExp b3 :**: rtVar "z")))
         `shouldBe` (RunTimeBExp (b1 :&: (b2 :&: b3)) :**: rtVar "z")
+
+  -- Forma normal Σ [g]·p (Imp.deepSimplifyRunTime): átomos canónicos,
+  -- razonamiento por intervalos entre literales sobre el mismo término,
+  -- disyunciones partidas en piezas disjuntas y fusión de piezas contiguas.
+  describe "forma normal de RunTime" $ do
+    let vx = Var "x"
+        vy = Var "y"
+
+    it "canonAtom: 2*x <= 2 es el mismo átomo que x <= 1" $ do
+      canonAtom ((Lit 2 :*: vx) :<=: Lit 2) `shouldBe` (vx :<=: Lit 1)
+
+    it "canonAtom: -x + 1 <= 0 es la cota inferior 1 <= x" $ do
+      canonAtom ((Lit (-1) :*: vx) :+: Lit 1 :<=: Lit 0) `shouldBe` (Lit 1 :<=: vx)
+
+    it "canonAtom: un átomo constante se evalúa" $ do
+      canonAtom (Lit 3 :<=: Lit 2) `shouldBe` False'
+
+    it "deepSimplifyBExp deja fijo un literal ya canónico (idempotencia)" $ do
+      deepSimplifyBExp (Not (vx :<=: Lit 1)) `shouldBe` Not (vx :<=: Lit 1)
+      deepSimplifyBExp (Not (Lit 1 :<=: vx)) `shouldBe` Not (Lit 1 :<=: vx)
+
+    it "guardsOf: x <= 0 && x > 1 es vacía" $ do
+      guardsOf ((vx :<=: Lit 0) :&: Not (vx :<=: Lit 1)) `shouldBe` []
+
+    it "guardsOf: x <= 0 && x <= 1 es x <= 0" $ do
+      guardsOf ((vx :<=: Lit 0) :&: (vx :<=: Lit 1)) `shouldBe` guardsOf (vx :<=: Lit 0)
+
+    it "una disyunción se parte en piezas disjuntas: [a || b] = [a] + [!a && b]" $ do
+      deepSimplifyRunTime (RunTimeBExp ((vx :<=: Lit 0) :|: (vy :<=: Lit 0)))
+        `shouldBe` (RunTimeBExp (vx :<=: Lit 0) :++: RunTimeBExp (Not (vx :<=: Lit 0) :&: (vy :<=: Lit 0)))
+
+    it "la partición de una disyunción no depende del orden en que se escribió" $ do
+      deepSimplifyRunTime (RunTimeBExp ((vy :<=: Lit 0) :|: (vx :<=: Lit 0)))
+        `shouldBe` deepSimplifyRunTime (RunTimeBExp ((vx :<=: Lit 0) :|: (vy :<=: Lit 0)))
+
+    it "sustituye en el polinomio la igualdad de su guarda: [x==3]·x - [x==3]·3 = 0" $ do
+      deepSimplifyRunTime ((RunTimeBExp (vx :==: Lit 3) :**: RunTimeArit vx) --: (RunTimeBExp (vx :==: Lit 3) :**: 3))
+        `shouldBe` rtZero
+
+    it "despeja una variable de una igualdad lineal: [x - y == 1]·(x - y) = [x - y == 1]" $ do
+      deepSimplifyRunTime (RunTimeBExp ((vx -: vy) :==: Lit 1) :**: RunTimeArit (vx -: vy))
+        `shouldBe` RunTimeBExp (canonAtom ((vx -: vy) :==: Lit 1))
+
+    it "no usa una igualdad de la que no se puede despejar una variable de grado 1" $ do
+      let b = (vx :*: vx) :==: Lit 4
+      deepSimplifyRunTime (RunTimeBExp b :**: RunTimeArit vx)
+        `shouldBe` (RunTimeBExp (canonAtom b) :**: RunTimeArit vx)
+
+    it "f -- f colapsa a 0 aunque f esté escrita de dos formas distintas" $ do
+      let f_1 = RunTimeBExp ((Lit 2 :*: vx) :<=: Lit 0) :**: RunTimeArit (vx :+: Lit 1)
+          f_2 = RunTimeBExp (vx :<=: Lit 0) :**: RunTimeArit (Lit 1 :+: vx)
+      deepSimplifyRunTime (f_1 --: f_2) `shouldBe` rtZero
+
+    it "distribuye ** sobre ++" $ do
+      deepSimplifyRunTime (2 :**: (RunTimeBExp (vx :<=: Lit 0) :++: 1))
+        `shouldBe` (rtLit 2 :++: (RunTimeBExp (vx :<=: Lit 0) :**: rtLit 2))
+
+    it "descarta un producto de indicatrices contradictorias" $ do
+      deepSimplifyRunTime (RunTimeBExp (vx :<=: Lit 0) :**: RunTimeBExp (Not (vx :<=: Lit 1)) :**: rtVar "y")
+        `shouldBe` rtZero
+
+    it "funde piezas contiguas con el mismo peso: [x<=0]y + [0<x<=1]y + [x>1]y = y" $ do
+      let b_0 = vx :<=: Lit 0
+          b_1 = vx :<=: Lit 1
+      deepSimplifyRunTime ((RunTimeBExp b_0 :**: rtVar "y")
+                           :++: (RunTimeBExp (Not b_0 :&: b_1) :**: rtVar "y")
+                           :++: (RunTimeBExp (Not b_1) :**: rtVar "y"))
+        `shouldBe` rtVar "y"
+
+    it "un punto tapa el agujero de su complemento: [x==3]y + [x/=3]y = y" $ do
+      deepSimplifyRunTime ((RunTimeBExp (vx :==: Lit 3) :**: rtVar "y") :++: (RunTimeBExp (vx /=: Lit 3) :**: rtVar "y"))
+        `shouldBe` rtVar "y"
+
+    it "aplana una cadena de indicatrices anidadas (patrón de los iterados de Kleene)" $ do
+      deepSimplifyRunTime (RunTimeBExp (vx >: Lit 0) :**: (1 :++: RunTimeBExp ((vx -: Lit 1) >: Lit 0)))
+        `shouldBe` (RunTimeBExp (Not (vx :<=: Lit 0)) :++: RunTimeBExp (Not (vx :<=: Lit 1)))
 
   describe "aexpE" $ do
 

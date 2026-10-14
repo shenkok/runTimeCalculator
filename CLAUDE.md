@@ -36,36 +36,97 @@ y estables. Esta rama agrega el trabajo de **síntesis de invariantes**:
   entrada interactivo: `runSynth "..."` en `app/Main.hs`.
 
 El proyecto compila y pasa sus tests de punta a punta,
-tanto con `cabal` como con `stack` (ver sección **Build**) — `207 examples, 0 failures, 5
+tanto con `cabal` como con `stack` (ver sección **Build**) — `234 examples, 0 failures, 5
 pending`. Los 5 `pending` son esqueletos de tests sin terminar en `ImpVCGenSpec.hs` (trabajo
 futuro, no bugs).
 
-## PRÓXIMA SESIÓN: refinar los simplificadores (decidido 2026-10-05)
+## Forma normal de RunTime: polinomios por partes (rama `feature/runtime_normal_form`, 2026-10-11)
 
-Trabajo comprometido para la siguiente sesión — **hay que hacerlo**, no es opcional: refinar
-los tres simplificadores para que un `RunTime` quede **muy simplificado** de forma confiable.
+Cierra la tarea "refinar los simplificadores" comprometida el 2026-10-05 y la deuda de §6.4 del
+informe ("Definir forma normal de los tiempos de ejecución"). Alcance **elegido por el usuario**
+entre opciones (no asumido): forma normal completa, implicación sintáctica por intervalos (sin
+Z3 dentro del simplificador), disyunciones partidas en piezas exclusivas.
 
-1. **Aritmética (`AExp`)**: `normArit`/`simplifyArit`/`completeNormArit` (`Imp.hs`). Ya existe
-   la forma polinomial canónica (`Poly`); revisar que se aplique en todos los sitios donde hoy
-   queda aritmética sin normalizar (ej. `x + -1*1 <= 0` dentro de indicatrices).
-2. **Booleanos (`BExp`)**: `simplifyBExp` y `normBExp` (`Imp.hs`). `normBExp` (átomos
-   canónicos + NNF + aplanar/ordenar/deduplicar, sin DNF/CNF a propósito) existe pero **todavía
-   no está conectada** a `ImpVCGen.hs` (`getBExp`/`evalCondition`), que dependen de igualdad
-   estructural de `BExp`.
-3. **RunTime**: `simplifyRunTime`/`deepSimplifyRunTime` (`flattenMul`/`buildMul`,
-   `asIndicatorWeight`). Es la deuda técnica de "RunTime no tiene forma normal" (ver sección
-   "Deuda técnica pre-existente" más abajo, y §6.2/§6.4 del informe): `f <= f` no colapsa,
-   indicatrices compuestas sin normalizar generan `2^n` problemas.
+**Diagnóstico previo (medido, no supuesto)**: en el banco los contextos nunca pasaban de 2-3
+condiciones; el `2^n` no mordía. Lo que inflaba Φⁿ y las obligaciones era (1) arrastrar ramas
+imposibles (`[x≤0]**[!(x-1≤0)]`), (2) átomos no canónicos (`2x≤2` vs `x≤1`, cada lado de `<=`
+se normalizaba por separado) y (3) `**` sin distribuir sobre `++`. El síntoma `x + -1*1 <= 0`
+ya no aparecía (lo había resuelto el arreglo de paréntesis de `restrictionsToImplications`).
 
-Cómo encararlo, decidir con el usuario al empezar la sesión (alcance de cada simplificador,
-orden, y si se apunta a forma normal completa o a un fragmento). Lo que **no** entra en esta
-tarea: la iteración de Kleene / "Vía 2" de `SINTESIS_TEMPLATE_NATURAL.md` queda como **trabajo
-futuro** (aunque la extracción de coordenadas que necesita es, en el fondo, esta misma forma
-normal de `RunTime`).
+**Representación** (`Imp.hs`, sección "FORMA NORMAL DE RUNTIMES"): `deepSimplifyRunTime =
+fromPiecewise . mergePieces . toPiecewise`, con `Piecewise = Map Guard Poly` (Σ [gᵢ]·pᵢ) y
+`Guard = Map Poly Bounds` (por cada término `q`, un intervalo con cota inferior/superior
+abierta o cerrada y agujeros `q /= k`).
+- `atomBounds`/`splitPoly`: un átomo `e1 ⋈ e2` es una cota sobre `q` = parte no constante de
+  `e1 - e2`, escalada para que su primer término (orden de `fromPoly`) tenga coeficiente 1.
+  Así `2*x <= 2`, `x - 1 <= 0` y `x <= 1` coinciden, y `-x + 1 <= 0` es `1 <= x` sobre el mismo
+  `q`. `meetBounds`/`normalizeBounds` dan la implicación/contradicción entre literales del
+  mismo `q`; átomos sobre `q` distintos no se relacionan (a propósito).
+- `guardsOf`: BExp → guardas disjuntas (`[a || b] = [a] + [¬a ∧ b]`), descartando las vacías.
+- `mergePieces`/`unionBounds`: funde piezas con el mismo polinomio cuyas guardas difieren en un
+  único intervalo contiguo (`[x≤0]p + [x>0]p = p`, `[x==3]p + [x/=3]p = p`). No refina piezas
+  que se solapan (`1·p + [x≤0]·p` queda así): no es canónica respecto a toda reescritura.
+- Salida: pieza sin guarda primero, luego el orden de `Guard`. **Cambió el orden** respecto de
+  las reglas viejas (3 tests de `ImpSpec` se actualizaron sólo por eso).
+- **Disyunciones independientes del orden** (agregado después, pedido del usuario): `guardsOf`
+  ordena los disyuntos por sus guardas antes de partir, así `[x<=0 || y<=0]` y
+  `[y<=0 || x<=0]` dan la misma partición.
+- **Igualdades de la guarda sustituidas en el polinomio** (`reduceByEqualities`/`reducePieces`,
+  ídem): dentro de `[g]·p`, `p` sólo importa donde `g` vale, así que de cada `q == k` de `g` se
+  despeja la variable del primer término de `q` (si es de grado 1 y no aparece en el resto de
+  `q`) y se sustituye en `p`: `[x==3]·(x-3) = 0`, `[x-y==1]·(x-y) = [x-y==1]`. Sólo toca el
+  polinomio, no las otras cotas de la guarda.
+- `canonAtom` es la forma de un átomo suelto; `deepSimplifyBExp` la usa en sus átomos, así
+  queda consistente con cómo `guardToBExp` escribe las guardas (idempotente).
+- Se eliminaron `flattenMul`/`buildMul`/`asIndicatorWeight` y las reglas sueltas;
+  `simplifyRunTime` quedó como alias de `deepSimplifyRunTime`. Las reglas viejas están en el
+  commit padre de esta rama si hace falta compararlas.
 
-Pendiente menor relacionado, conversado pero no confirmado para aplicar: escribir el template
-natural de `ImpSynth.hs` como `1 ++ [¬φ]**f ++ [φ]**t` (forma de `cfWhile`) en vez de
-`[¬φ]**(1++f) ++ [φ]**(1++t)` — matemáticamente idénticos, el primero es más legible.
+**`ImpVCGen.hs` pasó a contextos sobre átomos** (necesario: sin esto, las guardas conjuntivas
+nuevas subían las implicaciones, ej. 4→32 en `while(y<=x && x<=z)` sintetizado): `getBExp`
+extrae átomos (`atomsOf`), `evalCondition` asigna un átomo dentro de una conjunción
+(`assignAtom`), y `allContext` descarta contextos inconsistentes vía `guardsOf` (su implicación
+vale trivialmente). Con eso las implicaciones quedan iguales o menores que antes (`cdkcMenos`
+4→3, `synth-if` 8→6), salvo `cdvcMas` 4→6 (átomos simples en vez de conjunciones).
+
+**Verificado**: todos los veredictos del banco (`ImpProgramSpec`, `ImpIOSpec`) sin cambios; los
+cinco casos de síntesis de la tabla de `SINTESIS_TEMPLATE_NATURAL.md` dan el mismo veredicto
+(`Cdkc` con `a0 = 3, a1 = 3`; el cuadrático sigue sin instancia afín). Φ⁴ del anidado
+cuadrático pasó de varias pantallas a una línea. `normBExp` **no** se tocó ni se conectó: queda
+como representación aparte, con sus tests (superada en la práctica por `guardsOf`).
+
+**Criterio de diseño explícito del usuario**: el simplificador se invoca recursivamente muchas
+veces (cada iterado de Kleene, cada `aexpE`, cada obligación), así que sólo lleva **reglas
+baratas**. Medido: el código viejo se quedaba sin memoria (3 GB) en Φ⁸ del anidado cuadrático;
+la forma normal lo hace en 0,044 s (Φ¹² en 0,275 s). Quedan **pendientes de discutir con el
+usuario, no implementar por iniciativa propia**: (c) refinar a partición disjunta y (d)
+Fourier–Motzkin para factibilidad entre términos distintos. La idea conversada es usarlas, si
+acaso, **sólo al mostrar los iterados de Kleene** (para que el usuario vea la recurrencia), nunca
+en el camino a Z3, que razona por sí mismo.
+
+Lo que **no** entra: la iteración de Kleene / "Vía 2" de `SINTESIS_TEMPLATE_NATURAL.md` sigue
+como trabajo futuro (la extracción de coordenadas que necesita ahora puede partir de
+`Piecewise`). Pendiente menor sin confirmar: escribir el template natural de `ImpSynth.hs` como
+`1 ++ [¬φ]**f ++ [φ]**t` — tras la forma normal ambas formas imprimen igual, así que perdió
+relevancia.
+
+## PENDIENTE: `*` genérico en la sintaxis concreta de `aexp` (anotado 2026-10-13)
+
+El usuario lo va a hacer **él mismo, en otra rama** (no implementarlo por iniciativa propia).
+`AExp :*: AExp` ya es producto genuino en el AST (ver "AExp: de lineal a polinomial"), pero el
+parser de `aexp` (`ImpParser.hs:79-80`) sigue con la gramática de la versión lineal: `*` sólo
+acepta un **número a la izquierda** (`rational * aexpBase` o `rational * (aexp)`). Verificado con
+`parseAExp`:
+
+- Parsean: `2*3`, `2*x`, `2*(x+1)`.
+- **Fallan**: `x*y`, `x*2`, `(x+1)*(x-1)`, `2*x*y`.
+
+Consecuencia práctica: cualquier ejemplo o test con producto de variables hay que construirlo
+directo en el AST (así se hizo en los decks y en `ImpSpec.hs`), y un template como `a**x` (variable
+por variable) tampoco se puede escribir en concreto. El `**` de `runtime` sí es genérico desde la
+sesión de `RunTimeBExp`; lo que falta es el `*` de `aexp`. Al cambiarlo, ojo con la precedencia
+respecto de `+`/`-` en la tabla de `buildExpressionParser` y con que `Show AExp` ya imprime ambos
+operandos parentizados (`showFactor`), así que la ida y vuelta show/parse debería cerrar.
 
 ## Contexto extenso (leer antes de decisiones de diseño no triviales)
 
@@ -749,12 +810,13 @@ cosas no obvias que confirman esos tests:
   `programToSolverInputs` (la continuación de un `while` anidado arrastra el contexto del
   `while` que lo contiene), no una falla del filtro `relevantVars`.
 
-Estado: **207 examples, 0 failures, 5 pending** (correr `cabal test runtime-test` o
+Estado: **234 examples, 0 failures, 5 pending** (correr `cabal test runtime-test` o
 `stack test`, ver **Build**; el conteo subió de 187 a 189 en la sesión de "RunTime: indicatriz
 como constructor propio (RunTimeBExp)", de 189 a 211 con `ImpSynthSpec.hs`/`ImpIOSpec.hs`/
 `ImpVCGenSpec.hs` de las sesiones de "ImpSynth"/"Buena-definición", y de 211 a 212 con el test
 de parser de "While/PWhile: invariante opcional"; después subió a 222 con `ImpSynthSpec.hs` y volvió a
-207 al eliminar los 15 tests de `certifyDegree`). De paso se encontraron y corrigieron dos
+207 al eliminar los 15 tests de `certifyDegree`; 213 con `kleeneHints`, 230 con la forma normal
+de RunTime y 234 con disyunciones ordenadas/igualdades sustituidas). De paso se encontraron y corrigieron dos
 bugs reales en los tests mismos (no en el código de producción):
 - `ImpParserSpec.hs`, test "parsea for": el valor esperado no envolvía el cuerpo del `for` en
   `Seq Empty (...)`, aunque la gramática de `program` siempre envuelve así cualquier cuerpo

@@ -5,7 +5,9 @@ import GHC.Real (infinity)
 import Data.SBV
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Data.List (sortOn, sort)
+import Data.List (sortOn, sort, tails)
+import Control.Monad (foldM)
+import Control.Applicative ((<|>))
 
 {-
   MÓDULO QUE SE ENCARGA DE REPRESENTAR EXPRESIONES ARITMÉTICAS, BOOLEANAS, RUNTIMES Y PROGRAMAS
@@ -324,8 +326,8 @@ simplifyBExp otherwise          = otherwise
 deepSimplifyBExp :: BExp -> BExp
 deepSimplifyBExp True'          = True'
 deepSimplifyBExp False'         = False'
-deepSimplifyBExp (e_1 :<=: e_2) = simplifyBExp (completeNormArit e_1 :<=: completeNormArit e_2)
-deepSimplifyBExp (e_1 :==: e_2) = simplifyBExp (completeNormArit e_1 :==: completeNormArit e_2)
+deepSimplifyBExp atom@(_ :<=: _) = canonAtom atom -- ver canonAtom, en la forma normal de RunTime
+deepSimplifyBExp atom@(_ :==: _) = canonAtom atom
 deepSimplifyBExp (e_1 :|: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :|: deepSimplifyBExp e_2)
 deepSimplifyBExp (e_1 :&: e_2)  = simplifyBExp (deepSimplifyBExp e_1 :&: deepSimplifyBExp e_2)
 deepSimplifyBExp (Not e_b)      = simplifyBExp (Not $ deepSimplifyBExp e_b)
@@ -519,140 +521,292 @@ freeVarsRunTime (RunTimeBExp b)    = freeVarsBExp b
 freeVarsRunTime (e_1 :++: e_2)     = freeVarsRunTime e_1 ++ freeVarsRunTime e_2
 freeVarsRunTime (r_1 :**: r_2)     = freeVarsRunTime r_1 ++ freeVarsRunTime r_2
 
--------------------- {  SIMPLIFICAR RUNTIMES }------------------------------------------------------------------
--- TODO: releer toda la siplificación
+-------------------- {  FORMA NORMAL DE RUNTIMES: POLINOMIOS POR PARTES }------------------------------------------
+-- Un RunTime se normaliza a una suma de piezas
+--
+--     Σᵢ [gᵢ]·pᵢ        gᵢ :: Guard (conjunción de literales canónicos),  pᵢ :: Poly
+--
+-- Es la forma normal que la memoria deja como trabajo futuro (§6.4): con ella
+-- "f -- f" colapsa a 0 siempre (las piezas iguales se cancelan término a
+-- término), no sólo cuando los sumandos quedan adyacentes, y ** se distribuye
+-- sobre ++ en vez de quedar anidado.
+--
+-- Guardas. Cada átomo (e1 <= e2 / e1 == e2) se lleva a una cota sobre un
+-- término q: la parte no constante de e1 - e2, escalada para que su primer
+-- término (en el orden de fromPoly) tenga coeficiente 1. Así "2*x <= 2",
+-- "x <= 1" y "x - 1 <= 0" son la misma cota "q = x, q <= 1", y "-x + 1 <= 0"
+-- es la cota inferior "x >= 1" sobre el mismo q. Una guarda junta, por cada q
+-- distinto, todas sus cotas en un intervalo (Bounds). Eso da gratis el
+-- razonamiento sintáctico entre literales: "x <= 0 && x > 1" es vacía (la pieza
+-- se descarta) y "x <= 0 && x <= 1" es "x <= 0". Átomos sobre q distintos no se
+-- relacionan (eso pediría un solver, decisión tomada a propósito).
+--
+-- Disyunciones. [a || b] se parte en piezas disjuntas, [a] + [¬a && b], así
+-- toda guarda queda como conjunción de literales y la suma de indicatrices es
+-- exacta (sin el doble conteo que daría [a] + [b] cuando ambas valen).
+--
+-- No es canónica respecto a cualquier reescritura semántica: dos piezas que se
+-- solapan ([x <= 0]·p + 1·p) no se refinan en una partición. Sí se funden dos
+-- piezas disjuntas con el mismo polinomio cuyas guardas difieren en un único
+-- intervalo contiguo ([x <= 0]·p + [x > 0]·p = p).
 
--- | Aplana una cadena de :**: (asociada de cualquier forma, izquierda o
--- derecha, mezclada) en la lista de sus factores. Necesario porque, a
--- diferencia de :++: (que sólo se reasocia hacia la derecha y por lo tanto
--- puede fusionarse par a par sin riesgo), :**: no tiene una única dirección
--- "correcta" — una indicatriz ahora es un factor más, no un caso aparte, y
--- reasociar por pares en ambas direcciones a la vez puede oscilar
--- indefinidamente cuando el par que toca fusionar primero no reduce a nada
--- (se probó a mano: intentarlo cuelga el simplificador). Aplanar toda la
--- cadena de una vez y reconstruirla con buildMul es la única forma segura
--- de canonicalizar un producto sin importar cómo haya quedado parentizado.
-flattenMul :: RunTime -> [RunTime]
-flattenMul (r_1 :**: r_2) = flattenMul r_1 ++ flattenMul r_2
-flattenMul r              = [r]
+-- | Cotas sobre el valor de un término q.
+data Bounds = Bounds
+  { lowerB :: Maybe (Constant, Bool) -- (k, estricta): q > k si estricta, q >= k si no
+  , upperB :: Maybe (Constant, Bool) -- (k, estricta): q < k si estricta, q <= k si no
+  , holesB :: [Constant]             -- q /= k; ordenadas y sólo las interiores al intervalo
+  } deriving (Eq, Ord, Show)
 
--- | Reconstruye un producto ya canonicalizado a partir de su lista de
--- factores (ver flattenMul): junta todas las indicatrices (RunTimeBExp) en
--- una única conjunción a la izquierda, todos los pesos aritméticos
--- (RunTimeArit) en un único polinomio a la derecha (vía completeNormArit),
--- y deja cualquier otro factor (ej. una suma :++: usada como peso) tal
--- cual, multiplicando al final en el orden en que aparecía. Maneja los
--- casos absorbentes (una indicatriz que colapsa a False', o un peso que
--- colapsa a 0) devolviendo rtZero directo, y omite cualquier parte que
--- colapse al neutro (True'/Lit 1) del resultado final — si TODO colapsa al
--- neutro (producto vacío), el resultado es rtOne.
-buildMul :: [RunTime] -> RunTime
-buildMul factors
-  | boolPart == Just False'  = rtZero
-  | aritPart == Just (Lit 0) = rtZero
-  | otherwise                = case boolFactor ++ aritFactor ++ others of
-      []       -> rtOne
-      (f : fs) -> foldr1 (:**:) (f : fs)
+-- | Conjunción de literales: un intervalo por cada término q.
+-- Map.empty es la guarda "true".
+type Guard = Map Poly Bounds
+
+-- | Polinomio por partes. Invariante: nunca guarda un Poly nulo.
+type Piecewise = Map Guard Poly
+
+-- | Cota sin restricciones (el literal "true" sobre q)
+unboundedB :: Bounds
+unboundedB = Bounds Nothing Nothing []
+
+-- | La más restrictiva de dos cotas inferiores (a igual valor gana la estricta)
+tighterLower :: Maybe (Constant, Bool) -> Maybe (Constant, Bool) -> Maybe (Constant, Bool)
+tighterLower Nothing b = b
+tighterLower b Nothing = b
+tighterLower (Just (k_1, s_1)) (Just (k_2, s_2))
+  | k_1 > k_2 = Just (k_1, s_1)
+  | k_2 > k_1 = Just (k_2, s_2)
+  | otherwise = Just (k_1, s_1 || s_2)
+
+-- | La más restrictiva de dos cotas superiores (a igual valor gana la estricta)
+tighterUpper :: Maybe (Constant, Bool) -> Maybe (Constant, Bool) -> Maybe (Constant, Bool)
+tighterUpper Nothing b = b
+tighterUpper b Nothing = b
+tighterUpper (Just (k_1, s_1)) (Just (k_2, s_2))
+  | k_1 < k_2 = Just (k_1, s_1)
+  | k_2 < k_1 = Just (k_2, s_2)
+  | otherwise = Just (k_1, s_1 || s_2)
+
+-- | Forma canónica de un intervalo, o Nothing si es vacío. Un agujero en un
+-- extremo cerrado lo vuelve estricto, uno fuera del intervalo sobra (ya está
+-- implicado), y un intervalo de un solo punto no lleva agujeros.
+normalizeBounds :: Bounds -> Maybe Bounds
+normalizeBounds (Bounds lo up hs) = case (lo, up) of
+  (Just (a, s_a), Just (b, s_b))
+    | a > b                -> Nothing
+    | a == b && (s_a || s_b) -> Nothing
+    | a == b               -> if a `elem` hs then Nothing else Just (Bounds lo up [])
+  _                        -> Just (foldl punch (Bounds lo up []) (sort (rmdups hs)))
   where
-    bools    = [b | RunTimeBExp b <- factors]
-    arits    = [a | RunTimeArit a <- factors]
-    others   = filter isOther factors
-      where
-        isOther (RunTimeBExp _) = False
-        isOther (RunTimeArit _) = False
-        isOther _               = True
-    boolPart = if null bools then Nothing else Just (foldr1 (\b1 b2 -> simplifyBExp (b1 :&: b2)) bools)
-    aritPart = if null arits then Nothing else Just (completeNormArit (foldr1 (:*:) arits))
-    boolFactor = case boolPart of
-      Just True' -> []
-      Just b     -> [RunTimeBExp b]
-      Nothing    -> []
-    aritFactor = case aritPart of
-      Just (Lit 1) -> []
-      Just a       -> [RunTimeArit a]
-      Nothing      -> []
+    punch bnd@(Bounds lo' up' hs') h
+      | Just (a, s_a) <- lo', h < a || (h == a && s_a) = bnd
+      | Just (a, _)   <- lo', h == a                   = bnd { lowerB = Just (a, True) }
+      | Just (b, s_b) <- up', h > b || (h == b && s_b) = bnd
+      | Just (b, _)   <- up', h == b                   = bnd { upperB = Just (b, True) }
+      | otherwise                                      = Bounds lo' up' (hs' ++ [h])
 
--- | Si el RunTime es una indicatriz (con o sin peso explícito), retorna su
--- condición y su peso: "RunTimeBExp b :**: r" da (b, r), y una indicatriz
--- desnuda "RunTimeBExp b" (peso implícito 1 — la forma en la que queda tras
--- pasar por buildMul cuando el peso colapsa al neutro, ej. "[b]**1") da
--- (b, rtOne). Nothing para cualquier otro RunTime. Necesaria para que las
--- reglas 1/1b de abajo reconozcan una indicatriz sin importar si buildMul
--- ya le quitó el "**1" redundante.
-asIndicatorWeight :: RunTime -> Maybe (BExp, RunTime)
-asIndicatorWeight (RunTimeBExp b :**: r) = Just (b, r)
-asIndicatorWeight (RunTimeBExp b)        = Just (b, rtOne)
-asIndicatorWeight _                      = Nothing
+-- | Intersección de dos intervalos sobre el mismo q
+meetBounds :: Bounds -> Bounds -> Maybe Bounds
+meetBounds b_1 b_2 = normalizeBounds $
+  Bounds (tighterLower (lowerB b_1) (lowerB b_2))
+         (tighterUpper (upperB b_1) (upperB b_2))
+         (holesB b_1 ++ holesB b_2)
 
--- | Reglas de un sólo paso para simplificar un RunTime
+-- | Conjunción de dos guardas, o Nothing si es insatisfacible
+meetGuard :: Guard -> Guard -> Maybe Guard
+meetGuard g_1 g_2 = foldM step g_1 (Map.toList g_2)
+  where
+    step g (q, b) = case Map.lookup q g of
+      Nothing -> Just (Map.insert q b g)
+      Just b' -> do
+        m <- meetBounds b b'
+        return (if m == unboundedB then Map.delete q g else Map.insert q m g)
+
+-- | Descompone un polinomio p como l·q + c, con c su término constante y q
+-- la parte no constante escalada para que su primer término (orden de
+-- fromPoly) tenga coeficiente 1. Left c si p es constante.
+splitPoly :: Poly -> Either Constant (Poly, Constant, Constant)
+splitPoly p = case sortOn termOrder (Map.toList q') of
+  []           -> Left c
+  ((_, l) : _) -> Right (Map.map (/ l) q', l, c)
+  where
+    c  = Map.findWithDefault 0 unitMonomial p
+    q' = Map.delete unitMonomial p
+
+-- | Cota que impone un átomo positivo (e1 <= e2 / e1 == e2), o su valor de
+-- verdad si el átomo es constante.
+atomBounds :: BExp -> Either Bool (Poly, Bounds)
+atomBounds (e_1 :<=: e_2) = case splitPoly (toPoly (e_1 -: e_2)) of
+  Left c -> Left (c <= 0)
+  Right (q, l, c)
+    | l > 0     -> Right (q, Bounds Nothing (Just (k, False)) [])  -- q <= k
+    | otherwise -> Right (q, Bounds (Just (k, False)) Nothing [])  -- q >= k (dividir por l < 0 da vuelta la desigualdad)
+    where k = negate c / l
+atomBounds (e_1 :==: e_2) = case splitPoly (toPoly (e_1 -: e_2)) of
+  Left c          -> Left (c == 0)
+  Right (q, l, c) -> let k = negate c / l in Right (q, Bounds (Just (k, False)) (Just (k, False)) [])
+atomBounds e_b = error $ "atomBounds: no es un átomo: " ++ show e_b
+
+-- | Negación de la cota de un único átomo (sobre reales: ¬(q <= k) es q > k)
+negateAtomBounds :: Bounds -> Bounds
+negateAtomBounds (Bounds Nothing (Just (k, False)) [])       = Bounds (Just (k, True)) Nothing []
+negateAtomBounds (Bounds (Just (k, False)) Nothing [])       = Bounds Nothing (Just (k, True)) []
+negateAtomBounds (Bounds (Just (k, False)) (Just _) [])      = Bounds Nothing Nothing [k]
+negateAtomBounds bnd = error $ "negateAtomBounds: no es la cota de un átomo: " ++ show bnd
+
+-- | Guardas de un literal (átomo con polaridad): a lo más una
+literalGuards :: Bool -> BExp -> [Guard]
+literalGuards pol atom = case atomBounds atom of
+  Left b         -> [Map.empty | b == pol]
+  Right (q, bnd) -> [Map.singleton q (if pol then bnd else negateAtomBounds bnd)]
+
+-- | Parte un BExp en guardas disjuntas dos a dos cuya unión es el BExp:
+-- [e_b] = Σ [gᵢ]. Las guardas vacías (insatisfacibles) se descartan.
 --
--- Además de las reglas algebraicas originales (neutros de :++:/:**:,
--- literales), se agregaron reglas puntuales para casos que antes quedaban
--- sin combinar aunque fueran sintácticamente adyacentes (no es una forma
--- normal completa de RunTime — eso sigue pendiente, ver CLAUDE.md — sólo
--- cierra los casos más obvios). Una indicatriz ponderada, antes un
--- constructor dedicado (b :<>: r), ahora es sólo "RunTimeBExp b :**: r" —
--- multiplicación genuina entre dos RunTime — así que las reglas de abajo se
--- expresan sobre ese patrón:
---
---   1. [b]**r1 ++ [b]**r2  =  [b]**(r1 ++ r2), cuando la condición "b" es
---      sintácticamente igual (Eq derivado de BExp) en ambos sumandos, tanto
---      si son los dos únicos términos como si el segundo encabeza una
---      cadena de :++: más larga. Se reconoce una indicatriz vía
---      asIndicatorWeight, así que también aplica cuando uno de los lados
---      quedó como indicatriz desnuda (peso 1 implícito, ej. tras pasar por
---      buildMul).
---   1b. [b]**r ++ [!b]**r = r: la suma de indicatrices complementarias con
---      el mismo peso "r" es 1*r. A diferencia de la regla 1, esto NO se
---      generaliza a "suma de indicatrices = OR" — [b1]+[b2] = [b1 || b2]
---      sólo vale si b1/b2 son mutuamente excluyentes, y en general no lo
---      son (si ambas son verdaderas, la suma da 2, no 1). El único caso
---      donde la exclusión mutua es gratis (verdadera para cualquier b) es
---      justo el complemento sintáctico b/¬b, que es lo que se detecta acá
---      vía complementOf (misma función que usa normBExp).
---   2. Reasociación de :++: hacia la derecha: (e1 ++ e2) ++ e3 = e1 ++ (e2 ++ e3).
---      Sirve para que las reglas 1/1b (y las reglas de RunTimeArit ya
---      existentes, que asumen la cadena asociada a la derecha) encuentren
---      términos adyacentes aunque el árbol original los haya parentizado a
---      la izquierda.
---   3. Cualquier :**: (con cualquier forma de anidamiento) se canonicaliza
---      de una vez vía flattenMul/buildMul: fusiona todos los pesos
---      aritméticos en un polinomio único, todas las indicatrices en una
---      única conjunción, y aplica los neutros/absorbentes (Lit 1/Lit 0,
---      True'/False') sobre el resultado ya combinado. Esto reemplaza (y
---      generaliza a cualquier nivel de anidamiento, no sólo el
---      inmediatamente adyacente) lo que antes eran varias reglas sueltas
---      para :**: — incluida la vieja "b1 :<>: (b2 :<>: r) = (b1:&:b2):<>:r",
---      que queda subsumida acá.
-simplifyRunTime :: RunTime -> RunTime
-simplifyRunTime (RunTimeArit arit_1 :++: RunTimeArit arit_2)               = RunTimeArit $ completeNormArit (arit_1 :+: arit_2)
-simplifyRunTime (RunTimeArit arit_1 :++: (RunTimeArit arit_2 :++: runt))   = RunTimeArit (completeNormArit $ arit_1 :+: arit_2) :++: runt
-simplifyRunTime (t_1 :++: t_2)
-  | Just (e_b1, r_1) <- asIndicatorWeight t_1
-  , Just (e_b2, r_2) <- asIndicatorWeight t_2
-  , e_b1 == e_b2                             = simplifyRunTime (RunTimeBExp e_b1 :**: simplifyRunTime (r_1 :++: r_2))
-  | Just (e_b1, r_1) <- asIndicatorWeight t_1
-  , Just (e_b2, r_2) <- asIndicatorWeight t_2
-  , complementOf e_b1 == e_b2 && r_1 == r_2  = r_1
-simplifyRunTime (t_1 :++: (t_2 :++: runt))
-  | Just (e_b1, r_1) <- asIndicatorWeight t_1
-  , Just (e_b2, r_2) <- asIndicatorWeight t_2
-  , e_b1 == e_b2                             = simplifyRunTime (simplifyRunTime (RunTimeBExp e_b1 :**: simplifyRunTime (r_1 :++: r_2)) :++: runt)
-  | Just (e_b1, r_1) <- asIndicatorWeight t_1
-  , Just (e_b2, r_2) <- asIndicatorWeight t_2
-  , complementOf e_b1 == e_b2 && r_1 == r_2  = simplifyRunTime (r_1 :++: runt)
-simplifyRunTime ((e_1 :++: e_2) :++: e_3)                                  = simplifyRunTime (e_1 :++: simplifyRunTime (e_2 :++: e_3))
-simplifyRunTime (RunTimeArit (Lit 0) :++: runt)                            = runt
-simplifyRunTime (runt :++: RunTimeArit (Lit 0))                            = runt
-simplifyRunTime rt@(_ :**: _)                                              = buildMul (flattenMul rt)
-simplifyRunTime otherwise                                                  = otherwise
+-- Una disyunción se parte en [d₁] + [¬d₁ ∧ d₂] + [¬d₁ ∧ ¬d₂ ∧ d₃] + ..., y
+-- esa partición depende de qué disyunto va primero. Para que no dependa de
+-- cómo se escribió ("x<=0 || y<=0" y "y<=0 || x<=0" dan lo mismo) se ordenan
+-- los disyuntos por sus guardas antes de partir.
+guardsOf :: BExp -> [Guard]
+guardsOf = go . toNNF
+  where
+    go True'         = [Map.empty]
+    go False'        = []
+    go (Not atom)    = literalGuards False atom -- tras toNNF, Not sólo envuelve átomos
+    go (e_1 :&: e_2) = [g | g_1 <- go e_1, g_2 <- go e_2, Just g <- [meetGuard g_1 g_2]]
+    go e_b@(_ :|: _) = case sortOn go (flattenOr e_b) of
+      (d : ds@(_ : _)) -> go d ++ go (toNNF (Not d) :&: foldr1 (:|:) ds)
+      ds               -> concatMap go ds -- no ocurre: flattenOr da al menos dos disyuntos
+    go atom          = literalGuards True atom
 
--- Reglas recursivas para simplificar un RunTime
+-- | Literales (BExp) de un intervalo sobre q, en un orden fijo:
+-- igualdad, o bien cota inferior, superior y agujeros.
+boundsToBExps :: Poly -> Bounds -> [BExp]
+boundsToBExps q (Bounds lo up hs) = case (lo, up) of
+  (Just (a, False), Just (b, False)) | a == b -> [q_a :==: Lit a]
+  _ -> lowerLit ++ upperLit ++ [Not (q_a :==: Lit h) | h <- hs]
+  where
+    q_a = fromPoly q
+    lowerLit = case lo of
+      Just (k, False) -> [Lit k :<=: q_a]
+      Just (k, True)  -> [Not (q_a :<=: Lit k)]
+      Nothing         -> []
+    upperLit = case up of
+      Just (k, False) -> [q_a :<=: Lit k]
+      Just (k, True)  -> [Not (Lit k :<=: q_a)]
+      Nothing         -> []
+
+-- | Reconstruye una guarda como BExp (conjunción de literales canónicos)
+guardToBExp :: Guard -> BExp
+guardToBExp g = case concatMap (uncurry boundsToBExps) (Map.toList g) of
+  []   -> True'
+  lits -> foldr1 (:&:) lits
+
+-- | Forma canónica de un átomo: "2*x <= 2", "x - 1 <= 0" y "x <= 1" dan todos
+-- "x <= 1"; "-x + 1 <= 0" da "1 <= x". Idempotente, y consistente con cómo
+-- guardToBExp escribe los literales de una guarda.
+canonAtom :: BExp -> BExp
+canonAtom atom = case atomBounds atom of
+  Left b         -> toBExp b
+  Right (q, bnd) -> guardToBExp (Map.singleton q bnd)
+
+-- | Une dos intervalos disjuntos cuya unión vuelve a ser un intervalo:
+-- contiguos con el punto de contacto en exactamente uno de los dos, o un
+-- punto que tapa un agujero del otro.
+unionBounds :: Bounds -> Bounds -> Maybe Bounds
+unionBounds b_1 b_2 = adjacent b_1 b_2 <|> adjacent b_2 b_1 <|> fill b_1 b_2 <|> fill b_2 b_1
+  where
+    adjacent (Bounds lo (Just (k, s_1)) []) (Bounds (Just (k', s_2)) up [])
+      | k == k' && s_1 /= s_2 = Just (Bounds lo up [])
+    adjacent _ _ = Nothing
+    fill (Bounds (Just (k, False)) (Just (k', False)) []) bnd
+      | k == k' && k `elem` holesB bnd = Just bnd { holesB = filter (/= k) (holesB bnd) }
+    fill _ _ = Nothing
+
+-- | Funde dos guardas disjuntas que difieren en el intervalo de un único q,
+-- cuando la unión de ambos intervalos vuelve a ser un intervalo.
+mergeGuards :: Guard -> Guard -> Maybe Guard
+mergeGuards g_1 g_2
+  | Map.keys g_1 /= Map.keys g_2 = Nothing
+  | otherwise = case [q | (q, b) <- Map.toList g_1, Map.lookup q g_2 /= Just b] of
+      [q] -> do
+        u <- unionBounds (g_1 Map.! q) (g_2 Map.! q)
+        return (if u == unboundedB then Map.delete q g_1 else Map.insert q u g_1)
+      _   -> Nothing
+
+-- | Suma de polinomios por partes
+addPiecewise :: Piecewise -> Piecewise -> Piecewise
+addPiecewise p q = Map.filter (not . Map.null) (Map.unionWith addPoly p q)
+
+-- | Producto de polinomios por partes: distribuye, intersecando las guardas
+-- y descartando las piezas cuya guarda queda vacía.
+mulPiecewise :: Piecewise -> Piecewise -> Piecewise
+mulPiecewise p q = Map.filter (not . Map.null) $ Map.fromListWith addPoly
+  [ (g, mulPoly a b) | (g_1, a) <- Map.toList p, (g_2, b) <- Map.toList q, Just g <- [meetGuard g_1 g_2] ]
+
+-- | Lleva un RunTime a su polinomio por partes
+toPiecewise :: RunTime -> Piecewise
+toPiecewise (RunTimeArit arit) = addPiecewise Map.empty (Map.singleton Map.empty (toPoly arit))
+toPiecewise (RunTimeBExp e_b)  = foldr addPiecewise Map.empty [Map.singleton g (constPoly 1) | g <- guardsOf e_b]
+toPiecewise (r_1 :++: r_2)     = addPiecewise (toPiecewise r_1) (toPiecewise r_2)
+toPiecewise (r_1 :**: r_2)     = mulPiecewise (toPiecewise r_1) (toPiecewise r_2)
+
+-- | Dentro de una pieza [g]·p, p sólo importa donde g vale, así que cada
+-- igualdad q == k de g permite despejar una variable de q y sustituirla en
+-- p sin cambiar la función: [x == 3]·(x - 3) = [x == 3]·0, y
+-- [x - y == 1]·(x - y) = [x - y == 1]·1. Se despeja la variable del primer
+-- término de q (coeficiente 1 por cómo splitPoly escala q), y sólo si es de
+-- grado 1 y no aparece en el resto de q; si no, la igualdad no se usa.
+reduceByEqualities :: Guard -> Poly -> Poly
+reduceByEqualities g p = foldl substEquality p
+  [ (q, k) | (q, Bounds (Just (k, False)) (Just (k', False)) _) <- Map.toList g, k == k' ]
+  where
+    substEquality p' (q, k) = case sortOn termOrder (Map.toList q) of
+      ((m, _) : _)
+        | [(v, 1)] <- Map.toList m
+        , let rest = Map.delete m q
+        , all (Map.notMember v) (Map.keys rest)
+        -> let value = fromPoly (addPoly (constPoly k) (Map.map negate rest)) -- v = k - rest
+           in toPoly (sustAExp v value (fromPoly p'))
+      _ -> p'
+
+-- | reduceByEqualities en cada pieza; descarta las que quedan en 0
+reducePieces :: Piecewise -> Piecewise
+reducePieces pw = Map.filter (not . Map.null) (Map.mapWithKey reduceByEqualities pw)
+
+-- | Funde piezas con el mismo polinomio y guardas contiguas hasta que no
+-- quede ningún par fusionable. Termina: cada fusión saca al menos una pieza.
+mergePieces :: Piecewise -> Piecewise
+mergePieces pw = case candidates of
+  []                  -> pw
+  ((g_1, g_2, g, p) : _) ->
+    mergePieces (addPiecewise (Map.singleton g p) (Map.delete g_1 (Map.delete g_2 pw)))
+  where
+    candidates = [ (g_1, g_2, g, p_1)
+                 | ((g_1, p_1) : rest) <- tails (Map.toList pw)
+                 , (g_2, p_2) <- rest
+                 , p_1 == p_2
+                 , Just g <- [mergeGuards g_1 g_2] ]
+
+-- | Reconstruye el RunTime: la pieza sin guarda primero, luego el resto en el
+-- orden de Guard; cada pieza como "[g]**p" (o "[g]" si p = 1).
+fromPiecewise :: Piecewise -> RunTime
+fromPiecewise pw = case map piece (Map.toList pw) of
+  []     -> rtZero
+  pieces -> foldr1 (:++:) pieces
+  where
+    piece (g, p)
+      | Map.null g       = RunTimeArit (fromPoly p)
+      | p == constPoly 1 = RunTimeBExp (guardToBExp g)
+      | otherwise        = RunTimeBExp (guardToBExp g) :**: RunTimeArit (fromPoly p)
+
+-- | Simplifica un RunTime llevándolo a su forma normal Σ [g]·p (ver arriba)
 deepSimplifyRunTime :: RunTime -> RunTime
-deepSimplifyRunTime (RunTimeArit arit) = RunTimeArit (completeNormArit arit)
-deepSimplifyRunTime (RunTimeBExp bexp) = RunTimeBExp (deepSimplifyBExp bexp)
-deepSimplifyRunTime (e_1 :++: e_2)     = simplifyRunTime (deepSimplifyRunTime e_1 :++: deepSimplifyRunTime e_2)
-deepSimplifyRunTime (r_1 :**: r_2)     = simplifyRunTime (deepSimplifyRunTime r_1 :**: deepSimplifyRunTime r_2)
+deepSimplifyRunTime = fromPiecewise . mergePieces . reducePieces . toPiecewise
+
+-- | Antes había reglas "de un paso" distintas de las recursivas; con la forma
+-- normal ya no hay diferencia, se deja el nombre por compatibilidad.
+simplifyRunTime :: RunTime -> RunTime
+simplifyRunTime = deepSimplifyRunTime
 
 
 ----------------------------------{ CONSTRUCCIONES PROBABILISTAS} ----------------------------------
